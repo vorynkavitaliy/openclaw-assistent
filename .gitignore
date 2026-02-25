@@ -1,0 +1,12 @@
+# OpenClaw: never commit secrets or local config
+openclaw.json
+~/.openclaw/
+*.env
+*.local.json
+*.secret
+*.bak
+*.swp
+*.log
+*.pyc
+.DS_Store
+keys.md

@@ -59,7 +59,7 @@ function toBool(value, fallback = false) {
 function loadCredentials() {
   const configPath = path.join(process.env.HOME || '/root', '.openclaw', 'credentials.json');
   if (!fs.existsSync(configPath))
-    return { apiKey: '', apiSecret: '', testnet: false, demoTrading: false };
+    return { apiKey: '', apiSecret: '', testnet: false, demoTrading: true };
 
   const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   const bybit = config.bybit || {};
@@ -67,7 +67,7 @@ function loadCredentials() {
     apiKey: bybit.api_key || '',
     apiSecret: bybit.api_secret || '',
     testnet: Boolean(bybit.testnet),
-    demoTrading: Boolean(bybit.demoTrading || bybit.demo_trading),
+    demoTrading: true,
     defaultLeverage: bybit.default_leverage || DEFAULT_LEVERAGE,
     maxLeverage: bybit.max_leverage || MAX_LEVERAGE,
   };

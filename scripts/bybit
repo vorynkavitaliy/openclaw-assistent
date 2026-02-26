@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Thin wrapper around bybit_trade.js for agent-friendly subcommands.
+# Usage:
+#   ./scripts/bybit positions [--symbol=BTCUSDT] [--demo]
+#   ./scripts/bybit order --symbol=BTCUSDT --side=Buy --qty=0.01 [--type=Market|Limit --price=...] [--sl=... --tp=...] [--demo]
+#   ./scripts/bybit close --symbol=BTCUSDT [--demo]
+#   ./scripts/bybit partial-close --symbol=BTCUSDT --qty=0.005 [--demo]
+#   ./scripts/bybit modify --symbol=BTCUSDT [--sl=... --tp=...] [--demo]
+#   ./scripts/bybit leverage --symbol=BTCUSDT --leverage=3 [--demo]
+#   ./scripts/bybit balance [--coin=USDT] [--demo]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRADE_JS="$SCRIPT_DIR/bybit_trade.js"
+
+if [[ $# -lt 1 ]]; then
+  echo "Missing subcommand. Try: positions|order|close|partial-close|modify|leverage|balance" >&2
+  exit 2
+fi
+
+cmd="$1"; shift
+case "$cmd" in
+  positions) action="positions";;
+  order) action="order";;
+  close) action="close";;
+  partial-close|partial_close) action="partial_close";;
+  modify) action="modify";;
+  leverage) action="leverage";;
+  balance) action="balance";;
+  close-all|close_all) action="close_all";;
+  *)
+    echo "Unknown subcommand: $cmd" >&2
+    exit 2
+    ;;
+esac
+
+exec node "$TRADE_JS" --action="$action" "$@"

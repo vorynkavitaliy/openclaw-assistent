@@ -5,7 +5,10 @@
 ```
 Bybit REST API v5
     ↕
-Python-скрипты (bybit_get_data.py, bybit_trade.py, bybit_monitor.py)
+Node.js SDK (bybit-api) — с поддержкой Demo Trading
+    ↕
+bybit_trade.js — торговля, мониторинг, управление позициями
+bybit_get_data.py — публичные данные (OHLC, индикаторы)
     ↕
 OpenClaw Crypto Trader Agent
     ↕
@@ -18,34 +21,113 @@ Orchestrator → Telegram
 
 - **Mainnet**: https://api.bybit.com
 - **Testnet**: https://api-testnet.bybit.com
+- **Demo Trading**: mainnet + флаг `demoTrading: true` в SDK
 - **Docs**: https://bybit-exchange.github.io/docs/v5/intro
 
 ### Credentials
 
-- **API Key**: `[настроить в ~/.openclaw/openclaw.json → bybit.api_key]`
-- **API Secret**: `[настроить в ~/.openclaw/openclaw.json → bybit.api_secret]`
+- **Файл**: `~/.openclaw/credentials.json` → секция `bybit`
 - **Тип аккаунта**: Unified Trading Account (UTA)
 - **Тип торговли**: USDT-M Linear Perpetual
+- **Demo Trading**: ключи от демо-аккаунта Bybit (работают только через Node SDK с `demoTrading: true`)
 
-### Конфигурация в openclaw.json
+### Конфигурация credentials.json
 
-```json5
+```json
 {
-  bybit: {
-    api_key: 'YOUR_API_KEY',
-    api_secret: 'YOUR_API_SECRET',
-    testnet: false, // true для тестовой сети
-    default_leverage: 3,
-    max_leverage: 5,
-  },
+  "bybit": {
+    "api_key": "YOUR_API_KEY",
+    "api_secret": "YOUR_API_SECRET",
+    "testnet": false,
+    "demoTrading": true,
+    "default_leverage": 3,
+    "max_leverage": 5
+  }
 }
+```
+
+> ⚠️ Demo Trading ключи НЕ работают с обычным REST API (Python urllib). Только через Node SDK `bybit-api` с параметром `demoTrading: true`.
+
+---
+
+## Node.js — Торговля и мониторинг (bybit_trade.js)
+
+### Открытие позиции (Market)
+
+```bash
+node scripts/bybit_trade.js --action=order --symbol=BTCUSDT --side=Buy \
+  --qty=0.01 --sl=95000 --tp=102000
+
+node scripts/bybit_trade.js --action=order --symbol=ETHUSDT --side=Sell \
+  --qty=0.1 --sl=3800 --tp=3400
+```
+
+### Открытие позиции (Limit)
+
+```bash
+node scripts/bybit_trade.js --action=order --symbol=SOLUSDT --side=Buy \
+  --type=Limit --qty=1 --price=140 --sl=130 --tp=170
+```
+
+### Закрытие позиции
+
+```bash
+node scripts/bybit_trade.js --action=close --symbol=BTCUSDT
+```
+
+### Частичное закрытие (50% при +1R)
+
+```bash
+node scripts/bybit_trade.js --action=partial_close --symbol=BTCUSDT --qty=0.005
+```
+
+### Модификация SL/TP
+
+```bash
+node scripts/bybit_trade.js --action=modify --symbol=BTCUSDT --sl=96500 --tp=103000
+```
+
+### Закрытие всех позиций (экстренно)
+
+```bash
+node scripts/bybit_trade.js --action=close_all
+```
+
+### Установка плеча
+
+```bash
+node scripts/bybit_trade.js --action=leverage --symbol=BTCUSDT --leverage=5
+```
+
+### Открытые позиции
+
+```bash
+node scripts/bybit_trade.js --action=positions
+node scripts/bybit_trade.js --action=positions --symbol=BTCUSDT
+```
+
+### Баланс аккаунта
+
+```bash
+node scripts/bybit_trade.js --action=balance
+node scripts/bybit_trade.js --action=balance --coin=BTC
+```
+
+### Флаг --demo
+
+Для явного включения Demo Trading режима (вместо credentials.json):
+
+```bash
+node scripts/bybit_trade.js --action=balance --demo
 ```
 
 ---
 
-## Python скрипты
+## Python — Рыночные данные (bybit_get_data.py)
 
-### Получение данных (OHLC + индикаторы)
+Публичный API, не требует авторизации.
+
+### Получение OHLC + индикаторы
 
 ```bash
 # Определение тренда (4h/1h)
@@ -61,50 +143,6 @@ python3 scripts/bybit_get_data.py --pair BTCUSDT --market-info
 ```
 
 Возвращает JSON: `current_price`, `indicators` (EMA200, EMA50, RSI14, ATR14), `levels` (support/resistance), `bias`, `funding_rate`, `open_interest`.
-
-### Торговля (открытие/закрытие/модификация)
-
-```bash
-# Открытие LONG
-python3 scripts/bybit_trade.py --action open --pair BTCUSDT --direction Buy \
-  --qty 0.01 --sl 95000 --tp 102000
-
-# Открытие SHORT
-python3 scripts/bybit_trade.py --action open --pair ETHUSDT --direction Sell \
-  --qty 0.1 --sl 3800 --tp 3400
-
-# Закрытие позиции
-python3 scripts/bybit_trade.py --action close --pair BTCUSDT
-
-# Модификация SL/TP
-python3 scripts/bybit_trade.py --action modify --pair BTCUSDT --sl 96500 --tp 103000
-
-# Частичное закрытие
-python3 scripts/bybit_trade.py --action partial_close --pair BTCUSDT --qty 0.005
-
-# Закрытие всех позиций (экстренно)
-python3 scripts/bybit_trade.py --action close_all
-
-# Режим симуляции (без Bybit)
-python3 scripts/bybit_trade.py --action open --pair BTCUSDT --direction Buy \
-  --qty 0.01 --sl 95000 --tp 102000 --simulate
-```
-
-### Мониторинг (позиции, счёт, риски)
-
-```bash
-# Открытые позиции
-python3 scripts/bybit_monitor.py --positions
-
-# Состояние счёта
-python3 scripts/bybit_monitor.py --account
-
-# Полный Heartbeat (всё + алерты + funding)
-python3 scripts/bybit_monitor.py --heartbeat
-
-# Только проверка рисков
-python3 scripts/bybit_monitor.py --risk-check
-```
 
 ---
 
@@ -130,16 +168,10 @@ curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
 
 ## Визуальные инструменты (Browser)
 
-- **TradingView**: https://www.tradingview.com/chart/ — графики, индикаторы
-- **CoinMarketCap**: https://coinmarketcap.com/ — рыночная сводка
-- **DeFi Llama**: https://defillama.com/ — TVL
+- **TradingView**: https://www.tradingview.com/chart/
+- **CoinMarketCap**: https://coinmarketcap.com/
+- **DeFi Llama**: https://defillama.com/
 - **Coinglass**: https://www.coinglass.com/ — funding, OI, liquidations
-
-## Экономический календарь
-
-- **Основной источник**: Market Analyst агент (`sessions_send`)
-- CoinGlass: https://www.coinglass.com/FundingRate
-- Investing.com: https://www.investing.com/economic-calendar/
 
 ## Таймфреймы (ОБЯЗАТЕЛЬНОЕ ПРАВИЛО)
 

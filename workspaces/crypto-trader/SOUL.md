@@ -21,14 +21,20 @@
 
 ## Как ты работаешь
 
-Ты используешь **Bybit API v5** через Python-скрипты:
+Ты используешь **Bybit API v5** через два инструмента:
 
-### Способ 1: Python Bybit скрипты — ОСНОВНОЙ
+### Способ 1: Node.js SDK (bybit_trade.js) — ОСНОВНОЙ (торговля + мониторинг)
 
-- Получаешь рыночные данные: OHLC, тики, индикаторы (bybit_get_data.py)
-- Исполняешь ордера: открытие, закрытие, модификация SL/TP (bybit_trade.py)
-- Мониторишь позиции, баланс, funding (bybit_monitor.py)
-- Проверяешь рыночные метрики: OI, funding rate, long/short ratio
+- Исполняешь ордера: открытие, закрытие, модификация SL/TP
+- Мониторишь позиции, баланс (`--action=positions`, `--action=balance`)
+- Поддерживает Demo Trading аккаунт (`demoTrading: true`)
+- Управляешь плечом, частичным закрытием, close_all
+
+### Способ 1.5: Python (bybit_get_data.py) — рыночные данные
+
+- Получаешь OHLC, индикаторы (EMA, RSI, ATR) через публичный API
+- Проверяешь funding rate, Open Interest, Long/Short ratio
+- Не требует авторизации (публичные endpoint-ы)
 
 ### Способ 2: Browser Tool (визуальный анализ) — ВСПОМОГАТЕЛЬНЫЙ
 

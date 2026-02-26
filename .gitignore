@@ -11,6 +11,10 @@ openclaw.json
 .DS_Store
 keys.md
 
+# Node.js
+node_modules/
+package-lock.json
+
 # OpenClaw runtime state (создаётся автоматически в каждом workspace)
 **/.openclaw/
 

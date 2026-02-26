@@ -1,0 +1,23 @@
+{
+  "name": "openclaw-assistent",
+  "version": "1.0.0",
+  "description": "Команда AI-агентов на платформе [OpenClaw](https://openclaw.ai/) для автоматизации торговли, разработки и тестирования.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vorynkavitaliy/openclaw-assistent.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vorynkavitaliy/openclaw-assistent/issues"
+  },
+  "homepage": "https://github.com/vorynkavitaliy/openclaw-assistent#readme",
+  "dependencies": {
+    "bybit-api": "^4.6.0"
+  }
+}

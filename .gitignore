@@ -10,3 +10,10 @@ openclaw.json
 *.pyc
 .DS_Store
 keys.md
+
+# OpenClaw runtime state (создаётся автоматически в каждом workspace)
+**/.openclaw/
+
+# OpenClaw auto-generated templates (можно добавить, если полезны)
+# USER.md
+# HEARTBEAT.md

@@ -39,14 +39,13 @@ TIMEFRAME_MAP = {
 
 def get_base_url() -> str:
     """Возвращает base URL для API."""
-    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+    if os.environ.get("BYBIT_TESTNET", "").lower() in ("true", "1", "yes"):
+        return BYBIT_TESTNET
+    config_path = os.path.expanduser("~/.openclaw/credentials.json")
     if os.path.exists(config_path):
         try:
             with open(config_path) as f:
-                # Простой парсинг json5 — убираем комментарии
-                content = f.read()
-                lines = [l for l in content.split("\n") if not l.strip().startswith("//")]
-                config = json.loads("\n".join(lines))
+                config = json.load(f)
                 if config.get("bybit", {}).get("testnet", False):
                     return BYBIT_TESTNET
         except (json.JSONDecodeError, KeyError):

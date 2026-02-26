@@ -34,7 +34,7 @@ MAX_LEVERAGE = 5               # Макс плечо
 
 
 def load_config() -> dict:
-    """Загружает credentials."""
+    """Загружает credentials из credentials.json или env vars."""
     api_key = os.environ.get("BYBIT_API_KEY", "")
     api_secret = os.environ.get("BYBIT_API_SECRET", "")
     testnet = os.environ.get("BYBIT_TESTNET", "").lower() in ("true", "1")
@@ -42,13 +42,12 @@ def load_config() -> dict:
     if api_key and api_secret:
         return {"api_key": api_key, "api_secret": api_secret, "testnet": testnet}
 
-    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+    # Из credentials.json (отдельный файл, чтобы не конфликтовать с OpenClaw)
+    config_path = os.path.expanduser("~/.openclaw/credentials.json")
     if os.path.exists(config_path):
         try:
             with open(config_path) as f:
-                content = f.read()
-                lines = [l for l in content.split("\n") if not l.strip().startswith("//")]
-                config = json.loads("\n".join(lines))
+                config = json.load(f)
                 bybit = config.get("bybit", {})
                 return {
                     "api_key": bybit.get("api_key", ""),
@@ -80,7 +79,7 @@ def api_get(config: dict, endpoint: str, params: dict = None) -> dict:
     api_secret = config["api_secret"]
 
     if not api_key or not api_secret:
-        return {"error": "API ключи не настроены. Добавь bybit.api_key/api_secret в ~/.openclaw/openclaw.json"}
+        return {"error": "API ключи не настроены. Добавь bybit.api_key/api_secret в ~/.openclaw/credentials.json"}
 
     base = get_base_url(config)
     query = "&".join(f"{k}={v}" for k, v in (params or {}).items() if v is not None)
@@ -370,7 +369,7 @@ def main():
 
     result = {"timestamp": datetime.now().isoformat()}
     if using_demo:
-        result["_note"] = "DEMO — настрой API ключи в ~/.openclaw/openclaw.json → bybit.api_key/api_secret"
+        result["_note"] = "DEMO — настрой API ключи в ~/.openclaw/credentials.json → bybit.api_key/api_secret"
 
     if args.positions or args.heartbeat:
         result["positions"] = positions

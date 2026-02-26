@@ -3,7 +3,7 @@
 Bybit Trade — открытие/закрытие/модификация позиций через Bybit API v5.
 
 Использует HMAC-SHA256 авторизацию для приватных endpoints.
-Credentials из ~/.openclaw/openclaw.json или env vars.
+Credentials из ~/.openclaw/credentials.json или env vars.
 
 Использование:
     python3 bybit_trade.py --action open --pair BTCUSDT --direction Buy \
@@ -40,7 +40,7 @@ MAX_QTY_DEFAULT = 1000   # Максимум для альтов в USDT
 
 
 def load_config() -> dict:
-    """Загружает Bybit credentials из openclaw.json или env vars."""
+    """Загружает Bybit credentials из credentials.json или env vars."""
     # Env vars имеют приоритет
     api_key = os.environ.get("BYBIT_API_KEY", "")
     api_secret = os.environ.get("BYBIT_API_SECRET", "")
@@ -49,15 +49,12 @@ def load_config() -> dict:
     if api_key and api_secret:
         return {"api_key": api_key, "api_secret": api_secret, "testnet": testnet}
 
-    # Из конфига
-    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+    # Из credentials.json (отдельный файл, чтобы не конфликтовать с OpenClaw)
+    config_path = os.path.expanduser("~/.openclaw/credentials.json")
     if os.path.exists(config_path):
         try:
             with open(config_path) as f:
-                content = f.read()
-                # Убираем // комментарии для JSON5 совместимости
-                lines = [l for l in content.split("\n") if not l.strip().startswith("//")]
-                config = json.loads("\n".join(lines))
+                config = json.load(f)
                 bybit = config.get("bybit", {})
                 return {
                     "api_key": bybit.get("api_key", ""),
@@ -92,7 +89,7 @@ def api_post(config: dict, endpoint: str, params: dict) -> dict:
     api_secret = config["api_secret"]
 
     if not api_key or not api_secret:
-        return {"error": "API ключи не настроены. Добавь bybit.api_key/api_secret в ~/.openclaw/openclaw.json"}
+        return {"error": "API ключи не настроены. Добавь bybit.api_key/api_secret в ~/.openclaw/credentials.json"}
 
     base = get_base_url(config)
     url = f"{base}{endpoint}"

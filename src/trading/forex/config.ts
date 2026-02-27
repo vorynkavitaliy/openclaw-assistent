@@ -1,5 +1,5 @@
 /**
- * Forex Trading Config — конфигурация для cTrader.
+ * Forex Trading Config — конфигурация для cTrader FIX API.
  *
  * Пары, риск-менеджмент, лимиты (FTMO-совместимые).
  */

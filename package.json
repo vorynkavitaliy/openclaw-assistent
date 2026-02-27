@@ -30,7 +30,6 @@
   "homepage": "https://github.com/vorynkavitaliy/openclaw-assistent#readme",
   "dependencies": {
     "bybit-api": "^4.6.0",
-    "ctrader-ts": "^0.1.1",
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {

@@ -19,6 +19,26 @@ export interface OandaCredentials {
   practice: boolean;
 }
 
+export interface CTraderFixSession {
+  portSSL: number;
+  portPlain: number;
+  senderSubID: string;
+}
+
+export interface CTraderCredentials {
+  login: string;
+  ctraderId: string;
+  password: string;
+  fixPassword: string;
+  fix: {
+    host: string;
+    quote: CTraderFixSession;
+    trade: CTraderFixSession;
+    senderCompID: string;
+    targetCompID: string;
+  };
+}
+
 interface CredentialsFile {
   bybit?: {
     apiKey?: string;
@@ -30,6 +50,19 @@ interface CredentialsFile {
     token?: string;
     accountId?: string;
     practice?: boolean;
+  };
+  ctrader?: {
+    login?: string;
+    ctraderId?: string;
+    password?: string;
+    fixPassword?: string;
+    fix?: {
+      host?: string;
+      quote?: { portSSL?: number; portPlain?: number; senderSubID?: string };
+      trade?: { portSSL?: number; portPlain?: number; senderSubID?: string };
+      senderCompID?: string;
+      targetCompID?: string;
+    };
   };
 }
 
@@ -88,6 +121,37 @@ export function getOandaCredentials(): OandaCredentials {
       process.env.OANDA_PRACTICE !== undefined
         ? process.env.OANDA_PRACTICE.toLowerCase() !== 'false'
         : (file.oanda?.practice ?? true),
+  };
+}
+
+/**
+ * Загрузить cTrader FIX credentials.
+ * Приоритет: env vars > credentials.json
+ */
+export function getCTraderCredentials(): CTraderCredentials {
+  const file = loadCredentialsFile();
+  const ct = file.ctrader;
+
+  return {
+    login: process.env.CTRADER_LOGIN ?? ct?.login ?? '',
+    ctraderId: process.env.CTRADER_ID ?? ct?.ctraderId ?? '',
+    password: process.env.CTRADER_PASSWORD ?? ct?.password ?? '',
+    fixPassword: process.env.CTRADER_FIX_PASSWORD ?? ct?.fixPassword ?? ct?.password ?? '',
+    fix: {
+      host: process.env.CTRADER_FIX_HOST ?? ct?.fix?.host ?? '',
+      quote: {
+        portSSL: ct?.fix?.quote?.portSSL ?? 5211,
+        portPlain: ct?.fix?.quote?.portPlain ?? 5201,
+        senderSubID: ct?.fix?.quote?.senderSubID ?? 'QUOTE',
+      },
+      trade: {
+        portSSL: ct?.fix?.trade?.portSSL ?? 5212,
+        portPlain: ct?.fix?.trade?.portPlain ?? 5202,
+        senderSubID: ct?.fix?.trade?.senderSubID ?? 'TRADE',
+      },
+      senderCompID: process.env.CTRADER_SENDER_COMP_ID ?? ct?.fix?.senderCompID ?? '',
+      targetCompID: ct?.fix?.targetCompID ?? 'cServer',
+    },
   };
 }
 

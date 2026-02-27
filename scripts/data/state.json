@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "lastUpdate": "2026-02-27T10:00:24.913Z",
+  "today": "2026-02-27",
+  "daily": {
+    "date": "2026-02-27",
+    "trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "stops": 0,
+    "totalPnl": 0,
+    "realizedPnl": 0,
+    "fees": 0,
+    "maxDrawdown": 0,
+    "stopDay": false,
+    "stopDayReason": null
+  },
+  "positions": [
+    {
+      "symbol": "SOLUSDT",
+      "side": "Buy",
+      "size": "208",
+      "entryPrice": "86.3",
+      "markPrice": "86.27",
+      "unrealisedPnl": "-6.24",
+      "leverage": "3",
+      "stopLoss": "85.1",
+      "takeProfit": "88.7"
+    }
+  ],
+  "pendingSignals": [],
+  "lastMonitor": "2026-02-27T10:00:24.913Z",
+  "lastReport": "2026-02-27T08:29:39.277Z",
+  "balance": {
+    "total": 50567.17239191,
+    "available": 35251.34418574,
+    "unrealizedPnl": 3.74433321,
+    "lastUpdate": "2026-02-27T10:00:01.838Z"
+  }
+}

@@ -19,7 +19,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 LOG_DIR="$SCRIPT_DIR/data/logs"
-NODE="$(command -v node)"
+# Cron может запускаться с урезанным PATH (без nvm). Фиксируем node явно.
+export PATH="/root/.nvm/versions/node/v22.22.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+NODE="$(command -v node || true)"
+if [[ -z "$NODE" ]]; then
+  echo "ERROR: node не найден в PATH" >&2
+  exit 1
+fi
 
 # Убедимся что директория логов существует
 mkdir -p "$LOG_DIR"
@@ -53,7 +59,7 @@ case "$cmd" in
     # Отправляем через OpenClaw agent → Telegram
     if command -v openclaw &>/dev/null; then
       openclaw agent --agent crypto-trader \
-        --message "Отправь этот часовой отчёт пользователю в Telegram:\n\n${REPORT_TEXT}" \
+        --message "Отправь этот часовой отчёт в Telegram чату telegram:5929886678 (через message.send):\n\n${REPORT_TEXT}" \
         >> "$REPORT_LOG" 2>&1 || true
     fi
     echo "" >> "$REPORT_LOG"

@@ -23,7 +23,7 @@ const log = createLogger('crypto-report');
 
 function getArg(name: string, def: string): string {
   const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
+  const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? found.slice(prefix.length) : def;
 }
 

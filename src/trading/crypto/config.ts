@@ -6,9 +6,11 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { TradingConfig } from '../shared/types.js';
 
-const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const config: TradingConfig = {
   // ─── Торговые пары ───────────────────────────────────────────

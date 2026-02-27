@@ -383,14 +383,14 @@ export function getRecentEvents(count: number = 50): StoredEvent[] {
   const lines = fs.readFileSync(EVENTS_FILE, 'utf-8').trim().split('\n').filter(Boolean);
   return lines
     .slice(-count)
-    .map((line) => {
+    .map((line: string) => {
       try {
         return JSON.parse(line) as StoredEvent;
       } catch {
         return null;
       }
     })
-    .filter((e): e is StoredEvent => e !== null);
+    .filter((e: StoredEvent | null): e is StoredEvent => e !== null);
 }
 
 /**

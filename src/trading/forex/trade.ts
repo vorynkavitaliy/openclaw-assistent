@@ -28,7 +28,7 @@ const log = createLogger('forex-trade');
 
 function getArg(name: string): string | undefined {
   const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
+  const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? found.slice(prefix.length) : undefined;
 }
 
@@ -39,7 +39,7 @@ function getNumArg(name: string): number | undefined {
 
 function getRequiredArg(name: string): string {
   const val = getArg(name);
-  if (!val) {
+  if (val === undefined) {
     console.error(JSON.stringify({ error: `--${name} обязателен` }));
     process.exit(1);
   }
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
         process.exit(1);
     }
   } finally {
-    await disconnect();
+    disconnect();
   }
 }
 

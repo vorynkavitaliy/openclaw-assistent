@@ -36,7 +36,7 @@ const log = createLogger('crypto-monitor');
 
 function getArg(name: string): string | undefined {
   const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
+  const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? found.slice(prefix.length) : undefined;
 }
 

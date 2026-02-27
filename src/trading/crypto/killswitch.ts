@@ -21,7 +21,7 @@ const log = createLogger('killswitch');
 
 function getArg(name: string): string | undefined {
   const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
+  const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? found.slice(prefix.length) : undefined;
 }
 
@@ -36,8 +36,8 @@ async function showStatus(): Promise<void> {
   const s = state.get();
   const killActive = state.isKillSwitchActive();
 
-  let balanceInfo = '';
-  let posInfo = '';
+  let balanceInfo: string;
+  let posInfo: string;
 
   try {
     const balance = await getBalance();

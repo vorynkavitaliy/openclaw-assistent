@@ -52,9 +52,9 @@ async function getClient(): Promise<CTrader> {
   return client;
 }
 
-export async function disconnect(): Promise<void> {
+export function disconnect(): void {
   if (client) {
-    await client.disconnect();
+    client.disconnect();
     client = null;
     log.info('cTrader: отключено');
   }
@@ -202,7 +202,7 @@ export async function getPositions(): Promise<OurPosition[]> {
     const lots = unitsToLots(td.volume);
     return {
       symbol: String(td.symbolId),
-      side: (td.tradeSide === 1 ? 'long' : 'short') as 'long' | 'short',
+      side: Number(td.tradeSide) === 1 ? 'long' : 'short',
       size: String(lots),
       entryPrice: String(p.price ?? 0),
       markPrice: '0',

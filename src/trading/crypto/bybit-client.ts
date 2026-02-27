@@ -8,7 +8,12 @@
  * Использует bybit-api SDK для торговли, fetch для публичных данных.
  */
 
-import { RestClientV5 } from 'bybit-api';
+import {
+  RestClientV5,
+  type OrderParamsV5,
+  type PositionInfoParamsV5,
+  type SetTradingStopParamsV5,
+} from 'bybit-api';
 import { getBybitBaseUrl, getBybitCredentials } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -273,14 +278,14 @@ export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
     throw new Error(`Ошибка получения баланса: ${res.retMsg}`);
   }
 
-  const account = (res.result as unknown as { list?: Array<Record<string, unknown>> })?.list?.[0];
+  const account = (res.result as unknown as { list?: Array<Record<string, string>> })?.list?.[0];
   if (!account) throw new Error('Аккаунт не найден');
 
   return {
-    totalEquity: parseFloat(String(account.totalEquity ?? 0)),
-    availableBalance: parseFloat(String(account.totalAvailableBalance ?? 0)),
-    totalWalletBalance: parseFloat(String(account.totalWalletBalance ?? 0)),
-    unrealisedPnl: parseFloat(String(account.totalPerpUPL ?? 0)),
+    totalEquity: parseFloat(account.totalEquity || '0'),
+    availableBalance: parseFloat(account.totalAvailableBalance || '0'),
+    totalWalletBalance: parseFloat(account.totalWalletBalance || '0'),
+    unrealisedPnl: parseFloat(account.totalPerpUPL || '0'),
     currency: coin,
   };
 }
@@ -290,8 +295,7 @@ export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
  */
 export async function getPositions(symbol?: string): Promise<Position[]> {
   const client = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const params: any = { category: CATEGORY, settleCoin: 'USDT' };
+  const params: PositionInfoParamsV5 = { category: CATEGORY, settleCoin: 'USDT' };
   if (symbol) params.symbol = symbol.toUpperCase();
 
   const res = await client.getPositionInfo(params);
@@ -305,7 +309,7 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
     .filter((p) => parseFloat(p.size) > 0)
     .map((p) => ({
       symbol: p.symbol,
-      side: (p.side === 'Buy' ? 'long' : 'short') as 'long' | 'short',
+      side: p.side === 'Buy' ? 'long' : 'short',
       size: p.size,
       entryPrice: p.avgPrice,
       markPrice: p.markPrice,
@@ -331,29 +335,19 @@ export async function submitOrder(params: {
 }): Promise<OrderResult> {
   const client = getClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const orderParams: any = {
+  const orderParams: OrderParamsV5 = {
     category: CATEGORY,
     symbol: params.symbol.toUpperCase(),
     side: params.side,
     orderType: params.orderType,
     qty: params.qty,
     timeInForce: 'GTC',
+    ...(params.orderType === 'Limit' && params.price ? { price: params.price } : {}),
+    ...(params.stopLoss ? { stopLoss: params.stopLoss, slTriggerBy: 'LastPrice' as const } : {}),
+    ...(params.takeProfit
+      ? { takeProfit: params.takeProfit, tpTriggerBy: 'LastPrice' as const }
+      : {}),
   };
-
-  if (params.orderType === 'Limit' && params.price) {
-    orderParams.price = params.price;
-  }
-
-  if (params.stopLoss) {
-    orderParams.stopLoss = params.stopLoss;
-    orderParams.slTriggerBy = 'LastPrice';
-  }
-
-  if (params.takeProfit) {
-    orderParams.takeProfit = params.takeProfit;
-    orderParams.tpTriggerBy = 'LastPrice';
-  }
 
   const res = await client.submitOrder(orderParams);
   if (res.retCode !== 0) {
@@ -407,12 +401,10 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
     throw new Error(`Ошибка закрытия позиции: ${res.retMsg}`);
   }
 
-  const result = res.result as { orderId: string };
-
   return {
-    orderId: result.orderId,
+    orderId: res.result.orderId,
     symbol: symbol.toUpperCase(),
-    side: closeSide as 'Buy' | 'Sell',
+    side: closeSide,
     orderType: 'Market',
     qty: pos.size,
     status: 'CLOSED',
@@ -453,12 +445,10 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
     throw new Error(`Ошибка частичного закрытия: ${res.retMsg}`);
   }
 
-  const result = res.result as { orderId: string };
-
   return {
-    orderId: result.orderId,
+    orderId: res.result.orderId,
     symbol: symbol.toUpperCase(),
-    side: closeSide as 'Buy' | 'Sell',
+    side: closeSide,
     orderType: 'Market',
     qty,
     status: 'PARTIAL_CLOSED',
@@ -475,22 +465,13 @@ export async function modifyPosition(
 ): Promise<void> {
   const client = getClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const params: any = {
+  const params: SetTradingStopParamsV5 = {
     category: CATEGORY,
     symbol: symbol.toUpperCase(),
     positionIdx: 0,
+    ...(stopLoss ? { stopLoss, slTriggerBy: 'LastPrice' as const } : {}),
+    ...(takeProfit ? { takeProfit, tpTriggerBy: 'LastPrice' as const } : {}),
   };
-
-  if (stopLoss) {
-    params.stopLoss = stopLoss;
-    params.slTriggerBy = 'LastPrice';
-  }
-
-  if (takeProfit) {
-    params.takeProfit = takeProfit;
-    params.tpTriggerBy = 'LastPrice';
-  }
 
   const res = await client.setTradingStop(params);
 

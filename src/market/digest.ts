@@ -63,7 +63,7 @@ interface DigestOutput {
 
 function getNumArg(name: string, defaultVal: number): number {
   const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
+  const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? parseInt(found.slice(prefix.length), 10) || defaultVal : defaultVal;
 }
 
@@ -184,7 +184,7 @@ async function main(): Promise<void> {
   }
 
   // Upcoming events (now → now + hours)
-  let upcoming = macroEvents
+  const upcoming = macroEvents
     .filter((e) => e.timestamp !== null && e.timestamp >= nowTs && e.timestamp <= untilTs)
     .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
     .slice(0, maxEvents);

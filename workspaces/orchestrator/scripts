@@ -1,1 +1,7 @@
-../../scripts
+# Оркестратор — системные команды
+openclaw status
+openclaw status --deep
+openclaw gateway restart
+openclaw logs --follow
+npx tsx src/trading/crypto/report.ts
+npx tsx src/market/digest.ts

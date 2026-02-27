@@ -1,1 +1,6 @@
-../../scripts
+# Backend Dev — инструменты
+npx tsc --noEmit
+npx eslint src/ --fix
+npx prettier --write src/
+npx vitest run
+npm run build

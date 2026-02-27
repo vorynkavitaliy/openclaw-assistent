@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-'use strict';
 /**
  * Crypto State Manager — управление состоянием между запусками.
  *
@@ -9,17 +7,15 @@
  *   - Открытые позиции snapshot
  *   - События (events.jsonl)
  *
- * Использование:
- *   const state = require('./crypto_state');
- *   state.load();
- *   state.recordTrade({ ... });
- *   state.checkDayLimits();
- *   state.save();
+ * Мигрировано из scripts/crypto_state.js
  */
 
-const fs = require('fs');
-const path = require('path');
-const config = require('./crypto_config');
+import fs from 'node:fs';
+import path from 'node:path';
+import { createLogger } from '../../utils/logger.js';
+import config from './config.js';
+
+const log = createLogger('crypto-state');
 
 // ─── Пути ─────────────────────────────────────────────────────
 
@@ -28,9 +24,77 @@ const EVENTS_FILE = config.eventsFile;
 const KILL_SWITCH_FILE = config.killSwitchFile;
 const DATA_DIR = path.dirname(STATE_FILE);
 
+// ─── Типы ─────────────────────────────────────────────────────
+
+interface DailyStats {
+  date: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  stops: number;
+  totalPnl: number;
+  realizedPnl: number;
+  fees: number;
+  maxDrawdown: number;
+  stopDay: boolean;
+  stopDayReason: string | null;
+}
+
+interface BalanceSnapshot {
+  total: number;
+  available: number;
+  unrealizedPnl: number;
+  lastUpdate: string | null;
+}
+
+interface PositionSnapshot {
+  symbol: string;
+  side: string;
+  size: string;
+  entryPrice: string;
+  markPrice: string;
+  unrealisedPnl: string;
+  leverage: string;
+  stopLoss?: string;
+  takeProfit?: string;
+}
+
+interface CryptoState {
+  version: number;
+  lastUpdate: string;
+  today: string;
+  daily: DailyStats;
+  positions: PositionSnapshot[];
+  pendingSignals: unknown[];
+  lastMonitor: string | null;
+  lastReport: string | null;
+  balance: BalanceSnapshot;
+}
+
+interface TradeInput {
+  symbol: string;
+  side: string;
+  pnl: number | string;
+  fee?: number | string;
+  isStop?: boolean;
+  entryPrice?: number | string;
+  exitPrice?: number | string;
+  qty?: string;
+}
+
+interface EventData {
+  [key: string]: unknown;
+}
+
+interface StoredEvent {
+  ts: string;
+  type: string;
+  [key: string]: unknown;
+}
+
 // ─── Инициализация ────────────────────────────────────────────
 
-function defaultState() {
+function defaultState(): CryptoState {
   const today = new Date().toISOString().slice(0, 10);
   return {
     version: 1,
@@ -49,10 +113,10 @@ function defaultState() {
       stopDay: false,
       stopDayReason: null,
     },
-    positions: [], // snapshot открытых позиций
-    pendingSignals: [], // сигналы на ожидании
-    lastMonitor: null, // timestamp последнего мониторинга
-    lastReport: null, // timestamp последнего отчёта
+    positions: [],
+    pendingSignals: [],
+    lastMonitor: null,
+    lastReport: null,
     balance: {
       total: 0,
       available: 0,
@@ -62,28 +126,29 @@ function defaultState() {
   };
 }
 
-let _state = null;
+let _state: CryptoState | null = null;
 
 // ─── Файловые операции ────────────────────────────────────────
 
-function ensureDataDir() {
+function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 }
 
-function load() {
+export function load(): CryptoState {
   ensureDataDir();
   if (fs.existsSync(STATE_FILE)) {
     try {
-      _state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-      // Проверяем что дата совпадает, если нет — ресет дневных
+      _state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) as CryptoState;
       const today = new Date().toISOString().slice(0, 10);
       if (_state.daily?.date !== today) {
         resetDaily();
       }
     } catch (e) {
-      console.error(`[state] Ошибка загрузки state.json: ${e.message}, создаю новый`);
+      log.error(
+        `Ошибка загрузки state.json: ${e instanceof Error ? e.message : String(e)}, создаю новый`,
+      );
       _state = defaultState();
     }
   } else {
@@ -92,23 +157,25 @@ function load() {
   return _state;
 }
 
-function save() {
+export function save(): void {
   ensureDataDir();
-  _state.lastUpdate = new Date().toISOString();
-  fs.writeFileSync(STATE_FILE, JSON.stringify(_state, null, 2), 'utf-8');
+  const state = get();
+  state.lastUpdate = new Date().toISOString();
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
 }
 
-function get() {
+export function get(): CryptoState {
   if (!_state) load();
-  return _state;
+  return _state!;
 }
 
 // ─── Дневные операции ─────────────────────────────────────────
 
-function resetDaily() {
+export function resetDaily(): void {
+  const state = get();
   const today = new Date().toISOString().slice(0, 10);
-  _state.today = today;
-  _state.daily = {
+  state.today = today;
+  state.daily = {
     date: today,
     trades: 0,
     wins: 0,
@@ -124,14 +191,13 @@ function resetDaily() {
 }
 
 /**
- * Записать завершённую сделку
- * @param {Object} trade - { symbol, side, pnl, fee, isStop, entryPrice, exitPrice, qty }
+ * Записать завершённую сделку.
  */
-function recordTrade(trade) {
+export function recordTrade(trade: TradeInput): void {
   const s = get();
   s.daily.trades++;
-  const pnl = parseFloat(trade.pnl) || 0;
-  const fee = parseFloat(trade.fee) || 0;
+  const pnl = typeof trade.pnl === 'string' ? parseFloat(trade.pnl) : trade.pnl;
+  const fee = typeof trade.fee === 'string' ? parseFloat(trade.fee) : (trade.fee ?? 0);
   s.daily.totalPnl += pnl;
   s.daily.realizedPnl += pnl - fee;
   s.daily.fees += fee;
@@ -146,43 +212,60 @@ function recordTrade(trade) {
     s.daily.stops++;
   }
 
-  // Обновить maxDrawdown
   if (s.daily.totalPnl < s.daily.maxDrawdown) {
     s.daily.maxDrawdown = s.daily.totalPnl;
   }
 
-  // Записать событие
-  logEvent('trade', trade);
-
-  // Проверить лимиты
+  logEvent('trade', trade as unknown as EventData);
   checkDayLimits();
   save();
 }
 
 /**
- * Обновить баланс
+ * Обновить баланс.
  */
-function updateBalance(balance) {
+export function updateBalance(balance: {
+  totalEquity?: string | number;
+  totalWalletBalance?: string | number;
+  totalAvailableBalance?: string | number;
+  totalPerpUPL?: string | number;
+}): void {
   const s = get();
   s.balance = {
-    total: parseFloat(balance.totalEquity) || parseFloat(balance.totalWalletBalance) || 0,
-    available: parseFloat(balance.totalAvailableBalance) || 0,
-    unrealizedPnl: parseFloat(balance.totalPerpUPL) || 0,
+    total:
+      parseFloat(String(balance.totalEquity ?? 0)) ||
+      parseFloat(String(balance.totalWalletBalance ?? 0)) ||
+      0,
+    available: parseFloat(String(balance.totalAvailableBalance ?? 0)) || 0,
+    unrealizedPnl: parseFloat(String(balance.totalPerpUPL ?? 0)) || 0,
     lastUpdate: new Date().toISOString(),
   };
   save();
 }
 
 /**
- * Обновить снапшот позиций
+ * Обновить снапшот позиций.
  */
-function updatePositions(positions) {
+export function updatePositions(
+  positions: Array<{
+    symbol: string;
+    side: string;
+    size: string;
+    entryPrice?: string;
+    avgPrice?: string;
+    markPrice: string;
+    unrealisedPnl: string;
+    leverage: string;
+    stopLoss?: string;
+    takeProfit?: string;
+  }>,
+): void {
   const s = get();
-  s.positions = positions.map(p => ({
+  s.positions = positions.map((p) => ({
     symbol: p.symbol,
     side: p.side,
     size: p.size,
-    entryPrice: p.entryPrice || p.avgPrice,
+    entryPrice: p.entryPrice ?? p.avgPrice ?? '0',
     markPrice: p.markPrice,
     unrealisedPnl: p.unrealisedPnl,
     leverage: p.leverage,
@@ -193,20 +276,18 @@ function updatePositions(positions) {
 }
 
 /**
- * Проверить дневные лимиты → stop-day
+ * Проверить дневные лимиты → stop-day.
  */
-function checkDayLimits() {
+export function checkDayLimits(): boolean {
   const s = get();
   const d = s.daily;
 
-  // Проверка 1: макс дневной убыток
   if (d.totalPnl <= -config.maxDailyLoss) {
     d.stopDay = true;
     d.stopDayReason = `Дневной убыток достиг $${Math.abs(d.totalPnl).toFixed(2)} (лимит $${config.maxDailyLoss})`;
     logEvent('stop_day', { reason: d.stopDayReason });
   }
 
-  // Проверка 2: кол-во стопов
   if (d.stops >= config.maxStopsPerDay) {
     d.stopDay = true;
     d.stopDayReason = `${d.stops} стопов (лимит ${config.maxStopsPerDay})`;
@@ -219,25 +300,21 @@ function checkDayLimits() {
 /**
  * Можно ли торговать?
  */
-function canTrade() {
+export function canTrade(): { allowed: boolean; reason: string } {
   const s = get();
 
-  // Kill-switch
   if (isKillSwitchActive()) {
     return { allowed: false, reason: 'KILL_SWITCH активен. Торговля остановлена.' };
   }
 
-  // Stop-day
   if (s.daily.stopDay) {
     return { allowed: false, reason: `СТОП-ДЕНЬ: ${s.daily.stopDayReason}` };
   }
 
-  // Режим dry-run
   if (config.mode !== 'execute') {
     return { allowed: false, reason: `Режим: ${config.mode}. Торговля отключена.` };
   }
 
-  // Макс позиций
   if (s.positions.length >= config.maxOpenPositions) {
     return {
       allowed: false,
@@ -249,9 +326,9 @@ function canTrade() {
 }
 
 /**
- * Рассчитать размер позиции
+ * Рассчитать размер позиции.
  */
-function calcPositionSize(entryPrice, stopLoss) {
+export function calcPositionSize(entryPrice: number, stopLoss: number): number {
   const s = get();
   const balance = s.balance.total || 0;
   if (balance === 0) return 0;
@@ -265,11 +342,11 @@ function calcPositionSize(entryPrice, stopLoss) {
 
 // ─── Kill Switch ──────────────────────────────────────────────
 
-function isKillSwitchActive() {
+export function isKillSwitchActive(): boolean {
   return fs.existsSync(KILL_SWITCH_FILE);
 }
 
-function activateKillSwitch(reason = 'manual') {
+export function activateKillSwitch(reason: string = 'manual'): void {
   ensureDataDir();
   const content = JSON.stringify({
     activated: new Date().toISOString(),
@@ -279,7 +356,7 @@ function activateKillSwitch(reason = 'manual') {
   logEvent('kill_switch_on', { reason });
 }
 
-function deactivateKillSwitch() {
+export function deactivateKillSwitch(): void {
   if (fs.existsSync(KILL_SWITCH_FILE)) {
     fs.unlinkSync(KILL_SWITCH_FILE);
     logEvent('kill_switch_off', {});
@@ -288,7 +365,7 @@ function deactivateKillSwitch() {
 
 // ─── Events Log (JSONL) ──────────────────────────────────────
 
-function logEvent(type, data) {
+export function logEvent(type: string, data: EventData): void {
   ensureDataDir();
   const event = {
     ts: new Date().toISOString(),
@@ -299,48 +376,27 @@ function logEvent(type, data) {
 }
 
 /**
- * Получить последние события
+ * Получить последние события.
  */
-function getRecentEvents(count = 50) {
+export function getRecentEvents(count: number = 50): StoredEvent[] {
   if (!fs.existsSync(EVENTS_FILE)) return [];
   const lines = fs.readFileSync(EVENTS_FILE, 'utf-8').trim().split('\n').filter(Boolean);
   return lines
     .slice(-count)
-    .map(line => {
+    .map((line) => {
       try {
-        return JSON.parse(line);
+        return JSON.parse(line) as StoredEvent;
       } catch {
         return null;
       }
     })
-    .filter(Boolean);
+    .filter((e): e is StoredEvent => e !== null);
 }
 
 /**
- * Получить сделки за сегодня
+ * Получить сделки за сегодня.
  */
-function getTodayTrades() {
+export function getTodayTrades(): StoredEvent[] {
   const today = new Date().toISOString().slice(0, 10);
-  return getRecentEvents(200).filter(e => e.type === 'trade' && e.ts?.startsWith(today));
+  return getRecentEvents(200).filter((e) => e.type === 'trade' && e.ts?.startsWith(today));
 }
-
-// ─── Экспорт ──────────────────────────────────────────────────
-
-module.exports = {
-  load,
-  save,
-  get,
-  resetDaily,
-  recordTrade,
-  updateBalance,
-  updatePositions,
-  checkDayLimits,
-  canTrade,
-  calcPositionSize,
-  isKillSwitchActive,
-  activateKillSwitch,
-  deactivateKillSwitch,
-  logEvent,
-  getRecentEvents,
-  getTodayTrades,
-};

@@ -1,1 +1,6 @@
-../../scripts
+# Рыночный дайджест — доступные команды
+# Полный дайджест (48 часов)
+npx tsx src/market/digest.ts
+
+# Дайджест с параметрами
+npx tsx src/market/digest.ts --hours=24 --max-news=10

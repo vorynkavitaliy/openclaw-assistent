@@ -15,6 +15,16 @@ keys.md
 node_modules/
 package-lock.json
 
+# TypeScript build output
+dist/
+
+# Runtime data
+data/
+
+# Python virtual environment
+.venv/
+__pycache__/
+
 # OpenClaw runtime state (создаётся автоматически в каждом workspace)
 **/.openclaw/
 

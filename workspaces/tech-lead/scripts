@@ -1,1 +1,5 @@
-../../scripts
+# Tech Lead — инструменты разработки
+npx tsc --noEmit
+npx eslint src/
+npx prettier --check src/
+npx vitest run

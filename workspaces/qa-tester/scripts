@@ -1,1 +1,4 @@
-../../scripts
+# QA — инструменты тестирования
+npx vitest run
+npx vitest run --coverage
+npx tsc --noEmit

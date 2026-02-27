@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-'use strict';
 /**
  * Crypto Monitor — автономный мониторинг рынка (каждые 10 минут).
  *
@@ -10,74 +8,71 @@
  *   4. Анализ рынка по всем парам (тренд + вход)
  *   5. Открытие сделок при наличии сигнала (mode=execute)
  *
- * Запуск:
- *   node scripts/crypto_monitor.js
- *   node scripts/crypto_monitor.js --dry-run   # только анализ без сделок
- *   node scripts/crypto_monitor.js --pair=BTCUSDT  # только одна пара
+ * Использование:
+ *   tsx src/trading/crypto/monitor.ts
+ *   tsx src/trading/crypto/monitor.ts --dry-run
+ *   tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
  *
- * Вывод: JSON с результатами мониторинга.
+ * Мигрировано из scripts/crypto_monitor.js
  */
 
-const { execSync } = require('child_process');
-const path = require('path');
-const config = require('./crypto_config');
-const state = require('./crypto_state');
+import { createLogger } from '../../utils/logger.js';
+import {
+  getBalance,
+  getMarketAnalysis,
+  getMarketInfo,
+  getPositions,
+  modifyPosition,
+  partialClosePosition,
+  setLeverage,
+  submitOrder,
+} from './bybit-client.js';
+import config from './config.js';
+import * as state from './state.js';
 
-const SCRIPTS_DIR = path.resolve(__dirname);
-const TRADE_JS = path.join(SCRIPTS_DIR, 'bybit_trade.js');
-const DATA_PY = path.join(SCRIPTS_DIR, 'bybit_get_data.py');
+const log = createLogger('crypto-monitor');
 
 // ─── CLI ──────────────────────────────────────────────────────
 
-function getArg(name, def) {
-  const p = `--${name}=`;
-  const f = process.argv.find(a => a.startsWith(p));
-  return f ? f.slice(p.length) : def;
+function getArg(name: string): string | undefined {
+  const prefix = `--${name}=`;
+  const found = process.argv.find((a) => a.startsWith(prefix));
+  return found ? found.slice(prefix.length) : undefined;
 }
-function hasFlag(name) {
+
+function hasFlag(name: string): boolean {
   return process.argv.includes(`--${name}`);
 }
+
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
 
-// ─── Exec helpers ─────────────────────────────────────────────
+// ─── Типы ─────────────────────────────────────────────────────
 
-function runTrade(args) {
-  try {
-    const out = execSync(`node "${TRADE_JS}" ${args}`, {
-      timeout: 30000,
-      encoding: 'utf-8',
-      env: { ...process.env, HOME: process.env.HOME || '/root' },
-    });
-    return JSON.parse(out.trim());
-  } catch (e) {
-    try {
-      return JSON.parse(e.stdout?.trim());
-    } catch {
-      return { status: 'ERROR', error: e.message };
-    }
-  }
+interface TradeSignalInternal {
+  pair: string;
+  side: 'Buy' | 'Sell';
+  entryPrice: number;
+  sl: number;
+  tp: number;
+  rr: number;
+  reason: string;
+  funding: number;
+  atr: number;
+  trendBias: string;
+  rsi4h: number;
+  rsi15m: number;
 }
 
-function runData(args) {
-  try {
-    const out = execSync(`python3 "${DATA_PY}" ${args}`, {
-      timeout: 15000,
-      encoding: 'utf-8',
-    });
-    return JSON.parse(out.trim());
-  } catch (e) {
-    try {
-      return JSON.parse(e.stdout?.trim());
-    } catch {
-      return { error: e.message };
-    }
-  }
+interface SignalResult extends TradeSignalInternal {
+  action: string;
+  orderId?: string;
+  qty?: string;
 }
 
 // ─── Шаг 1: Статус и лимиты ──────────────────────────────────
 
-function checkStatus() {
+function checkStatus(): { ok: boolean; reason: string } {
   state.load();
 
   if (state.isKillSwitchActive()) {
@@ -94,35 +89,53 @@ function checkStatus() {
 
 // ─── Шаг 2: Обновить баланс + позиции ───────────────────────
 
-function refreshAccount() {
-  const balRes = runTrade('--action=balance');
-  if (balRes.status === 'OK') {
-    state.updateBalance(balRes);
+async function refreshAccount(): Promise<void> {
+  try {
+    const balance = await getBalance();
+    state.updateBalance({
+      totalEquity: String(balance.totalEquity),
+      totalWalletBalance: String(balance.totalWalletBalance),
+      totalAvailableBalance: String(balance.availableBalance),
+      totalPerpUPL: String(balance.unrealisedPnl),
+    });
+  } catch (err) {
+    log.warn('Не удалось получить баланс', { error: (err as Error).message });
   }
 
-  const posRes = runTrade('--action=positions');
-  if (posRes.status === 'OK') {
-    state.updatePositions(posRes.positions || []);
+  try {
+    const positions = await getPositions();
+    state.updatePositions(
+      positions.map((p) => ({
+        symbol: p.symbol,
+        side: p.side,
+        size: p.size,
+        entryPrice: p.entryPrice,
+        markPrice: p.markPrice,
+        unrealisedPnl: p.unrealisedPnl,
+        leverage: p.leverage,
+        stopLoss: p.stopLoss,
+        takeProfit: p.takeProfit,
+      })),
+    );
+  } catch (err) {
+    log.warn('Не удалось получить позиции', { error: (err as Error).message });
   }
-
-  return { balance: balRes, positions: posRes };
 }
 
 // ─── Шаг 3: Управление открытыми позициями ───────────────────
 
-function managePositions() {
+async function managePositions(): Promise<Array<Record<string, unknown>>> {
   const s = state.get();
-  const actions = [];
+  const actions: Array<Record<string, unknown>> = [];
 
   for (const pos of s.positions) {
     const uPnl = parseFloat(pos.unrealisedPnl) || 0;
     const entry = parseFloat(pos.entryPrice) || 0;
-    const sl = parseFloat(pos.stopLoss) || 0;
+    const sl = parseFloat(pos.stopLoss ?? '0') || 0;
     const size = parseFloat(pos.size) || 0;
 
     if (entry === 0 || size === 0) continue;
 
-    // Рассчитать 1R
     const slDistance = Math.abs(entry - sl);
     if (slDistance === 0) continue;
 
@@ -133,68 +146,78 @@ function managePositions() {
     if (currentR >= config.partialCloseAtR && !DRY_RUN) {
       const partialQty = (size * config.partialClosePercent).toFixed(getQtyPrecision(pos.symbol));
       if (parseFloat(partialQty) > 0) {
-        const closeRes = runTrade(
-          `--action=partial_close --symbol=${pos.symbol} --qty=${partialQty}`
-        );
-        actions.push({
-          type: 'partial_close',
-          symbol: pos.symbol,
-          qty: partialQty,
-          atR: currentR.toFixed(2),
-          result: closeRes.status,
-        });
+        try {
+          await partialClosePosition(pos.symbol, partialQty);
+          actions.push({
+            type: 'partial_close',
+            symbol: pos.symbol,
+            qty: partialQty,
+            atR: currentR.toFixed(2),
+            result: 'OK',
+          });
 
-        // Передвинуть SL на безубыток
-        const modRes = runTrade(`--action=modify --symbol=${pos.symbol} --sl=${entry}`);
-        actions.push({
-          type: 'sl_breakeven',
-          symbol: pos.symbol,
-          newSl: entry,
-          result: modRes.status,
-        });
+          // Передвинуть SL на безубыток
+          await modifyPosition(pos.symbol, String(entry));
+          actions.push({
+            type: 'sl_breakeven',
+            symbol: pos.symbol,
+            newSl: entry,
+            result: 'OK',
+          });
 
-        state.logEvent('partial_close', {
-          symbol: pos.symbol,
-          qty: partialQty,
-          pnlAtClose: uPnl,
-          rMultiple: currentR.toFixed(2),
-        });
+          state.logEvent('partial_close', {
+            symbol: pos.symbol,
+            qty: partialQty,
+            pnlAtClose: uPnl,
+            rMultiple: currentR.toFixed(2),
+          });
+        } catch (err) {
+          actions.push({
+            type: 'partial_close',
+            symbol: pos.symbol,
+            result: `ERROR: ${(err as Error).message}`,
+          });
+        }
       }
     }
 
-    // Trailing stop после +1.5R (передвигаем SL)
+    // Trailing stop после +1.5R
     if (currentR >= config.trailingStartR && !DRY_RUN) {
       const mark = parseFloat(pos.markPrice) || 0;
       const trailingDistance = slDistance * config.trailingDistanceR;
-      let newSl;
-      if (pos.side === 'Buy') {
-        newSl = mark - trailingDistance;
-        if (newSl > sl) {
-          const modRes = runTrade(
-            `--action=modify --symbol=${pos.symbol} --sl=${newSl.toFixed(2)}`
-          );
-          actions.push({
-            type: 'trailing_sl',
-            symbol: pos.symbol,
-            oldSl: sl,
-            newSl: newSl.toFixed(2),
-            result: modRes.status,
-          });
+
+      try {
+        if (pos.side === 'Buy' || pos.side === 'long') {
+          const newSl = mark - trailingDistance;
+          if (newSl > sl) {
+            await modifyPosition(pos.symbol, newSl.toFixed(2));
+            actions.push({
+              type: 'trailing_sl',
+              symbol: pos.symbol,
+              oldSl: sl,
+              newSl: newSl.toFixed(2),
+              result: 'OK',
+            });
+          }
+        } else {
+          const newSl = mark + trailingDistance;
+          if (newSl < sl || sl === 0) {
+            await modifyPosition(pos.symbol, newSl.toFixed(2));
+            actions.push({
+              type: 'trailing_sl',
+              symbol: pos.symbol,
+              oldSl: sl,
+              newSl: newSl.toFixed(2),
+              result: 'OK',
+            });
+          }
         }
-      } else {
-        newSl = mark + trailingDistance;
-        if (newSl < sl || sl === 0) {
-          const modRes = runTrade(
-            `--action=modify --symbol=${pos.symbol} --sl=${newSl.toFixed(2)}`
-          );
-          actions.push({
-            type: 'trailing_sl',
-            symbol: pos.symbol,
-            oldSl: sl,
-            newSl: newSl.toFixed(2),
-            result: modRes.status,
-          });
-        }
+      } catch (err) {
+        actions.push({
+          type: 'trailing_sl',
+          symbol: pos.symbol,
+          result: `ERROR: ${(err as Error).message}`,
+        });
       }
     }
   }
@@ -204,60 +227,50 @@ function managePositions() {
 
 // ─── Шаг 4: Анализ рынка ────────────────────────────────────
 
-function analyzeMarket() {
+async function analyzeMarket(): Promise<TradeSignalInternal[]> {
   const pairs = SINGLE_PAIR ? [SINGLE_PAIR.toUpperCase()] : config.pairs;
-  const signals = [];
+  const signals: TradeSignalInternal[] = [];
 
   for (const pair of pairs) {
     try {
-      const signal = analyzePair(pair);
+      const signal = await analyzePair(pair);
       if (signal) signals.push(signal);
-    } catch (e) {
-      state.logEvent('analysis_error', { pair, error: e.message });
+    } catch (err) {
+      state.logEvent('analysis_error', { pair, error: (err as Error).message });
     }
   }
 
   return signals;
 }
 
-function analyzePair(pair) {
-  // 4h — тренд
-  const h4 = runData(`--pair ${pair} --tf 240 --bars 100`);
-  if (h4.error) return null;
+async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
+  // Multi-timeframe анализ
+  const [h4, m15, mkt] = await Promise.all([
+    getMarketAnalysis(pair, '240', 100),
+    getMarketAnalysis(pair, '15', 100),
+    getMarketInfo(pair),
+  ]);
 
-  // 1h — зоны
-  const h1 = runData(`--pair ${pair} --tf 60 --bars 50`);
+  if (!h4 || !m15) return null;
 
-  // 15m — точка входа
-  const m15 = runData(`--pair ${pair} --tf 15 --bars 100`);
-  if (m15.error) return null;
+  const trendBias = h4.bias.emaTrend;
+  const priceVsEma = h4.bias.priceVsEma200;
+  const rsi4h = h4.indicators.rsi14;
+  const rsi15m = m15.indicators.rsi14;
+  const atr15m = m15.indicators.atr14;
+  const currentPrice = m15.currentPrice;
+  const fundingRate = mkt?.fundingRate ?? 0;
 
-  // Market info (funding, OI)
-  const mkt = runData(`--pair ${pair} --market-info`);
-
-  // Определяем bias
-  const trendBias = h4.bias?.ema_trend || 'UNKNOWN';
-  const priceVsEma = h4.bias?.price_vs_ema200 || 'UNKNOWN';
-  const rsi4h = h4.indicators?.rsi14 || 50;
-  const rsi15m = m15.indicators?.rsi14 || 50;
-  const atr15m = m15.indicators?.atr14 || 0;
-  const currentPrice = m15.current_price || h4.current_price || 0;
-  const fundingRate = mkt?.data?.funding_rate || 0;
-
-  // Нет тренда = не торгуем
+  // Нет тренда — не торгуем
   if (trendBias === 'UNKNOWN') return null;
 
-  // Проверяем фильтры
   // Funding rate фильтр
   if (trendBias === 'BULLISH' && fundingRate > config.maxFundingRate) return null;
   if (trendBias === 'BEARISH' && fundingRate < config.minFundingRate) return null;
 
-  // RSI фильтр — ищем перепроданность для лонга, перекупленность для шорта
-  let entrySignal = null;
-
+  // LONG сигнал
   if (trendBias === 'BULLISH' && priceVsEma === 'ABOVE') {
-    // LONG: RSI15m < 40 или цена вблизи support
-    const support = m15.levels?.support || 0;
+    const support = m15.levels.support;
     const distToSupport = support > 0 ? ((currentPrice - support) / currentPrice) * 100 : 999;
 
     if (rsi15m < 40 || distToSupport < 1.5) {
@@ -265,12 +278,12 @@ function analyzePair(pair) {
       const slDist = currentPrice - sl;
       const tp = currentPrice + slDist * config.minRR;
 
-      entrySignal = {
+      return {
         pair,
         side: 'Buy',
         entryPrice: currentPrice,
-        sl: round(sl, pair),
-        tp: round(tp, pair),
+        sl: roundPrice(sl, pair),
+        tp: roundPrice(tp, pair),
         rr: config.minRR,
         reason: `BULLISH тренд 4h + RSI15m=${rsi15m.toFixed(1)} + поддержка ${support}`,
         funding: fundingRate,
@@ -282,9 +295,9 @@ function analyzePair(pair) {
     }
   }
 
+  // SHORT сигнал
   if (trendBias === 'BEARISH' && priceVsEma === 'BELOW') {
-    // SHORT: RSI15m > 60 или цена вблизи resistance
-    const resistance = m15.levels?.resistance || 0;
+    const resistance = m15.levels.resistance;
     const distToResistance =
       resistance > 0 ? ((resistance - currentPrice) / currentPrice) * 100 : 999;
 
@@ -293,12 +306,12 @@ function analyzePair(pair) {
       const slDist = sl - currentPrice;
       const tp = currentPrice - slDist * config.minRR;
 
-      entrySignal = {
+      return {
         pair,
         side: 'Sell',
         entryPrice: currentPrice,
-        sl: round(sl, pair),
-        tp: round(tp, pair),
+        sl: roundPrice(sl, pair),
+        tp: roundPrice(tp, pair),
         rr: config.minRR,
         reason: `BEARISH тренд 4h + RSI15m=${rsi15m.toFixed(1)} + сопротивление ${resistance}`,
         funding: fundingRate,
@@ -310,25 +323,24 @@ function analyzePair(pair) {
     }
   }
 
-  return entrySignal;
+  return null;
 }
 
 // ─── Шаг 5: Исполнение сигналов ──────────────────────────────
 
-function executeSignals(signals) {
+async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalResult[]> {
   if (DRY_RUN) {
-    return signals.map(s => ({ ...s, action: 'DRY_RUN (не исполнено)' }));
+    return signals.map((s) => ({ ...s, action: 'DRY_RUN (не исполнено)' }));
   }
 
   const tradePerm = state.canTrade();
   if (!tradePerm.allowed) {
-    return signals.map(s => ({ ...s, action: `BLOCKED: ${tradePerm.reason}` }));
+    return signals.map((s) => ({ ...s, action: `BLOCKED: ${tradePerm.reason}` }));
   }
 
-  const results = [];
+  const results: SignalResult[] = [];
 
   for (const sig of signals) {
-    // Ещё раз проверяем лимиты (может измениться после каждой сделки)
     const perm = state.canTrade();
     if (!perm.allowed) {
       results.push({ ...sig, action: `BLOCKED: ${perm.reason}` });
@@ -337,7 +349,7 @@ function executeSignals(signals) {
 
     // Проверяем нет ли уже позиции по этой паре
     const s = state.get();
-    const existing = s.positions.find(p => p.symbol === sig.pair);
+    const existing = s.positions.find((p) => p.symbol === sig.pair);
     if (existing) {
       results.push({ ...sig, action: 'SKIP: уже есть позиция' });
       continue;
@@ -350,7 +362,7 @@ function executeSignals(signals) {
       continue;
     }
 
-    // Проверяем R:R
+    // Проверяем риск
     const slDist = Math.abs(sig.entryPrice - sig.sl);
     const risk = slDist * qty;
     if (risk > config.maxRiskPerTrade) {
@@ -361,16 +373,21 @@ function executeSignals(signals) {
       continue;
     }
 
-    // Установить плечо
-    runTrade(`--action=leverage --symbol=${sig.pair} --leverage=${config.defaultLeverage}`);
+    try {
+      // Установить плечо
+      await setLeverage(sig.pair, config.defaultLeverage);
 
-    // Открыть ордер
-    const qtyStr = formatQty(qty, sig.pair);
-    const orderRes = runTrade(
-      `--action=order --symbol=${sig.pair} --side=${sig.side} --qty=${qtyStr} --sl=${sig.sl} --tp=${sig.tp}`
-    );
+      // Открыть ордер
+      const qtyStr = formatQty(qty, sig.pair);
+      const orderRes = await submitOrder({
+        symbol: sig.pair,
+        side: sig.side,
+        orderType: 'Market',
+        qty: qtyStr,
+        stopLoss: String(sig.sl),
+        takeProfit: String(sig.tp),
+      });
 
-    if (orderRes.status === 'EXECUTED') {
       state.logEvent('order_opened', {
         symbol: sig.pair,
         side: sig.side,
@@ -383,8 +400,8 @@ function executeSignals(signals) {
       });
 
       results.push({ ...sig, action: 'EXECUTED', orderId: orderRes.orderId, qty: qtyStr });
-    } else {
-      results.push({ ...sig, action: `ERROR: ${orderRes.error || orderRes.retMsg || 'unknown'}` });
+    } catch (err) {
+      results.push({ ...sig, action: `ERROR: ${(err as Error).message}` });
     }
   }
 
@@ -393,22 +410,21 @@ function executeSignals(signals) {
 
 // ─── Utils ────────────────────────────────────────────────────
 
-function getQtyPrecision(symbol) {
+function getQtyPrecision(symbol: string): number {
   if (symbol.startsWith('BTC')) return 3;
   if (symbol.startsWith('ETH')) return 2;
   if (symbol.startsWith('SOL')) return 1;
   return 1;
 }
 
-function formatQty(qty, symbol) {
+function formatQty(qty: number, symbol: string): string {
   const prec = getQtyPrecision(symbol);
   const formatted = qty.toFixed(prec);
-  // Минимальное значение
   const minQty = Math.pow(10, -prec);
   return parseFloat(formatted) < minQty ? minQty.toFixed(prec) : formatted;
 }
 
-function round(val, symbol) {
+function roundPrice(val: number, symbol: string): number {
   if (symbol.startsWith('BTC')) return parseFloat(val.toFixed(1));
   if (symbol.startsWith('ETH')) return parseFloat(val.toFixed(2));
   return parseFloat(val.toFixed(4));
@@ -416,9 +432,9 @@ function round(val, symbol) {
 
 // ─── Main ─────────────────────────────────────────────────────
 
-async function main() {
+async function main(): Promise<void> {
   const startTime = Date.now();
-  const report = {
+  const report: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     mode: DRY_RUN ? 'dry-run' : 'execute',
   };
@@ -433,20 +449,20 @@ async function main() {
   }
 
   // 2. Обновить аккаунт
-  const account = refreshAccount();
+  await refreshAccount();
   report.balance = state.get().balance;
   report.openPositions = state.get().positions.length;
 
   // 3. Управление позициями
-  const posActions = managePositions();
+  const posActions = await managePositions();
   report.positionActions = posActions;
 
   // 4. Анализ рынка
-  const signals = analyzeMarket();
+  const signals = await analyzeMarket();
   report.signals = signals;
 
   // 5. Исполнение
-  const execResults = executeSignals(signals);
+  const execResults = await executeSignals(signals);
   report.execution = execResults;
 
   // 6. Обновить lastMonitor
@@ -460,7 +476,7 @@ async function main() {
 
   state.logEvent('monitor', {
     signals: signals.length,
-    executed: execResults.filter(r => r.action === 'EXECUTED').length,
+    executed: execResults.filter((r) => r.action === 'EXECUTED').length,
     positions: s.positions.length,
     mode: DRY_RUN ? 'dry-run' : 'execute',
   });
@@ -468,7 +484,7 @@ async function main() {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch(err => {
-  console.error(JSON.stringify({ status: 'ERROR', error: err.message }));
+main().catch((err) => {
+  log.error(`Критическая ошибка: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

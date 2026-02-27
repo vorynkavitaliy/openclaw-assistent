@@ -1,1 +1,21 @@
-../../scripts
+# Крипто-трейдинг — доступные команды
+# Мониторинг (сухой запуск)
+npx tsx src/trading/crypto/monitor.ts --dry-run
+
+# Мониторинг (реальное исполнение)
+npx tsx src/trading/crypto/monitor.ts
+
+# Мониторинг одной пары
+npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
+
+# Kill Switch (включить)
+npx tsx src/trading/crypto/killswitch.ts --on
+
+# Kill Switch (выключить)
+npx tsx src/trading/crypto/killswitch.ts --off
+
+# Kill Switch (закрыть всё)
+npx tsx src/trading/crypto/killswitch.ts --close-all
+
+# Отчёт
+npx tsx src/trading/crypto/report.ts

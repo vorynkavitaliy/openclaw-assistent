@@ -1,1 +1,31 @@
-../../scripts
+# Forex трейдинг — доступные команды (cTrader Open API)
+
+# Аутентификация (один раз)
+npx ctrader-ts auth
+
+# Мониторинг (heartbeat)
+npx tsx src/trading/forex/monitor.ts --heartbeat
+
+# Позиции
+npx tsx src/trading/forex/monitor.ts --positions
+
+# Проверка рисков
+npx tsx src/trading/forex/monitor.ts --risk-check
+
+# Анализ + торговля (dry-run)
+npx tsx src/trading/forex/monitor.ts --trade --dry-run
+
+# Анализ + торговля (реальная)
+npx tsx src/trading/forex/monitor.ts --trade
+
+# Открыть ордер
+npx tsx src/trading/forex/trade.ts --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
+
+# Закрыть позицию
+npx tsx src/trading/forex/trade.ts --action close --position-id <ID>
+
+# Закрыть всё
+npx tsx src/trading/forex/trade.ts --action close-all
+
+# Статус аккаунта
+npx tsx src/trading/forex/trade.ts --action status

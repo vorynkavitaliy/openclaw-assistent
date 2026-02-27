@@ -1,1 +1,4 @@
-../../scripts
+# Frontend Dev — инструменты
+npx tsc --noEmit
+npx eslint src/ --fix
+npx prettier --write src/

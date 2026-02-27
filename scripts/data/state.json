@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdate": "2026-02-27T11:00:26.107Z",
+  "lastUpdate": "2026-02-27T11:10:25.569Z",
   "today": "2026-02-27",
   "daily": {
     "date": "2026-02-27",
@@ -21,20 +21,20 @@
       "side": "Buy",
       "size": "0.416",
       "entryPrice": "67050",
-      "markPrice": "66573.5",
-      "unrealisedPnl": "-198.224",
+      "markPrice": "66715.6",
+      "unrealisedPnl": "-139.1104",
       "leverage": "3",
       "stopLoss": "66450",
       "takeProfit": "68750"
     }
   ],
   "pendingSignals": [],
-  "lastMonitor": "2026-02-27T11:00:26.107Z",
+  "lastMonitor": "2026-02-27T11:10:25.569Z",
   "lastReport": "2026-02-27T08:29:39.277Z",
   "balance": {
-    "total": 50105.03300369,
-    "available": 40862.7257122,
-    "unrealizedPnl": -198.23589344,
-    "lastUpdate": "2026-02-27T11:00:01.999Z"
+    "total": 50165.70514586,
+    "available": 40903.4050336,
+    "unrealizedPnl": -139.12305904,
+    "lastUpdate": "2026-02-27T11:10:01.835Z"
   }
 }

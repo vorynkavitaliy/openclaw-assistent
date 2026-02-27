@@ -135,3 +135,5 @@
 {"ts":"2026-02-27T10:40:25.824Z","type":"monitor","signals":0,"executed":0,"positions":1,"mode":"execute"}
 {"ts":"2026-02-27T10:50:25.211Z","type":"monitor","signals":0,"executed":0,"positions":1,"mode":"execute"}
 {"ts":"2026-02-27T11:00:26.107Z","type":"monitor","signals":0,"executed":0,"positions":1,"mode":"execute"}
+{"ts":"2026-02-27T11:10:05.609Z","type":"report","balance":50165.70514586,"positions":1,"dailyPnl":0,"dailyTrades":0}
+{"ts":"2026-02-27T11:10:25.571Z","type":"monitor","signals":0,"executed":0,"positions":1,"mode":"execute"}

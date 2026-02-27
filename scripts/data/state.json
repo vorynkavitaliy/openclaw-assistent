@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdate": "2026-02-27T10:00:24.913Z",
+  "lastUpdate": "2026-02-27T11:00:26.107Z",
   "today": "2026-02-27",
   "daily": {
     "date": "2026-02-27",
@@ -17,24 +17,24 @@
   },
   "positions": [
     {
-      "symbol": "SOLUSDT",
+      "symbol": "BTCUSDT",
       "side": "Buy",
-      "size": "208",
-      "entryPrice": "86.3",
-      "markPrice": "86.27",
-      "unrealisedPnl": "-6.24",
+      "size": "0.416",
+      "entryPrice": "67050",
+      "markPrice": "66573.5",
+      "unrealisedPnl": "-198.224",
       "leverage": "3",
-      "stopLoss": "85.1",
-      "takeProfit": "88.7"
+      "stopLoss": "66450",
+      "takeProfit": "68750"
     }
   ],
   "pendingSignals": [],
-  "lastMonitor": "2026-02-27T10:00:24.913Z",
+  "lastMonitor": "2026-02-27T11:00:26.107Z",
   "lastReport": "2026-02-27T08:29:39.277Z",
   "balance": {
-    "total": 50567.17239191,
-    "available": 35251.34418574,
-    "unrealizedPnl": 3.74433321,
-    "lastUpdate": "2026-02-27T10:00:01.838Z"
+    "total": 50105.03300369,
+    "available": 40862.7257122,
+    "unrealizedPnl": -198.23589344,
+    "lastUpdate": "2026-02-27T11:00:01.999Z"
   }
 }

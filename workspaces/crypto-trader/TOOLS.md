@@ -7,8 +7,13 @@ Bybit REST API v5
     ↕
 Node.js SDK (bybit-api) — с поддержкой Demo Trading
     ↕
-bybit_trade.js — торговля, мониторинг, управление позициями
-bybit_get_data.py — публичные данные (OHLC, индикаторы)
+TypeScript модули (src/trading/crypto/)
+├── bybit-client.ts — API обёртка: торговля, данные, мониторинг
+├── monitor.ts      — автономный мониторинг + анализ + исполнение
+├── killswitch.ts   — экстренная остановка + закрытие всех позиций
+├── report.ts       — часовые отчёты Telegram + JSON
+├── state.ts        — персистентное состояние: баланс, лимиты, события
+└── config.ts       — конфигурация из ~/.openclaw/openclaw.json
     ↕
 OpenClaw Crypto Trader Agent
     ↕
@@ -26,123 +31,88 @@ Orchestrator → Telegram
 
 ### Credentials
 
-- **Файл**: `~/.openclaw/credentials.json` → секция `bybit`
+- **Файл**: `~/.openclaw/openclaw.json` → секция `crypto`
 - **Тип аккаунта**: Unified Trading Account (UTA)
 - **Тип торговли**: USDT-M Linear Perpetual
 - **Demo Trading**: ключи от демо-аккаунта Bybit (работают только через Node SDK с `demoTrading: true`)
 
-### Конфигурация credentials.json
-
-```json
-{
-  "bybit": {
-    "api_key": "YOUR_API_KEY",
-    "api_secret": "YOUR_API_SECRET",
-    "testnet": false,
-    "demoTrading": true,
-    "default_leverage": 3,
-    "max_leverage": 5
-  }
-}
-```
-
-> ⚠️ Demo Trading ключи НЕ работают с обычным REST API (Python urllib). Только через Node SDK `bybit-api` с параметром `demoTrading: true`.
+> ⚠️ Demo Trading ключи НЕ работают с обычным REST API. Только через Node SDK `bybit-api` с параметром `demoTrading: true`.
 
 ---
 
-## Node.js — Торговля и мониторинг (bybit_trade.js)
+## TypeScript CLI — Мониторинг и торговля
 
-### Открытие позиции (Market)
-
-```bash
-node scripts/bybit_trade.js --action=order --symbol=BTCUSDT --side=Buy \
-  --qty=0.01 --sl=95000 --tp=102000
-
-node scripts/bybit_trade.js --action=order --symbol=ETHUSDT --side=Sell \
-  --qty=0.1 --sl=3800 --tp=3400
-```
-
-### Открытие позиции (Limit)
+### Мониторинг (основной инструмент)
 
 ```bash
-node scripts/bybit_trade.js --action=order --symbol=SOLUSDT --side=Buy \
-  --type=Limit --qty=1 --price=140 --sl=130 --tp=170
+# Полный мониторинг всех пар (dry-run — без исполнения)
+npx tsx src/trading/crypto/monitor.ts --dry-run
+
+# Мониторинг одной пары (dry-run)
+npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
+
+# Боевой режим — анализ + автоматическое исполнение
+npx tsx src/trading/crypto/monitor.ts
+
+# Боевой режим — одна пара
+npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
 ```
 
-### Закрытие позиции
+Monitor автоматически:
+
+1. Проверяет kill-switch и стоп-день
+2. Обновляет баланс и позиции
+3. Управляет открытыми позициями (частичное закрытие +1R, trailing SL +1.5R, BE)
+4. Делает мультитаймфреймный анализ (4h + 15m)
+5. Исполняет сигналы (если не dry-run)
+
+### Kill Switch (экстренная остановка)
 
 ```bash
-node scripts/bybit_trade.js --action=close --symbol=BTCUSDT
+# Статус (kill-switch, stop-day, mode, balance, positions)
+npx tsx src/trading/crypto/killswitch.ts
+
+# Включить kill-switch (остановить торговлю)
+npx tsx src/trading/crypto/killswitch.ts --on --reason="ручная остановка"
+
+# Закрыть ВСЕ позиции + включить kill-switch
+npx tsx src/trading/crypto/killswitch.ts --close-all
+
+# Выключить kill-switch (возобновить торговлю)
+npx tsx src/trading/crypto/killswitch.ts --off
 ```
 
-### Частичное закрытие (50% при +1R)
+### Отчёт (Telegram + JSON)
 
 ```bash
-node scripts/bybit_trade.js --action=partial_close --symbol=BTCUSDT --qty=0.005
+# Часовой отчёт (отправляется в Telegram через Gateway)
+npx tsx src/trading/crypto/report.ts
+
+# Отчёт в JSON формате (stdout)
+npx tsx src/trading/crypto/report.ts --format=json
 ```
 
-### Модификация SL/TP
-
-```bash
-node scripts/bybit_trade.js --action=modify --symbol=BTCUSDT --sl=96500 --tp=103000
-```
-
-### Закрытие всех позиций (экстренно)
-
-```bash
-node scripts/bybit_trade.js --action=close_all
-```
-
-### Установка плеча
-
-```bash
-node scripts/bybit_trade.js --action=leverage --symbol=BTCUSDT --leverage=5
-```
-
-### Открытые позиции
-
-```bash
-node scripts/bybit_trade.js --action=positions
-node scripts/bybit_trade.js --action=positions --symbol=BTCUSDT
-```
-
-### Баланс аккаунта
-
-```bash
-node scripts/bybit_trade.js --action=balance
-node scripts/bybit_trade.js --action=balance --coin=BTC
-```
-
-### Флаг --demo
-
-Для явного включения Demo Trading режима (вместо credentials.json):
-
-```bash
-node scripts/bybit_trade.js --action=balance --demo
-```
+Содержит: баланс, позиции, дневная статистика, рыночные данные BTC/ETH/SOL.
 
 ---
 
-## Python — Рыночные данные (bybit_get_data.py)
+## API функции (bybit-client.ts)
 
-Публичный API, не требует авторизации.
+Доступны как библиотека для других модулей:
 
-### Получение OHLC + индикаторы
-
-```bash
-# Определение тренда (4h/1h)
-python3 scripts/bybit_get_data.py --pair BTCUSDT --tf 240 --bars 100
-python3 scripts/bybit_get_data.py --pair BTCUSDT --tf 60 --bars 50
-
-# Поиск точки входа (15m/5m — ОБЯЗАТЕЛЬНО!)
-python3 scripts/bybit_get_data.py --pair BTCUSDT --tf 15 --bars 100
-python3 scripts/bybit_get_data.py --pair BTCUSDT --tf 5 --bars 100
-
-# Рыночные метрики (funding, OI, volume)
-python3 scripts/bybit_get_data.py --pair BTCUSDT --market-info
-```
-
-Возвращает JSON: `current_price`, `indicators` (EMA200, EMA50, RSI14, ATR14), `levels` (support/resistance), `bias`, `funding_rate`, `open_interest`.
+| Функция                                       | Описание                                |
+| --------------------------------------------- | --------------------------------------- |
+| `getKlines(symbol, interval, limit)`          | OHLC свечи                              |
+| `getMarketInfo(symbol)`                       | Тикер, funding rate, OI, funding сигнал |
+| `getMarketAnalysis(symbol, tf, bars)`         | OHLC + EMA/RSI/ATR + trend bias         |
+| `getBalance(coin?)`                           | Баланс (UNIFIED account)                |
+| `getPositions(symbol?)`                       | Открытые позиции                        |
+| `submitOrder({symbol, side, type, qty, ...})` | Создать ордер с SL/TP                   |
+| `closePosition(symbol)`                       | Закрыть позицию                         |
+| `partialClosePosition(symbol, qty)`           | Частичное закрытие                      |
+| `modifyPosition(symbol, sl?, tp?)`            | Изменить SL/TP                          |
+| `closeAllPositions()`                         | Закрыть все USDT позиции                |
+| `setLeverage(symbol, leverage)`               | Установить плечо (макс 5x)              |
 
 ---
 
@@ -162,6 +132,12 @@ curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percent
 
 ```bash
 curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
+```
+
+### Market Digest (макро + новости)
+
+```bash
+npx tsx src/market/digest.ts --hours=24 --max-news=10
 ```
 
 ---

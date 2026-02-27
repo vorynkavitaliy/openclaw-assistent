@@ -2,34 +2,34 @@
 
 ## Расписание
 
-| Задача           | Интервал             | Скрипт              | Описание                                          |
-| ---------------- | -------------------- | ------------------- | ------------------------------------------------- |
-| Мониторинг рынка | Каждые 10 мин        | `crypto_monitor.js` | Анализ пар, управление позициями, открытие сделок |
-| Часовой отчёт    | Каждый час в :10 UTC | `crypto_report.js`  | Отчёт в Telegram: баланс, позиции, PnL, рынок     |
+| Задача           | Интервал             | Команда                                     | Описание                                          |
+| ---------------- | -------------------- | ------------------------------------------- | ------------------------------------------------- |
+| Мониторинг рынка | Каждые 10 мин        | `npx tsx src/trading/crypto/monitor.ts`      | Анализ пар, управление позициями, открытие сделок |
+| Часовой отчёт    | Каждый час в :10 UTC | `npx tsx src/trading/crypto/report.ts`       | Отчёт в Telegram: баланс, позиции, PnL, рынок     |
 
 ## Управление
 
 ```bash
 # Статус автоторговли
-node scripts/crypto_killswitch.js --status
+npx tsx src/trading/crypto/killswitch.ts
 
 # Аварийная остановка (kill-switch)
-node scripts/crypto_killswitch.js --on --reason="причина"
+npx tsx src/trading/crypto/killswitch.ts --on --reason="причина"
 
 # Kill + закрыть все позиции
-node scripts/crypto_killswitch.js --close-all
+npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Возобновить торговлю
-node scripts/crypto_killswitch.js --off
+npx tsx src/trading/crypto/killswitch.ts --off
 
 # Ручной запуск мониторинга
-node scripts/crypto_monitor.js
-node scripts/crypto_monitor.js --dry-run    # без сделок
-node scripts/crypto_monitor.js --pair=BTCUSDT  # одна пара
+npx tsx src/trading/crypto/monitor.ts
+npx tsx src/trading/crypto/monitor.ts --dry-run    # без сделок
+npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT  # одна пара
 
 # Ручной запуск отчёта
-node scripts/crypto_report.js
-node scripts/crypto_report.js --format=json
+npx tsx src/trading/crypto/report.ts
+npx tsx src/trading/crypto/report.ts --format=json
 ```
 
 ## Cron задачи
@@ -68,7 +68,7 @@ crontab -l | grep crypto
 
 ## Режим
 
-Текущий режим задаётся в `scripts/crypto_config.js`:
+Текущий режим задаётся в `~/.openclaw/openclaw.json` (секция `crypto.mode`):
 
 - `execute` — полная автоторговля (FULL-AUTO)
 - `dry-run` — только анализ, без открытия сделок

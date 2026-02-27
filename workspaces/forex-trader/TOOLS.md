@@ -1,117 +1,130 @@
 # TOOLS.md — Forex Trader Environment
 
-## MetaTrader 5 Setup (VPS Ubuntu 24.04)
-
-### Архитектура
+## Архитектура (cTrader Open API)
 
 ```
-MT5 (Wine + Xvfb :99)
-    ↓
-OpenClaw_Bridge.mq5 (Expert Advisor)
-    ↓  экспорт каждые 5с
-~/.openclaw/mt5_data/
-├── export_positions.csv    ← открытые позиции
-├── export_account.csv      ← баланс, equity, маржа
-├── export_EURUSD_M15.csv   ← OHLC данные (если включено)
-├── orders/                 ← входящие ордера от Python
-│   └── {order_id}.json     ← команда: open/close/modify
-└── results/                ← ответы от EA
-    └── {order_id}.json     ← результат исполнения
+cTrader Open API (Spotware)
+    ↕
+ctrader-ts SDK (TypeScript)
+    ↕
+TypeScript модули (src/trading/forex/)
+├── client.ts    — cTrader API клиент: подключение, данные, торговля
+├── monitor.ts   — мониторинг: heartbeat, позиции, risk-check, trade
+├── trade.ts     — CLI для ордеров: open, close, modify, status
+└── config.ts    — конфигурация из ~/.openclaw/openclaw.json
+    ↕
+OpenClaw Forex Trader Agent
+    ↕
+Orchestrator → Telegram
 ```
 
-### MT5 Desktop (Wine на VPS)
+### cTrader Credentials
 
-- **Wine prefix**: `~/.mt5`
-- **Terminal**: `~/.mt5/drive_c/Program Files/MetaTrader 5/terminal64.exe`
-- **Display**: `:99` (Xvfb headless, 1920x1080)
-- **Systemd**: `xvfb.service` + `mt5.service`
-- **Запуск**: `WINEPREFIX=~/.mt5 DISPLAY=:99 wine terminal64.exe /portable`
-
-### WebTerminal URL (браузер, визуальный анализ)
-
-- **FTMO**: https://mt5-3.ftmo.com/
-- **Резерв**: https://trade.mql5.com/trade
-
-### MT5 Credentials (FTMO)
-
-- **Логин**: `531…488` _(реальный в ~/.openclaw/openclaw.json)_
-- **Пароль**: `!ea2…Quq` _(реальный в ~/.openclaw/openclaw.json)_
-- **Сервер**: FTMO MT5-3
+- **Файл**: `~/.openclaw/openclaw.json` → секция `forex`
+- **Аутентификация**: `npx ctrader-ts auth` (один раз, OAuth2)
 - **Брокер**: FTMO (проп-трейдинг фирма)
 
 ---
 
-## Python скрипты (файловый мост ↔ EA)
+## TypeScript CLI — Мониторинг
 
-### Получение данных (OHLC + индикаторы)
-
-```bash
-# Определение тренда (H4/H1)
-python3 scripts/mt5_get_data.py --pair EURUSD --tf H4 --bars 100
-python3 scripts/mt5_get_data.py --pair EURUSD --tf H1 --bars 50
-
-# Поиск точки входа (M15/M5 — ОБЯЗАТЕЛЬНО!)
-python3 scripts/mt5_get_data.py --pair EURUSD --tf M15 --bars 100
-python3 scripts/mt5_get_data.py --pair EURUSD --tf M5 --bars 100
-```
-
-Возвращает JSON: `current_price`, `indicators` (EMA200, EMA50, RSI14, ATR14), `levels` (support/resistance), `bias`.
-
-### Торговля (открытие/закрытие/модификация)
+### Heartbeat (основной)
 
 ```bash
-# Открытие ордера
-python3 scripts/mt5_trade.py --action open --pair EURUSD --direction BUY \
-  --lot 0.1 --sl 1.0800 --tp 1.0950
+# Полный heartbeat — аккаунт, позиции, дродаун, FTMO-алерты
+npx tsx src/trading/forex/monitor.ts --heartbeat
 
-# Закрытие по тикету
-python3 scripts/mt5_trade.py --action close --ticket 123456789
+# Только позиции
+npx tsx src/trading/forex/monitor.ts --positions
 
-# Модификация SL/TP
-python3 scripts/mt5_trade.py --action modify --ticket 123456789 --sl 1.0820
+# Только аккаунт
+npx tsx src/trading/forex/monitor.ts --account
 
-# Закрытие всех позиций (экстренно)
-python3 scripts/mt5_trade.py --action close_all
-
-# Режим симуляции (без MT5)
-python3 scripts/mt5_trade.py --action open --pair EURUSD --direction BUY \
-  --lot 0.1 --sl 1.0800 --tp 1.0950 --simulate
+# Проверка рисков (FTMO max daily/total drawdown)
+npx tsx src/trading/forex/monitor.ts --risk-check
 ```
 
-### Мониторинг (позиции, счёт, риски)
+### Торговля (анализ + исполнение)
 
 ```bash
-# Открытые позиции
-python3 scripts/mt5_monitor.py --positions
+# Анализ + торговля по всем парам (dry-run — без исполнения)
+npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
-# Состояние счёта (баланс, equity, маржа)
-python3 scripts/mt5_monitor.py --account
+# Анализ + торговля по одной паре (dry-run)
+npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 
-# Полный Heartbeat (всё + алерты + дродаун)
-python3 scripts/mt5_monitor.py --heartbeat
+# Боевой режим — анализ + автоматическое исполнение
+npx tsx src/trading/forex/monitor.ts --trade
 
-# Только проверка рисков (позиции без SL, превышение %%)
-python3 scripts/mt5_monitor.py --risk-check
+# Боевой режим — одна пара
+npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
 ```
+
+Monitor в режиме `--trade` автоматически:
+
+1. Управляет открытыми позициями (частичное закрытие +1R, trailing SL +1.5R, BE)
+2. Сканирует все пары на входные сигналы (4h тренд + M15 RSI)
+3. Исполняет сигналы (если не dry-run)
 
 ---
 
-## Expert Advisor — OpenClaw_Bridge.mq5
+## TypeScript CLI — Ордера (trade.ts)
 
-Исходник: `scripts/OpenClaw_Bridge.mq5`
+### Открытие позиции
 
-**Установка:**
+```bash
+npx tsx src/trading/forex/trade.ts --action open \
+  --pair EURUSD --side BUY --lots 0.1 \
+  --sl-pips 50 --tp-pips 100
+```
 
-1. Скопировать в `MQL5/Experts/OpenClaw_Bridge.mq5`
-2. Скомпилировать в MetaEditor (F7)
-3. Прикрепить к графику (любая пара)
-4. Включить автоторговлю
+Обязательные параметры: `--pair`, `--side` (BUY/SELL), `--sl-pips` (риск-менеджмент).
+Опциональные: `--lots` (по умолчанию 0.01), `--tp-pips`.
 
-**Что делает:**
+### Закрытие позиции
 
-- Каждые 5с экспортирует позиции и счёт в CSV файлы
-- Читает папку `orders/` — входящие ордера
-- Исполняет торговые команды и пишет результат в `results/`
+```bash
+# Полное закрытие
+npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+
+# Частичное закрытие (50% при +1R)
+npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
+```
+
+### Модификация SL/TP
+
+```bash
+npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
+  --sl-pips 30 --tp-pips 100
+```
+
+### Закрытие всех позиций (экстренно)
+
+```bash
+npx tsx src/trading/forex/trade.ts --action close-all
+```
+
+### Статус аккаунта
+
+```bash
+npx tsx src/trading/forex/trade.ts --action status
+```
+
+Все команды возвращают JSON.
+
+---
+
+## Market Digest (макро + новости)
+
+```bash
+# Полный дайджест (48 часов)
+npx tsx src/market/digest.ts
+
+# Дайджест за 24 часа
+npx tsx src/market/digest.ts --hours=24 --max-news=10
+```
+
+Парсит: ForexFactory Calendar XML + CoinDesk/Cointelegraph RSS.
 
 ---
 
@@ -120,6 +133,11 @@ python3 scripts/mt5_monitor.py --risk-check
 - **Основной источник**: Market Analyst агент (`sessions_send`)
 - ForexFactory: https://www.forexfactory.com/calendar
 - Investing.com: https://www.investing.com/economic-calendar/
+
+## Визуальные инструменты (Browser)
+
+- **TradingView**: https://www.tradingview.com/chart/
+- **MT5 WebTerminal**: https://mt5-3.ftmo.com/ (только для визуального анализа)
 
 ## Торговые часы (UTC+3 Москва)
 

@@ -21,20 +21,15 @@
 
 ## Как ты работаешь
 
-Ты используешь **Bybit API v5** через два инструмента:
+Ты используешь **Bybit API v5** через TypeScript модули:
 
-### Способ 1: Node.js SDK (bybit_trade.js) — ОСНОВНОЙ (торговля + мониторинг)
+### Способ 1: TypeScript модули (src/trading/crypto/) — ОСНОВНОЙ
 
-- Исполняешь ордера: открытие, закрытие, модификация SL/TP
-- Мониторишь позиции, баланс (`--action=positions`, `--action=balance`)
+- `monitor.ts` — автономный мониторинг: анализ + управление позициями + исполнение
+- `killswitch.ts` — экстренная остановка, статус, закрытие всех позиций
+- `report.ts` — часовые отчёты в Telegram и JSON
+- `bybit-client.ts` — API обёртка: ордера, позиции, баланс, OHLC, индикаторы, funding rate
 - Поддерживает Demo Trading аккаунт (`demoTrading: true`)
-- Управляешь плечом, частичным закрытием, close_all
-
-### Способ 1.5: Python (bybit_get_data.py) — рыночные данные
-
-- Получаешь OHLC, индикаторы (EMA, RSI, ATR) через публичный API
-- Проверяешь funding rate, Open Interest, Long/Short ratio
-- Не требует авторизации (публичные endpoint-ы)
 
 ### Способ 2: Browser Tool (визуальный анализ) — ВСПОМОГАТЕЛЬНЫЙ
 

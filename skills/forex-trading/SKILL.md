@@ -47,30 +47,30 @@ curl -s "https://open.er-api.com/v6/latest/USD" | jq '.rates'
 
 ## Работа с брокером
 
-### Подключение к MT4/MT5 (через API)
+### cTrader Open API (через TypeScript)
 
-Если настроен API брокера, используй переменные окружения:
-
-- `FOREX_BROKER_API_KEY` — API ключ
-- `FOREX_BROKER_API_SECRET` — секрет
-- `FOREX_BROKER_URL` — URL API брокера
-
-### Пример сделки (шаблон)
+Основной метод торговли — через cTrader Open API. Все ордера исполняются программно:
 
 ```bash
-# Открытие позиции (замени на реальный API брокера)
-curl -X POST "${FOREX_BROKER_URL}/orders" \
-  -H "Authorization: Bearer ${FOREX_BROKER_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "symbol": "EURUSD",
-    "side": "buy",
-    "quantity": 10000,
-    "type": "market",
-    "stopLoss": 1.0800,
-    "takeProfit": 1.0950
-  }'
+# Открытие позиции
+npx tsx src/trading/forex/trade.ts --action open \
+  --pair EURUSD --side BUY --lots 0.1 \
+  --sl-pips 50 --tp-pips 100
+
+# Закрытие позиции
+npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+
+# Статус аккаунта
+npx tsx src/trading/forex/trade.ts --action status
+
+# Мониторинг (heartbeat)
+npx tsx src/trading/forex/monitor.ts --heartbeat
+
+# Анализ + торговля (dry-run)
+npx tsx src/trading/forex/monitor.ts --trade --dry-run
 ```
+
+Подробнее: см. `skills/ctrader-typescript/SKILL.md`
 
 ## Риск-менеджмент
 

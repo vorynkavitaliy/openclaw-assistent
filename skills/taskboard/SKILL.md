@@ -15,15 +15,18 @@ user-invocable: true
 - Уведомления: `{baseDir}/data/notifications.json`
 - Скрипт управления: `{baseDir}/scripts/taskboard.sh`
 
-## ⚠️ ВАЖНО: Идентификация агента
+## Идентификация агента
 
-**ВСЕГДА** передавай `--agent` перед командой. Это записывает твой ID в историю задач.
+Скрипт **автоматически определяет** агента по CWD workspace-директории.
+Ничего передавать не нужно — `reporter` и `agent` заполнятся правильно.
+
+Порядок определения: `--agent` флаг → `OPENCLAW_AGENT_ID` env → CWD `/workspaces/<id>` → ancestor CWD.
+
+Если автодетект не срабатывает (показывает "unknown"), передай явно:
 
 ```bash
 bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_AGENT_ID команда [аргументы]
 ```
-
-Без `--agent` в истории будет записано "unknown" — это нарушает трекинг.
 
 ## Команды
 

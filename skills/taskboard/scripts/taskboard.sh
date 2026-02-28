@@ -37,28 +37,44 @@ now_iso() {
 }
 
 # ─── Получить имя текущего агента ────────────────────────────
-# Приоритет: 1) глобальный --agent параметр  2) OPENCLAW_AGENT_ID
-# 3) парсинг OPENCLAW_AGENT_DIR  4) "unknown"
+# Приоритет: 1) --agent   2) OPENCLAW_AGENT_ID   3) OPENCLAW_AGENT_DIR
+#            4) CWD /workspaces/<id>   5) ancestor CWD   6) "unknown"
 _GLOBAL_AGENT=""
 
 get_agent_name() {
+  # 1) Явный --agent
   if [[ -n "$_GLOBAL_AGENT" ]]; then
-    echo "$_GLOBAL_AGENT"
-    return
+    echo "$_GLOBAL_AGENT"; return
   fi
+  # 2) Env var (если OpenClaw когда-нибудь начнёт устанавливать)
   if [[ -n "${OPENCLAW_AGENT_ID:-}" ]]; then
-    echo "$OPENCLAW_AGENT_ID"
-    return
+    echo "$OPENCLAW_AGENT_ID"; return
   fi
-  # Попробовать извлечь из OPENCLAW_AGENT_DIR: /root/.openclaw/agents/<id>/agent
+  # 3) Парсинг OPENCLAW_AGENT_DIR: /root/.openclaw/agents/<id>/agent
   if [[ -n "${OPENCLAW_AGENT_DIR:-}" ]]; then
     local dir_name
     dir_name=$(basename "$(dirname "$OPENCLAW_AGENT_DIR")")
     if [[ "$dir_name" != "." && "$dir_name" != "/" ]]; then
-      echo "$dir_name"
-      return
+      echo "$dir_name"; return
     fi
   fi
+  # 4) Автодетекция из CWD — OpenClaw делает chdir в workspace агента
+  if [[ "$PWD" =~ /workspaces/([^/]+) ]]; then
+    echo "${BASH_REMATCH[1]}"; return
+  fi
+  # 5) Обход предков (до 5 уровней) — ищем workspace в CWD parent shell'ов
+  local pid=$$
+  local depth=0
+  while [[ $depth -lt 5 ]]; do
+    pid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null) || break
+    [[ -z "$pid" || "$pid" == "0" || "$pid" == "1" ]] && break
+    local ancestor_cwd
+    ancestor_cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null) || break
+    if [[ "$ancestor_cwd" =~ /workspaces/([^/]+) ]]; then
+      echo "${BASH_REMATCH[1]}"; return
+    fi
+    depth=$((depth + 1))
+  done
   echo "unknown"
 }
 

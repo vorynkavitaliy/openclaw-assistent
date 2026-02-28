@@ -60,20 +60,19 @@ exec → npx tsx src/trading/forex/monitor.ts --risk-check
 ### Шаг 2: Визуальный анализ (Browser Tool — вспомогательный)
 
 ```
-browser → open URL (MT5 WebTerminal или TradingView)
+browser → open URL (cTrader Web или TradingView)
 browser → screenshot (сделать скриншот графика)
 image → analyze screenshot (проанализировать паттерны визуально)
 ```
 
 Примечание: Browser Tool используется ТОЛЬКО для визуального анализа.
-MT5 WebTerminal — canvas-приложение, DOM-элементы недоступны для Playwright.
 
 ### Шаг 3: Принятие решения
 
 Совместить данные:
 
 1. Фундаментальный bias от Market Analyst
-2. Технический анализ (Python MT5 данные)
+2. Технический анализ (cTrader API данные)
 3. Визуальный анализ (паттерны на графике)
 
 Если все 3 сигнала совпадают → готовить ордер.
@@ -159,8 +158,8 @@ exec → npx tsx src/market/digest.ts --hours=24 --max-news=10
 
 НЕ используется для:
 
-- Открытие/закрытие ордеров (MT5 WebTerminal = canvas, DOM недоступен)
-- Ввод данных в формы (Playwright не видит canvas-элементы)
+- Открытие/закрытие ордеров (всегда через TypeScript CLI)
+- Ввод данных в формы (Playwright не поддерживает canvas-элементы)
 
 ```
 browser → open URL (WebTerminal или TradingView)

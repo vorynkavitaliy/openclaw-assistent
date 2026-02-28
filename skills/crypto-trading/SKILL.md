@@ -21,21 +21,21 @@ curl -s "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,sola
 curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1" | jq '.[] | {symbol, current_price, price_change_percentage_24h, market_cap}'
 ```
 
-### Binance API
+### Bybit API v5
 
 ```bash
 # Текущая цена
-curl -s "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT" | jq '.'
-
-# 24h статистика
-curl -s "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT" | jq '{symbol, lastPrice, priceChangePercent, volume, quoteVolume}'
+curl -s "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT" | jq '.result.list[0] | {symbol, lastPrice, price24hPcnt, volume24h, turnover24h}'
 
 # Книга ордеров
-curl -s "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5" | jq '.'
+curl -s "https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=5" | jq '.result'
 
 # Klines (свечи) — 1h, последние 24
-curl -s "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=24" | jq '.[] | {open: .[1], high: .[2], low: .[3], close: .[4], volume: .[5]}'
+curl -s "https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=24" | jq '.result.list[] | {open: .[1], high: .[2], low: .[3], close: .[4], volume: .[5]}'
 ```
+
+> Для торговых операций используй TypeScript модули (bybit-client.ts) — не curl.
+> Docs: https://bybit-exchange.github.io/docs/v5/intro
 
 ### Fear & Greed Index
 
@@ -57,34 +57,31 @@ curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percent
 - **Etherscan**: https://etherscan.io/
 - **Whale Alert**: https://whale-alert.io/
 
-## Торговля через Binance API
+## Торговля через TypeScript модули (Bybit)
 
-### Подпись запросов
-
-Env переменные:
-
-- `BINANCE_API_KEY` — API ключ
-- `BINANCE_API_SECRET` — секрет
-
-### Баланс аккаунта
+Все торговые операции выполняются через TypeScript CLI:
 
 ```bash
-TIMESTAMP=$(date +%s000)
-QUERY="timestamp=${TIMESTAMP}"
-SIGNATURE=$(echo -n "$QUERY" | openssl dgst -sha256 -hmac "$BINANCE_API_SECRET" | awk '{print $2}')
-curl -s -H "X-MBX-APIKEY: ${BINANCE_API_KEY}" \
-  "https://api.binance.com/api/v3/account?${QUERY}&signature=${SIGNATURE}" | jq '.balances[] | select(.free != "0.00000000")'
+# Мониторинг (анализ + торговля, dry-run)
+npx tsx src/trading/crypto/monitor.ts --dry-run
+
+# Боевой режим
+npx tsx src/trading/crypto/monitor.ts
+
+# Kill Switch (экстренная остановка)
+npx tsx src/trading/crypto/killswitch.ts --close-all
+
+# Отчёт
+npx tsx src/trading/crypto/report.ts
 ```
 
-### Создание ордера (шаблон)
+### Credentials
 
-```bash
-TIMESTAMP=$(date +%s000)
-QUERY="symbol=BTCUSDT&side=BUY&type=LIMIT&timeInForce=GTC&quantity=0.001&price=95000&timestamp=${TIMESTAMP}"
-SIGNATURE=$(echo -n "$QUERY" | openssl dgst -sha256 -hmac "$BINANCE_API_SECRET" | awk '{print $2}')
-curl -s -X POST -H "X-MBX-APIKEY: ${BINANCE_API_KEY}" \
-  "https://api.binance.com/api/v3/order?${QUERY}&signature=${SIGNATURE}" | jq '.'
-```
+- **Файл**: `~/.openclaw/openclaw.json` → секция `crypto`
+- **SDK**: `bybit-api` (Node.js) с `demoTrading: true` для Demo Trading
+- **Тип**: Unified Trading Account (UTA), USDT-M Linear Perpetual
+
+> ⚠️ Demo Trading ключи работают ТОЛЬКО через Node SDK с `demoTrading: true`, не через REST API.
 
 ## Мониторинг портфеля
 

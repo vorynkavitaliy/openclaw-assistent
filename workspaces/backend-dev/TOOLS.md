@@ -3,7 +3,7 @@
 ## Инструменты
 
 ### Runtime
-- Node.js >= 22
+- Node.js >= 20
 - Python 3.10+
 - npm / pnpm
 

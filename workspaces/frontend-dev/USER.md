@@ -1,17 +1,17 @@
-# USER.md - About Your Human
+# USER.md — Информация о пользователе
 
-_Learn about the person you're helping. Update this as you go._
+## Профиль
 
-- **Name:**
-- **What to call them:**
-- **Pronouns:** _(optional)_
-- **Timezone:**
-- **Notes:**
+- **Telegram ID**: 5929886678
+- **Язык**: Русский (основной), Английский (технический)
+- **Часовой пояс**: UTC+3 (Москва)
 
-## Context
+## Предпочтения
 
-_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
+- Краткие, структурированные отчёты
+- Уведомления о важных событиях в Telegram
+- Торговля на Forex через FTMO (проп-трейдинг)
 
----
+## Контакт
 
-The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.
+- Telegram: @hyrotraders_bot (бот команды)

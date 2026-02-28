@@ -1,8 +1,8 @@
 ---
 name: Developer
-description: "Разработчик OpenClaw. Пишет и поддерживает TypeScript/Node.js код: торговые модули (Bybit API, cTrader/FIX4.4), технические индикаторы, риск-менеджмент, Telegram-уведомления, market digest. Используй для любых задач по написанию или изменению кода."
-tools: ["read", "edit", "search", "execute"]
-model: "GPT-4o"
+description: 'Разработчик OpenClaw. Пишет и поддерживает TypeScript/Node.js код: торговые модули (Bybit API, cTrader/FIX4.4), технические индикаторы, риск-менеджмент, Telegram-уведомления, market digest. Используй для любых задач по написанию или изменению кода.'
+tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'todo']
+model: 'GPT-4o'
 ---
 
 # Developer
@@ -71,26 +71,50 @@ const creds = getBybitCredentials(); // { apiKey, apiSecret, testnet, demoTradin
 ### Типы из shared
 
 ```typescript
-import type { OHLC, Position, OrderParams, TradingConfig, MarketAnalysis } from '../shared/types.js';
+import type {
+  OHLC,
+  Position,
+  OrderParams,
+  TradingConfig,
+  MarketAnalysis,
+} from '../shared/types.js';
 ```
 
 ### Bybit клиент (crypto/bybit-client.ts)
 
 ```typescript
-import { getKlines, getMarketInfo, getMarketAnalysis, submitOrder, closePosition } from './bybit-client.js';
+import {
+  getKlines,
+  getMarketInfo,
+  getMarketAnalysis,
+  submitOrder,
+  closePosition,
+} from './bybit-client.js';
 
 // Получить анализ рынка (OHLC + индикаторы + bias)
 const analysis = await getMarketAnalysis('BTCUSDT', '4h', 200);
 
 // Открыть позицию
-await submitOrder({ symbol: 'BTCUSDT', side: 'Buy', orderType: 'Market', qty: '0.01', stopLoss: '95000', takeProfit: '105000' });
+await submitOrder({
+  symbol: 'BTCUSDT',
+  side: 'Buy',
+  orderType: 'Market',
+  qty: '0.01',
+  stopLoss: '95000',
+  takeProfit: '105000',
+});
 ```
 
 ### Индикаторы (shared/indicators.ts)
 
 ```typescript
-import { calculateEma, calculateRsi, calculateAtr, calculateSupportResistance } from '../shared/indicators.js';
-const closes = ohlcData.map(r => r.close);
+import {
+  calculateEma,
+  calculateRsi,
+  calculateAtr,
+  calculateSupportResistance,
+} from '../shared/indicators.js';
+const closes = ohlcData.map((r) => r.close);
 const ema200 = calculateEma(closes, 200);
 const rsi = calculateRsi(closes, 14);
 ```

@@ -16,6 +16,6 @@
 
 ## Стек проекта
 
-- Runtime: Node.js >= 22
+- Runtime: Node.js >= 20
 - Платформа: OpenClaw (JSON5 config)
 - Языки: JavaScript/TypeScript, Python, Markdown

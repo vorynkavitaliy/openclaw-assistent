@@ -130,7 +130,7 @@ npx tsx src/market/digest.ts --hours=24 --max-news=10
 
 ## Экономический календарь
 
-- **Основной источник**: Market Analyst агент (`sessions_send`)
+- **Основной источник**: Market Analyst агент (через Task Board)
 - ForexFactory: https://www.forexfactory.com/calendar
 - Investing.com: https://www.investing.com/economic-calendar/
 

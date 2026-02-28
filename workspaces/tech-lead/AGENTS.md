@@ -32,7 +32,7 @@
    - Backend задачи → `backend-dev`
    - Frontend задачи → `frontend-dev`
 5. Создай задачи на Task Board с подробным описанием
-6. Делегируй через `sessions_send` или `sessions_spawn`
+6. Агенты заберут задачи из Task Board автоматически
 
 ### При code review:
 
@@ -67,21 +67,34 @@ npm test
 
 ### Task Board
 
+```bash
+bash skills/taskboard/scripts/taskboard.sh create --title "Backend: REST API Users" --assignee backend-dev --priority high --parent TASK-001
+bash skills/taskboard/scripts/taskboard.sh create --title "Frontend: User Dashboard" --assignee frontend-dev --priority high --parent TASK-001
+bash skills/taskboard/scripts/taskboard.sh list --status in_progress
+bash skills/taskboard/scripts/taskboard.sh comment TASK-002 "Code review: fix error handling in auth middleware"
 ```
-/taskboard create --title "Backend: REST API Users" --assignee backend-dev --priority high --parent TASK-001
-/taskboard create --title "Frontend: User Dashboard" --assignee frontend-dev --priority high --parent TASK-001
-/taskboard list --status in_progress
-/taskboard comment TASK-002 "Code review: fix error handling in auth middleware"
-```
 
-### Делегирование
+### Делегирование (через Task Board)
 
-```
-sessions_send → backend-dev: "Реализуй REST API для пользователей: GET /users, POST /users, PUT /users/:id, DELETE /users/:id. Используй Express + TypeORM + PostgreSQL. Подробности в TASK-002 на борде."
+Агенты забирают задачи из Task Board автоматически через heartbeat. Подробности указывай в описании задачи:
 
-sessions_send → frontend-dev: "Создай компонент UserDashboard с таблицей пользователей. React + TanStack Query. Подробности в TASK-003 на борде."
+```bash
+# Backend задача
+bash skills/taskboard/scripts/taskboard.sh create \
+  --title "REST API Users: GET/POST/PUT/DELETE" \
+  --description "Express + TypeORM + PostgreSQL. Подробности в TASK-002." \
+  --assignee backend-dev --priority high
 
-sessions_send → qa-tester: "TASK-001 готов к тестированию. Backend API + Frontend Dashboard для управления пользователями."
+# Frontend задача
+bash skills/taskboard/scripts/taskboard.sh create \
+  --title "UserDashboard: таблица пользователей" \
+  --description "React + TanStack Query. Подробности в TASK-003." \
+  --assignee frontend-dev --priority high
+
+# QA задача
+bash skills/taskboard/scripts/taskboard.sh create \
+  --title "Тестирование: Backend API + Frontend Dashboard" \
+  --assignee qa-tester --priority high
 ```
 
 ## Стандарты кода

@@ -13,9 +13,8 @@
 
 ### Коммуникация
 
-- **sessions_send** — делегирование backend-dev, frontend-dev, qa-tester
-- **sessions_spawn** — запуск фоновых задач
-- **taskboard** — управление задачами команды
+- **Task Board** — единственный канал делегирования задач (backend-dev, frontend-dev, qa-tester)
+- **taskboard** — управление задачами команды через `skills/taskboard/scripts/taskboard.sh`
 
 ## Стек проекта
 

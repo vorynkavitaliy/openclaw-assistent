@@ -8,23 +8,24 @@
 - **Telegram**: @hyrotraders_bot
 - **Проект**: /root/Projects/openclaw-assistent
 
-## Коммуникация с агентами
+## Коммуникация с агентами — ТОЛЬКО через Task Board
 
-### sessions_send (синхронно)
+Все межагентные коммуникации проходят исключительно через Task Board (структурировано и залогировано):
 
-Отправить сообщение агенту и дождаться ответа:
+```bash
+# Создать задачу для агента
+bash skills/taskboard/scripts/taskboard.sh create \
+  --title "Проверь текущие позиции" \
+  --assignee forex-trader --priority high
 
+# Проверить результаты
+bash skills/taskboard/scripts/taskboard.sh list --status done
+
+# Комментарий к задаче
+bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Детали..."
 ```
-sessions_send target=forex-trader message="Проверь текущие позиции"
-```
 
-### sessions_spawn (асинхронно)
-
-Запустить подзадачу у агента:
-
-```
-sessions_spawn target=crypto-trader message="Анализ BTC/USDT, ищи точку входа"
-```
+> ⚠️ НЕ используй `sessions_send` / `sessions_spawn` для рабочей коммуникации.
 
 ## Task Board
 

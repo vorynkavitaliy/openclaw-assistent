@@ -23,11 +23,12 @@
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "⚠️ FOMC через 30 мин — не открывать позиции" \
   --assignee crypto-trader --priority critical --labels "alert,macro"
-
-# Алерт для forex-trader
-bash skills/taskboard/scripts/taskboard.sh create \
-  --title "⚠️ NFP через 30 мин — закрыть позиции" \
-  --assignee forex-trader --priority critical --labels "alert,macro"
 ```
 
-> Все коммуникации — ТОЛЬКО через Task Board. НЕ используй sessions_send.
+```
+# Мгновенная доставка алертов
+sessions_send target=crypto-trader message="⚠️ FOMC через 30 мин! Не открывать позиции."
+sessions_send target=forex-trader message="⚠️ NFP через 30 мин! Закрыть позиции."
+```
+
+> ВСЕГДА делай ОБА шага: Task Board (трекинг) + sessions_send (мгновенная доставка).

@@ -7,26 +7,33 @@
 Ты используешь TypeScript модули (cTrader Open API) для исполнения и анализа. Browser для визуального анализа.
 Правила FTMO prop аккаунта: `skills/forex-trading/FTMO_RULES.md`
 
-## Межагентное взаимодействие — ТОЛЬКО через Task Board
+## Межагентное взаимодействие (гибридная модель)
 
-Все коммуникации с другими агентами проходят **исключительно через Task Board** (структурировано и залогировано):
+**Task Board** = трекинг/аудит. **sessions_send** = мгновенная доставка.
 
 ```bash
-# Запросить анализ у market-analyst
+# Запросить анализ у market-analyst (Task Board + мгновенно)
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "Анализ макрофона EURUSD" \
   --assignee market-analyst --priority high --labels "analysis,forex"
+```
 
+```
+sessions_send target=market-analyst message="TASK-XXX: Нужен фундаментальный анализ EURUSD. Детали на Task Board."
+```
+
+```bash
 # Отчёт о сделке для orchestrator
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "EURUSD BUY открыт @ 1.0850" \
   --assignee orchestrator --priority medium --labels "forex,trade,report"
-
-# Проверить ответы
-bash skills/taskboard/scripts/taskboard.sh list --assignee forex-trader
 ```
 
-> ⚠️ НЕ используй `sessions_send` для рабочей коммуникации. Task Board — единственный канал.
+```
+sessions_send target=orchestrator message="Сделка EURUSD BUY @ 1.0850. Детали в TASK-XXX."
+```
+
+> 💡 ВСЕГДА делай ОБА шага: Task Board (трекинг) + sessions_send (мгновенная доставка).
 
 ## Основные задачи
 

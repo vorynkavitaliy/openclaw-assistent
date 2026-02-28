@@ -74,23 +74,36 @@ bash skills/taskboard/scripts/taskboard.sh list --status in_progress
 bash skills/taskboard/scripts/taskboard.sh comment TASK-002 "Code review: fix error handling in auth middleware"
 ```
 
-### Делегирование (через Task Board)
+### Делегирование (Task Board + sessions_send)
 
-Агенты забирают задачи из Task Board автоматически через heartbeat. Подробности указывай в описании задачи:
+ВСЕГДА делай ОБА шага: Task Board (трекинг) + sessions_send (мгновенная доставка):
 
 ```bash
-# Backend задача
+# Backend задача — залогировать
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "REST API Users: GET/POST/PUT/DELETE" \
   --description "Express + TypeORM + PostgreSQL. Подробности в TASK-002." \
   --assignee backend-dev --priority high
+```
 
+```
+# Backend задача — мгновенно отправить
+sessions_send target=backend-dev message="TASK-XXX: REST API Users. Express + TypeORM + PostgreSQL. Детали на Task Board."
+```
+
+```bash
 # Frontend задача
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "UserDashboard: таблица пользователей" \
   --description "React + TanStack Query. Подробности в TASK-003." \
   --assignee frontend-dev --priority high
+```
 
+```
+sessions_send target=frontend-dev message="TASK-XXX: UserDashboard. React + TanStack Query. Детали на Task Board."
+```
+
+```bash
 # QA задача
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "Тестирование: Backend API + Frontend Dashboard" \

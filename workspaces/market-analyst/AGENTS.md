@@ -20,22 +20,33 @@
 - **memory_search** — поиск в предыдущих анализах
 - **exec (curl)** — Fear & Greed Index, Bitcoin Dominance, CoinGecko API
 
-## Межагентное взаимодействие — ТОЛЬКО через Task Board
+## Межагентное взаимодействие (гибридная модель)
 
-Все ответы на запросы и алерты — через Task Board:
+**Task Board** = трекинг/аудит. **sessions_send** = мгновенная доставка.
 
 ```bash
-# Ответить на запрос трейдера
+# Ответить на запрос трейдера (Task Board + мгновенно)
 bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
 bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Отчёт: ..."
+```
 
-# Создать алерт для трейдеров
+```
+sessions_send target=crypto-trader message="TASK-XXX выполнен. Отчёт на Task Board."
+```
+
+```bash
+# Создать алерт для трейдеров (мгновенно!)
 bash skills/taskboard/scripts/taskboard.sh create \
   --title "⚠️ High Impact: NFP через 30 мин" \
   --assignee forex-trader --priority critical --labels "alert,macro"
 ```
 
-> ⚠️ НЕ используй `sessions_send`. Task Board — единственный канал.
+```
+sessions_send target=forex-trader message="⚠️ NFP через 30 мин! Не открывать позиции. Детали в TASK-XXX."
+sessions_send target=crypto-trader message="⚠️ NFP через 30 мин! Осторожно с позициями."
+```
+
+> 💡 ВСЕГДА делай ОБА шага: Task Board (трекинг) + sessions_send (мгновенная доставка).
 
 ## Рабочий процесс
 

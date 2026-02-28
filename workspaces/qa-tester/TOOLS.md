@@ -25,6 +25,6 @@
 
 ## Коммуникация
 
-- Получает задачи от **tech-lead** и **orchestrator** через **Task Board**
-- Создаёт баг-репорты на **Task Board**
-- Отчитывается через **Task Board** (обновление статуса + комментарий)
+- Получает задачи от **tech-lead** и **orchestrator** через **sessions_send** + **Task Board**
+- Создаёт баг-репорты на **Task Board** + отправляет через **sessions_send**
+- Отчитывается через **sessions_send** + обновление **Task Board**

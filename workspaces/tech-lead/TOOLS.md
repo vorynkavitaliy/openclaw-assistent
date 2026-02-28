@@ -13,8 +13,9 @@
 
 ### Коммуникация
 
-- **Task Board** — единственный канал делегирования задач (backend-dev, frontend-dev, qa-tester)
-- **taskboard** — управление задачами команды через `skills/taskboard/scripts/taskboard.sh`
+- **sessions_send** — мгновенное делегирование задач (backend-dev, frontend-dev, qa-tester)
+- **Task Board** — трекинг и аудит всех задач команды
+- ВСЕГДА делай оба шага: Task Board + sessions_send
 
 ## Стек проекта
 

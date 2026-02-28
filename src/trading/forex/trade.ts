@@ -92,7 +92,7 @@ async function actionOpen(): Promise<void> {
 }
 
 async function actionClose(): Promise<void> {
-  const positionId = parseInt(getRequiredArg('position-id'), 10);
+  const positionId = getRequiredArg('position-id');
   const partialLots = getNumArg('lots');
 
   await closePosition(positionId, partialLots);
@@ -126,7 +126,7 @@ async function actionCloseAll(): Promise<void> {
 }
 
 async function actionModify(): Promise<void> {
-  const positionId = parseInt(getRequiredArg('position-id'), 10);
+  const positionId = getRequiredArg('position-id');
   const slPips = getNumArg('sl-pips');
   const tpPips = getNumArg('tp-pips');
 

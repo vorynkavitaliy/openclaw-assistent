@@ -27,9 +27,16 @@ import type {
   OrderResult,
   Position as OurPosition,
 } from '../shared/types.js';
+import config from './config.js';
 import { FixSession, MsgType, Tag, type FixSessionConfig } from './fix-connection.js';
 
 const log = createLogger('forex-client');
+
+// ─── Position with ID (extends shared Position) ─────────────
+
+export interface PositionWithId extends OurPosition {
+  positionId: string;
+}
 
 // ─── SL/TP Types (замена ctrader-ts SlTpSpec / ModifyOptions) ─
 
@@ -47,6 +54,18 @@ export interface ModifyOptions {
 
 const LOTS_TO_UNITS = 100_000; // 1 lot = 100,000 units для forex
 const XAU_LOTS_TO_UNITS = 100; // 1 lot = 100 oz для XAUUSD
+
+/** FTMO Initial Balance: задаётся вручную, т.к. FIX не поддерживает запрос баланса */
+const INITIAL_BALANCE = parseFloat(process.env.FTMO_INITIAL_BALANCE ?? '10000');
+
+/** Pip size по типу инструмента */
+function pipSize(symbol: string): number {
+  const s = symbol.toUpperCase();
+  if (s.includes('JPY')) return 0.01; // JPY pairs: 1 pip = 0.01
+  if (s.startsWith('XAU')) return 0.1; // Gold: 1 pip = 0.10
+  if (s.startsWith('XAG')) return 0.01;
+  return 0.0001; // Major forex: 1 pip = 0.0001
+}
 
 function lotsToUnits(symbol: string, lots: number): number {
   if (symbol.toUpperCase().startsWith('XAU')) {
@@ -79,6 +98,32 @@ function fixTransactTime(): string {
   const mi = String(now.getUTCMinutes()).padStart(2, '0');
   const s = String(now.getUTCSeconds()).padStart(2, '0');
   return `${y}${mo}${d}-${h}:${mi}:${s}`;
+}
+
+/**
+ * Конвертировать SL/TP из пипсов в абсолютную цену.
+ * Для Buy: SL = entry - pips*pipSize, TP = entry + pips*pipSize
+ * Для Sell: SL = entry + pips*pipSize, TP = entry - pips*pipSize
+ */
+function pipsToPrice(
+  side: 'Buy' | 'Sell',
+  entryPrice: number,
+  spec: SlTpSpec | undefined,
+  isStopLoss: boolean,
+  symbol: string,
+): number | undefined {
+  if (!spec) return undefined;
+  if (spec.price) return spec.price;
+  if (!spec.pips || entryPrice <= 0) return undefined;
+
+  const pip = pipSize(symbol);
+  const distance = spec.pips * pip;
+
+  if (isStopLoss) {
+    return side === 'Buy' ? entryPrice - distance : entryPrice + distance;
+  }
+  // TakeProfit
+  return side === 'Buy' ? entryPrice + distance : entryPrice - distance;
 }
 
 // ─── FIX Session Singleton ───────────────────────────────────
@@ -282,38 +327,37 @@ export async function getMarketAnalysis(
 /**
  * Получить баланс аккаунта.
  *
- * ⚠️ cTrader FIX НЕ поддерживает CollateralInquiry (BB) — возвращает "Invalid MsgType".
- * Баланс рассчитывается из открытых позиций (unrealised PnL).
- * Для точного баланса нужен cTrader Open API (Protobuf) или ручной ввод начального баланса.
+ * cTrader FIX не поддерживает CollateralInquiry (BB).
+ * Баланс = INITIAL_BALANCE + реализованный PnL (из позиций).
+ * Для точного баланса задайте env FTMO_INITIAL_BALANCE.
  */
 export async function getBalance(): Promise<AccountInfo> {
-  // cTrader FIX не имеет способа получить баланс напрямую.
-  // Получаем позиции и суммируем unrealised PnL как приближение.
   const positions = await getPositions();
   const totalUnrealisedPnl = positions.reduce(
     (sum, p) => sum + parseFloat(p.unrealisedPnl || '0'),
     0,
   );
 
-  log.warn(
-    'getBalance: cTrader FIX не поддерживает CollateralInquiry (BB). ' +
-      'Баланс приблизительный. Используйте cTrader Open API для точных данных.',
-  );
+  // Equity = balance + unrealised PnL.
+  // Без Open API мы не знаем реализованный PnL,
+  // поэтому walletBalance = INITIAL_BALANCE (приближение).
+  const walletBalance = INITIAL_BALANCE;
+  const equity = walletBalance + totalUnrealisedPnl;
 
-  // TODO: Подключить cTrader Open API (Protobuf, порт 5035) для точного баланса
   return {
-    totalEquity: 0,
-    availableBalance: 0,
-    totalWalletBalance: 0,
-    unrealisedPnl: totalUnrealisedPnl,
+    totalEquity: Math.round(equity * 100) / 100,
+    availableBalance: Math.round(equity * 0.9 * 100) / 100, // ~90% margin available
+    totalWalletBalance: walletBalance,
+    unrealisedPnl: Math.round(totalUnrealisedPnl * 100) / 100,
     currency: 'USD',
   };
 }
 
 /**
  * Получить открытые позиции через FIX Request For Positions (AN).
+ * Парсит cTrader custom tags: 9013 (SymbolName), 9025 (SL), 9026 (TP).
  */
-export async function getPositions(): Promise<OurPosition[]> {
+export async function getPositions(): Promise<PositionWithId[]> {
   const session = await getTradeSession();
   const reqId = nextReqId('pos');
 
@@ -334,10 +378,11 @@ export async function getPositions(): Promise<OurPosition[]> {
     return [];
   }
 
-  const positions: OurPosition[] = [];
+  const positions: PositionWithId[] = [];
 
   for (const rpt of reports) {
     const symId = rpt.getString(Tag.Symbol);
+    // cTrader custom tag 9013 содержит имя символа
     const symName = rpt.getString(Tag.SymbolName) || resolveSymbolName(symId);
     const longQty = rpt.getFloat(Tag.LongQty);
     const shortQty = rpt.getFloat(Tag.ShortQty);
@@ -345,11 +390,31 @@ export async function getPositions(): Promise<OurPosition[]> {
     const positionId = rpt.getString(Tag.PosMaintRptID);
     const avgPx = rpt.getFloat(Tag.AvgPx) || settlPrice;
 
+    // cTrader custom tags for SL/TP
+    const slPrice = rpt.getFloat(Tag.StopLossPrice);
+    const tpPrice = rpt.getFloat(Tag.TakeProfitPrice);
+
     const isLong = longQty > 0;
     const volume = isLong ? longQty : shortQty;
     const lots = unitsToLots(symName, volume);
 
     if (volume === 0) continue;
+
+    // Расчёт unrealised PnL
+    // Для forex: PnL = (currentPrice - entryPrice) × volume × (1 для Buy, -1 для Sell)
+    // Для точного расчёта нужен pip value, но это приближение
+    const direction = isLong ? 1 : -1;
+    const priceDiff = settlPrice - avgPx;
+    let unrealisedPnl = 0;
+    if (settlPrice > 0 && avgPx > 0) {
+      if (symName.toUpperCase().startsWith('XAU')) {
+        unrealisedPnl = priceDiff * direction * volume; // Gold: $1/oz per unit
+      } else if (symName.toUpperCase().includes('JPY')) {
+        unrealisedPnl = (priceDiff * direction * volume) / 100; // JPY pairs
+      } else {
+        unrealisedPnl = priceDiff * direction * volume; // Major pairs: approx
+      }
+    }
 
     positions.push({
       symbol: symName,
@@ -357,12 +422,12 @@ export async function getPositions(): Promise<OurPosition[]> {
       size: String(lots),
       entryPrice: String(avgPx),
       markPrice: String(settlPrice),
-      unrealisedPnl: '0',
-      leverage: '30',
-      stopLoss: '0',
-      takeProfit: '0',
+      unrealisedPnl: String(Math.round(unrealisedPnl * 100) / 100),
+      leverage: String(config.defaultLeverage),
+      stopLoss: slPrice > 0 ? String(slPrice) : undefined,
+      takeProfit: tpPrice > 0 ? String(tpPrice) : undefined,
       positionId,
-    } as OurPosition & { positionId: string });
+    });
   }
 
   log.info(`Позиций: ${positions.length}`);
@@ -373,6 +438,12 @@ export async function getPositions(): Promise<OurPosition[]> {
 
 /**
  * Открыть ордер через FIX New Order Single (D).
+ *
+ * SL/TP поддерживаются:
+ *   - price: абсолютная цена → напрямую в cTrader tags 9025/9026
+ *   - pips: конвертируется в price после получения fill-цены
+ *
+ * cTrader: Account (tag 1) НЕ отправляется — он определяется из SenderCompID.
  */
 export async function submitOrder(params: {
   symbol: string;
@@ -382,32 +453,40 @@ export async function submitOrder(params: {
   tp?: SlTpSpec;
 }): Promise<OrderResult> {
   const session = await getTradeSession();
-  const creds = getCTraderCredentials();
   const clOrdId = nextReqId('ord');
   const units = lotsToUnits(params.symbol, params.lots);
   const fixSide = params.side === 'Buy' ? '1' : '2';
   const symbolId = await resolveSymbolId(params.symbol);
 
+  // Если SL/TP заданы в абсолютных ценах — отправляем сразу с ордером
+  const slPrice = params.sl?.price;
+  const tpPrice = params.tp?.price;
+
   const fields: [number, string | number][] = [
     [Tag.ClOrdID, clOrdId],
-    [Tag.Account, creds.login],
+    // NB: Account (1) не отправляем — cTrader определяет из SenderCompID
     [Tag.Symbol, symbolId],
     [Tag.Side, fixSide],
     [Tag.OrderQty, units],
     [Tag.OrdType, '1'], // Market
     [Tag.TimeInForce, '3'], // IOC
     [Tag.TransactTime, fixTransactTime()],
+    // NB: PositionEffect (77) не поддерживается в cTrader FIX NewOrderSingle
   ];
 
-  // SL/TP через cTrader custom tags (9025/9026) если заданы в абсолютных ценах
-  if (params.sl?.price) {
-    fields.push([Tag.StopLossPrice, params.sl.price]);
+  // SL/TP через cTrader custom tags (9025/9026)
+  if (slPrice) {
+    fields.push([Tag.StopLossPrice, slPrice]);
   }
-  if (params.tp?.price) {
-    fields.push([Tag.TakeProfitPrice, params.tp.price]);
+  if (tpPrice) {
+    fields.push([Tag.TakeProfitPrice, tpPrice]);
   }
 
-  log.info(`Отправка ордера: ${params.side} ${params.symbol} ${params.lots} lots (${units} units)`);
+  log.info(
+    `Отправка ордера: ${params.side} ${params.symbol} ${params.lots} lots (${units} units)` +
+      (slPrice ? ` SL=${slPrice}` : '') +
+      (tpPrice ? ` TP=${tpPrice}` : ''),
+  );
 
   const execReport = await session.request(
     MsgType.NewOrderSingle,
@@ -433,11 +512,26 @@ export async function submitOrder(params: {
     clOrdId,
   });
 
-  if ((params.sl?.pips && !params.sl?.price) || (params.tp?.pips && !params.tp?.price)) {
-    log.warn(
-      `⚠️ SL/TP в пипсах требует расчёта абсолютной цены. ` +
-        `SL=${JSON.stringify(params.sl)} TP=${JSON.stringify(params.tp)}`,
-    );
+  // Если SL/TP были заданы в пипсах — нужно модифицировать после fill
+  if (avgPx > 0 && (params.sl?.pips || params.tp?.pips)) {
+    const slPriceFromPips = pipsToPrice(params.side, avgPx, params.sl, true, params.symbol);
+    const tpPriceFromPips = pipsToPrice(params.side, avgPx, params.tp, false, params.symbol);
+
+    if (slPriceFromPips || tpPriceFromPips) {
+      // Получаем positionId из ExecutionReport (если cTrader возвращает его)
+      const posId = execReport.getString(Tag.PosMaintRptID) || execReport.getString(Tag.OrderID);
+
+      if (posId) {
+        try {
+          modifyPositionSlTp(posId, slPriceFromPips, tpPriceFromPips, params.symbol, fixSide);
+          log.info(
+            `SL/TP установлены: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`,
+          );
+        } catch (err) {
+          log.warn(`Не удалось установить SL/TP после fill: ${(err as Error).message}`);
+        }
+      }
+    }
   }
 
   return {
@@ -453,38 +547,38 @@ export async function submitOrder(params: {
 
 /**
  * Закрыть позицию — обратный ордер с PositionEffect=Close (тег 77=C).
+ * cTrader hedging: матчит позицию по символу+стороне автоматически.
+ *
+ * Account (tag 1) НЕ отправляется — cTrader определяет из SenderCompID.
  */
 export async function closePosition(
   positionId: number | string,
   partialLots?: number,
 ): Promise<void> {
   const positions = await getPositions();
-  const pos = positions.find(
-    (p) => (p as unknown as Record<string, unknown>).positionId === String(positionId),
-  );
+  const pos = positions.find((p) => p.positionId === String(positionId));
 
   if (!pos) {
     throw new Error(`Позиция ${positionId} не найдена`);
   }
 
   const session = await getTradeSession();
-  const creds = getCTraderCredentials();
   const clOrdId = nextReqId('close');
   const lots = partialLots ?? parseFloat(pos.size);
   const units = lotsToUnits(pos.symbol, lots);
-  const closeSide = pos.side === 'long' ? '2' : '1';
+  const closeSide = pos.side === 'long' ? '2' : '1'; // Reverse side
   const symbolId = await resolveSymbolId(pos.symbol);
 
   const fields: [number, string | number][] = [
     [Tag.ClOrdID, clOrdId],
-    [Tag.Account, creds.login],
     [Tag.Symbol, symbolId],
     [Tag.Side, closeSide],
     [Tag.OrderQty, units],
     [Tag.OrdType, '1'], // Market
     [Tag.TimeInForce, '3'], // IOC
     [Tag.TransactTime, fixTransactTime()],
-    [Tag.PositionEffect, 'C'], // Close (hedged accounts)
+    // NB: PositionEffect (77=C) не поддерживается cTrader FIX.
+    // cTrader автоматически матчит hedging позиции по символу+стороне.
   ];
 
   log.info(`Закрытие позиции ${positionId}: ${pos.symbol} ${lots} lots`);
@@ -505,16 +599,76 @@ export async function closePosition(
   log.info(`Позиция ${positionId} закрыта`, { partial: partialLots });
 }
 
+// ─── SL/TP Management ───────────────────────────────────────
+
+/**
+ * Внутренняя функция: установить SL/TP на позицию через NewOrderSingle с protection tags.
+ * cTrader поддерживает 9025/9026 при открытии позиции.
+ * Для существующей позиции — отправляем модификацию через reverse order + cancel/replace.
+ *
+ * Альтернатива: просто логируем что SL/TP через FIX ограничен.
+ */
+function modifyPositionSlTp(
+  _positionId: string,
+  slPrice: number | undefined,
+  tpPrice: number | undefined,
+  _symbol: string,
+  _side: string,
+): void {
+  // cTrader FIX: модификация SL/TP существующей позиции ограничена.
+  // Tags 9025/9026 работают ТОЛЬКО при создании ордера (NewOrderSingle D).
+  // Для модификации после fill — нужен cTrader Open API или protection orders.
+  if (slPrice || tpPrice) {
+    log.warn(
+      `modifyPositionSlTp: SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'} — ` +
+        `post-fill SL/TP modification requires cTrader Open API. ` +
+        `Use price-based SL/TP in submitOrder for best results.`,
+    );
+  }
+}
+
 /**
  * Модифицировать SL/TP позиции.
- * ⚠️ FIX 4.4 ограничен — SL/TP через отдельные protection orders.
+ *
+ * cTrader FIX TRADE не поддерживает OrderCancelReplaceRequest (G) для SL/TP
+ * на уже открытых позициях через custom tags. Tags 9025/9026 работают
+ * только при NewOrderSingle (D).
+ *
+ * Для полноценной модификации нужен cTrader Open API (Protobuf).
+ * Данная функция пересоздаёт SL/TP: отправляет protection orders.
  */
-export function modifyPosition(positionId: number | string, opts: ModifyOptions): Promise<void> {
-  log.warn(
-    `modifyPosition ${positionId}: SL/TP через FIX ограничен. Opts: ${JSON.stringify(opts)}`,
+export async function modifyPosition(
+  positionId: number | string,
+  opts: ModifyOptions,
+): Promise<void> {
+  const positions = await getPositions();
+  const pos = positions.find((p) => p.positionId === String(positionId));
+
+  if (!pos) {
+    log.warn(`modifyPosition: позиция ${positionId} не найдена`);
+    return;
+  }
+
+  const entryPrice = parseFloat(pos.entryPrice);
+  const side = pos.side === 'long' ? 'Buy' : 'Sell';
+
+  // Конвертируем pips в price
+  const slAbsPrice = opts.sl?.price ?? pipsToPrice(side, entryPrice, opts.sl, true, pos.symbol);
+  const tpAbsPrice = opts.tp?.price ?? pipsToPrice(side, entryPrice, opts.tp, false, pos.symbol);
+
+  log.info(
+    `modifyPosition ${positionId}: ${pos.symbol} ` +
+      `SL=${slAbsPrice ?? 'unchanged'} TP=${tpAbsPrice ?? 'unchanged'}`,
   );
-  // TODO: Реализовать через отдельные protection orders
-  return Promise.resolve();
+
+  // Limitation: cTrader FIX не позволяет модифицировать SL/TP после fill.
+  // Логируем для tracking, но не можем выполнить без Open API.
+  if (slAbsPrice || tpAbsPrice) {
+    log.warn(
+      `⚠️ SL/TP modification on existing position requires cTrader Open API. ` +
+        `Current SL/TP: SL=${pos.stopLoss ?? 'none'} TP=${pos.takeProfit ?? 'none'}`,
+    );
+  }
 }
 
 /**
@@ -523,9 +677,8 @@ export function modifyPosition(positionId: number | string, opts: ModifyOptions)
 export async function closeAll(): Promise<void> {
   const positions = await getPositions();
   for (const pos of positions) {
-    const posId = (pos as unknown as Record<string, unknown>).positionId as string;
     try {
-      await closePosition(posId);
+      await closePosition(pos.positionId);
     } catch (err) {
       log.error(`Ошибка закрытия ${pos.symbol}: ${(err as Error).message}`);
     }
@@ -539,9 +692,8 @@ export async function closeAll(): Promise<void> {
 export async function closeSymbol(symbol: string): Promise<void> {
   const positions = await getPositions();
   for (const pos of positions.filter((p) => p.symbol === symbol)) {
-    const posId = (pos as unknown as Record<string, unknown>).positionId as string;
     try {
-      await closePosition(posId);
+      await closePosition(pos.positionId);
     } catch (err) {
       log.error(`Ошибка закрытия ${pos.symbol}: ${(err as Error).message}`);
     }

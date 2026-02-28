@@ -98,8 +98,23 @@ export const Tag = {
   // cTrader custom tags
   PositionID: 721, // PosMaintRptID doubles as position ID in reports
   SymbolName: 9013, // cTrader custom: human-readable symbol name
-  StopLossPrice: 9025, // cTrader custom: SL price on order
-  TakeProfitPrice: 9026, // cTrader custom: TP price on order
+  SymbolDigits: 9014, // cTrader custom: decimal precision (5 forex, 2 metals)
+  StopLossPrice: 9025, // cTrader custom: SL price on order/position
+  TakeProfitPrice: 9026, // cTrader custom: TP price on order/position
+  TrailingStop: 9027, // cTrader custom: trailing stop in pips
+
+  // Reject routing
+  RefSeqNum: 45, // Sequence number of rejected message
+  RefMsgType: 372, // MsgType of rejected message
+  RefTagID: 371, // Tag of rejected field
+  SessionRejectReason: 373,
+
+  // Order Cancel Reject
+  CxlRejReason: 102,
+  CxlRejResponseTo: 434,
+  OrdRejReason: 103,
+  BusinessRejectRefID: 379,
+  BusinessRejectReason: 380,
 
   // SecurityList
   SecurityReqID: 320,
@@ -134,6 +149,8 @@ export const MsgType = {
   PositionReport: 'AP',
   CollateralInquiry: 'BB',
   CollateralReport: 'BA',
+  OrderCancelReject: '9',
+  BusinessMessageReject: 'j',
 } as const;
 
 // ─── FIX Message ─────────────────────────────────────────────
@@ -363,6 +380,8 @@ export class FixSession extends EventEmitter {
 
   private pendingRequests = new Map<string, PendingRequest>();
   private multiResponses = new Map<string, PendingMultiRequest>();
+  /** Map outgoing seq# → pending request key (for reject routing) */
+  private seqToKey = new Map<number, string>();
 
   constructor(private config: FixSessionConfig) {
     super();
@@ -472,14 +491,17 @@ export class FixSession extends EventEmitter {
   ): Promise<FixMessage> {
     return new Promise((resolve, reject) => {
       const key = `${responseType}:${reqId}`;
+      const seqNum = this.outSeqNum; // будет использовано в sendRaw
 
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(key);
+        this.seqToKey.delete(seqNum);
         reject(new Error(`FIX timeout: ${msgType} reqId=${reqId}`));
       }, timeoutMs);
 
       this.pendingRequests.set(key, { resolve, reject, timeout });
       this.sendRaw(msgType, fields);
+      this.seqToKey.set(seqNum, key);
     });
   }
 
@@ -594,8 +616,57 @@ export class FixSession extends EventEmitter {
 
       case MsgType.Reject: {
         const reason = msg.getString(Tag.Text);
-        log.warn(`Reject от сервера: ${reason}`);
+        const refSeqNum = msg.getInt(Tag.RefSeqNum);
+        log.warn(`Reject от сервера (refSeq=${refSeqNum}): ${reason}`);
+        // Пытаемся зарезолвить pending request как ошибку
+        this.rejectPendingBySeq(refSeqNum, reason);
         this.emit('reject', msg);
+        break;
+      }
+
+      case MsgType.OrderCancelReject: {
+        // OrderCancelReject (9) — отказ в отмене/модификации ордера
+        const reason = msg.getString(Tag.Text);
+        const clOrdId = msg.getString(Tag.ClOrdID);
+        log.warn(`OrderCancelReject: ${reason} (ClOrdID=${clOrdId})`);
+        // Резолвим как ExecutionReport с reject-статусом
+        const key = `${MsgType.ExecutionReport}:${clOrdId}`;
+        const pending = this.pendingRequests.get(key);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          this.pendingRequests.delete(key);
+          const fakeReject = new FixMessage();
+          fakeReject.set(Tag.MsgType, MsgType.OrderCancelReject);
+          fakeReject.set(Tag.ClOrdID, clOrdId);
+          fakeReject.set(Tag.ExecType, '8');
+          fakeReject.set(Tag.OrdStatus, '8');
+          fakeReject.set(Tag.Text, reason);
+          pending.resolve(fakeReject);
+        }
+        this.emit('cancel-reject', msg);
+        break;
+      }
+
+      case MsgType.BusinessMessageReject: {
+        // BusinessMessageReject (j) — отказ по бизнес-логике (Market Closed, etc)
+        const reason = msg.getString(Tag.Text);
+        const refId = msg.getString(Tag.BusinessRejectRefID);
+        log.warn(`BusinessReject: ${reason} (RefID=${refId})`);
+        // Пытаемся зарезолвить pending request по ClOrdID
+        const key2 = `${MsgType.ExecutionReport}:${refId}`;
+        const pending2 = this.pendingRequests.get(key2);
+        if (pending2) {
+          clearTimeout(pending2.timeout);
+          this.pendingRequests.delete(key2);
+          const fakeReject = new FixMessage();
+          fakeReject.set(Tag.MsgType, MsgType.BusinessMessageReject);
+          fakeReject.set(Tag.ClOrdID, refId);
+          fakeReject.set(Tag.ExecType, '8');
+          fakeReject.set(Tag.OrdStatus, '8');
+          fakeReject.set(Tag.Text, reason);
+          pending2.resolve(fakeReject);
+        }
+        this.emit('business-reject', msg);
         break;
       }
 
@@ -681,6 +752,35 @@ export class FixSession extends EventEmitter {
     this.emit(`msg:${msgType}`, msg);
   }
 
+  /**
+   * Зарезолвить pending request при получении Reject (35=3).
+   * Сервер ссылается на seq# отклонённого сообщения через RefSeqNum (45).
+   */
+  private rejectPendingBySeq(refSeqNum: number, reason: string): void {
+    const key = this.seqToKey.get(refSeqNum);
+    if (!key) return;
+    this.seqToKey.delete(refSeqNum);
+
+    const pending = this.pendingRequests.get(key);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      this.pendingRequests.delete(key);
+      pending.reject(new Error(`FIX Reject: ${reason}`));
+      return;
+    }
+
+    const multi = this.multiResponses.get(key);
+    if (multi) {
+      clearTimeout(multi.timeout);
+      this.multiResponses.delete(key);
+      if (multi.messages.length > 0) {
+        multi.resolve(multi.messages);
+      } else {
+        multi.reject(new Error(`FIX Reject: ${reason}`));
+      }
+    }
+  }
+
   private cleanup(): void {
     this.connected = false;
     this.loggedIn = false;
@@ -707,5 +807,6 @@ export class FixSession extends EventEmitter {
       req.reject(new Error('FIX: соединение закрыто'));
     }
     this.multiResponses.clear();
+    this.seqToKey.clear();
   }
 }

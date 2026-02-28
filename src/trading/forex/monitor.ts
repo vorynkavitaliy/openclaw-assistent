@@ -19,7 +19,7 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
-import type { AccountInfo, Position } from '../shared/types.js';
+import type { AccountInfo } from '../shared/types.js';
 import {
   closePosition,
   disconnect,
@@ -28,6 +28,7 @@ import {
   getPositions,
   modifyPosition,
   submitOrder,
+  type PositionWithId,
 } from './client.js';
 import config from './config.js';
 
@@ -58,7 +59,7 @@ interface RiskAlert {
 interface HeartbeatReport {
   timestamp: string;
   account: AccountInfo;
-  positions: Position[];
+  positions: PositionWithId[];
   positionsCount: number;
   totalProfit: number;
   drawdownPct: number;
@@ -69,7 +70,7 @@ interface HeartbeatReport {
 
 // ─── Risk checks ─────────────────────────────────────────────
 
-function checkPositionRisks(positions: Position[], balance: number): RiskAlert[] {
+function checkPositionRisks(positions: PositionWithId[], balance: number): RiskAlert[] {
   const alerts: RiskAlert[] = [];
 
   for (const pos of positions) {
@@ -84,7 +85,7 @@ function checkPositionRisks(positions: Position[], balance: number): RiskAlert[]
         message: `⚠️ ПОЗИЦИЯ БЕЗ STOP LOSS! ${pos.symbol} ${pos.side} ${size} lots`,
         details: {
           symbol: pos.symbol,
-          positionId: (pos as unknown as Record<string, unknown>).positionId,
+          positionId: pos.positionId,
         },
       });
     }
@@ -306,11 +307,8 @@ async function manageOpenPositions(): Promise<void> {
     if (oneR === 0) continue;
 
     const currentR = uPnl / oneR;
-    const positionId = parseInt(
-      (pos as unknown as Record<string, unknown>).positionId as string,
-      10,
-    );
-    if (isNaN(positionId)) continue;
+    const positionId = pos.positionId;
+    if (!positionId) continue;
 
     // Partial close at +1R
     if (currentR >= config.partialCloseAtR && !DRY_RUN) {

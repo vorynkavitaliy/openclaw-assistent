@@ -1,13 +1,3 @@
-/**
- * Bybit API v5 клиент — торговля + рыночные данные.
- *
- * Объединяет функциональность из:
- *   - scripts/bybit_trade.js (торговля через SDK)
- *   - scripts/bybit_get_data.py (рыночные данные через REST)
- *
- * Использует bybit-api SDK для торговли, fetch для публичных данных.
- */
-
 import {
   RestClientV5,
   type OrderParamsV5,
@@ -40,15 +30,11 @@ const log = createLogger('bybit-client');
 const MAX_LEVERAGE = 5;
 const CATEGORY = 'linear' as const;
 
-// ─── Типы ─────────────────────────────────────────────────────
-
 interface BybitApiResponse {
   retCode: number;
   retMsg: string;
   result: Record<string, unknown>;
 }
-
-// ─── REST Client (SDK) ────────────────────────────────────────
 
 let _client: RestClientV5 | null = null;
 
@@ -58,7 +44,7 @@ function getClient(): RestClientV5 {
   const creds = getBybitCredentials();
 
   if (!creds.apiKey || !creds.apiSecret) {
-    throw new Error('API ключи не настроены. Проверь ~/.openclaw/credentials.json');
+    throw new Error('API keys not configured. Check ~/.openclaw/credentials.json');
   }
 
   _client = new RestClientV5({
@@ -70,8 +56,6 @@ function getClient(): RestClientV5 {
 
   return _client;
 }
-
-// ─── Public API (без SDK, через fetch) ────────────────────────
 
 async function apiGet(
   endpoint: string,
@@ -106,11 +90,6 @@ async function apiGet(
   }
 }
 
-// ─── Рыночные данные (замена bybit_get_data.py) ───────────────
-
-/**
- * Получить OHLC свечи с Bybit.
- */
 export async function getKlines(
   symbol: string,
   interval: string,
@@ -126,7 +105,7 @@ export async function getKlines(
   });
 
   if ('error' in result) {
-    log.error('Ошибка получения klines', { symbol, error: result.error as string });
+    log.error('Failed to fetch klines', { symbol, error: result.error as string });
     return [];
   }
 
@@ -152,9 +131,6 @@ export async function getKlines(
   return rows;
 }
 
-/**
- * Получить рыночные метрики: тикер, funding rate, OI.
- */
 export async function getMarketInfo(symbol: string): Promise<MarketInfo | null> {
   const [ticker, funding, oi] = await Promise.all([
     apiGet('/v5/market/tickers', { category: CATEGORY, symbol }),
@@ -184,36 +160,30 @@ export async function getMarketInfo(symbol: string): Promise<MarketInfo | null> 
     ask1: parseFloat(t.ask1Price ?? '0'),
   };
 
-  // Funding history
   const fundingList = (funding.list ?? []) as Record<string, string>[];
   if (fundingList.length > 0) {
     info.lastFundingRate = parseFloat(fundingList[0].fundingRate ?? '0');
     info.lastFundingTime = fundingList[0].fundingRateTimestamp ?? '';
   }
 
-  // Open Interest
   const oiList = (oi.list ?? []) as Record<string, string>[];
   if (oiList.length > 0) {
     info.openInterest = parseFloat(oiList[0].openInterest ?? '0');
     info.oiTimestamp = oiList[0].timestamp ?? '';
   }
 
-  // Funding signal
   const fr = info.fundingRate;
   if (fr > 0.0003) {
-    info.fundingSignal = 'ПЕРЕГРЕТ_ЛОНГИ';
+    info.fundingSignal = 'LONGS_OVERHEATED';
   } else if (fr < -0.0003) {
-    info.fundingSignal = 'ПЕРЕГРЕТ_ШОРТЫ';
+    info.fundingSignal = 'SHORTS_OVERHEATED';
   } else {
-    info.fundingSignal = 'НЕЙТРАЛЬНО';
+    info.fundingSignal = 'NEUTRAL';
   }
 
   return info;
 }
 
-/**
- * Получить полный анализ по паре: OHLC + индикаторы + bias.
- */
 export async function getMarketAnalysis(
   symbol: string,
   timeframe: string,
@@ -265,21 +235,16 @@ export async function getMarketAnalysis(
   };
 }
 
-// ─── Торговые операции (замена bybit_trade.js) ────────────────
-
-/**
- * Получить баланс кошелька.
- */
 export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
   const client = getClient();
   const res = await client.getWalletBalance({ accountType: 'UNIFIED', coin });
 
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка получения баланса: ${res.retMsg}`);
+    throw new Error(`Failed to get balance: ${res.retMsg}`);
   }
 
   const account = (res.result as unknown as { list?: Array<Record<string, string>> })?.list?.[0];
-  if (!account) throw new Error('Аккаунт не найден');
+  if (!account) throw new Error('Account not found');
 
   return {
     totalEquity: parseFloat(account.totalEquity || '0'),
@@ -290,9 +255,6 @@ export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
   };
 }
 
-/**
- * Получить открытые позиции.
- */
 export async function getPositions(symbol?: string): Promise<Position[]> {
   const client = getClient();
   const params: PositionInfoParamsV5 = { category: CATEGORY, settleCoin: 'USDT' };
@@ -300,7 +262,7 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
 
   const res = await client.getPositionInfo(params);
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка получения позиций: ${res.retMsg}`);
+    throw new Error(`Failed to get positions: ${res.retMsg}`);
   }
 
   const list = ((res.result as { list?: unknown[] })?.list ?? []) as Array<Record<string, string>>;
@@ -321,9 +283,6 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
     }));
 }
 
-/**
- * Создать ордер.
- */
 export async function submitOrder(params: {
   symbol: string;
   side: 'Buy' | 'Sell';
@@ -351,7 +310,7 @@ export async function submitOrder(params: {
 
   const res = await client.submitOrder(orderParams);
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка создания ордера: ${res.retMsg}`);
+    throw new Error(`Failed to create order: ${res.retMsg}`);
   }
 
   const result = res.result as { orderId: string; orderLinkId?: string };
@@ -367,15 +326,12 @@ export async function submitOrder(params: {
   };
 }
 
-/**
- * Закрыть позицию.
- */
 export async function closePosition(symbol: string): Promise<OrderResult> {
   const client = getClient();
   const posRes = await client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
 
   if (posRes.retCode !== 0) {
-    throw new Error(`Ошибка получения позиции: ${posRes.retMsg}`);
+    throw new Error(`Failed to get position: ${posRes.retMsg}`);
   }
 
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
@@ -383,7 +339,7 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
   >;
   const pos = list.find((p) => parseFloat(p.size) > 0);
 
-  if (!pos) throw new Error(`Нет открытой позиции по ${symbol}`);
+  if (!pos) throw new Error(`No open position for ${symbol}`);
 
   const closeSide = pos.side === 'Buy' ? 'Sell' : 'Buy';
 
@@ -398,7 +354,7 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
   });
 
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка закрытия позиции: ${res.retMsg}`);
+    throw new Error(`Failed to close position: ${res.retMsg}`);
   }
 
   return {
@@ -411,15 +367,12 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
   };
 }
 
-/**
- * Частичное закрытие позиции.
- */
 export async function partialClosePosition(symbol: string, qty: string): Promise<OrderResult> {
   const client = getClient();
   const posRes = await client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
 
   if (posRes.retCode !== 0) {
-    throw new Error(`Ошибка получения позиции: ${posRes.retMsg}`);
+    throw new Error(`Failed to get position: ${posRes.retMsg}`);
   }
 
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
@@ -427,7 +380,7 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
   >;
   const pos = list.find((p) => parseFloat(p.size) > 0);
 
-  if (!pos) throw new Error(`Нет открытой позиции по ${symbol}`);
+  if (!pos) throw new Error(`No open position for ${symbol}`);
 
   const closeSide = pos.side === 'Buy' ? 'Sell' : 'Buy';
 
@@ -442,7 +395,7 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
   });
 
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка частичного закрытия: ${res.retMsg}`);
+    throw new Error(`Failed to partial close: ${res.retMsg}`);
   }
 
   return {
@@ -455,9 +408,6 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
   };
 }
 
-/**
- * Модификация SL/TP.
- */
 export async function modifyPosition(
   symbol: string,
   stopLoss?: string,
@@ -476,13 +426,10 @@ export async function modifyPosition(
   const res = await client.setTradingStop(params);
 
   if (res.retCode !== 0) {
-    throw new Error(`Ошибка модификации SL/TP: ${res.retMsg}`);
+    throw new Error(`Failed to modify SL/TP: ${res.retMsg}`);
   }
 }
 
-/**
- * Закрыть все позиции.
- */
 export async function closeAllPositions(): Promise<{
   closed: number;
   total: number;
@@ -492,7 +439,7 @@ export async function closeAllPositions(): Promise<{
   const posRes = await client.getPositionInfo({ category: CATEGORY, settleCoin: 'USDT' });
 
   if (posRes.retCode !== 0) {
-    throw new Error(`Ошибка получения позиций: ${posRes.retMsg}`);
+    throw new Error(`Failed to get positions: ${posRes.retMsg}`);
   }
 
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
@@ -539,12 +486,9 @@ export async function closeAllPositions(): Promise<{
   };
 }
 
-/**
- * Установить плечо.
- */
 export async function setLeverage(symbol: string, leverage: number): Promise<void> {
   if (leverage > MAX_LEVERAGE) {
-    throw new Error(`Плечо ${leverage}x превышает максимум ${MAX_LEVERAGE}x`);
+    throw new Error(`Leverage ${leverage}x exceeds maximum ${MAX_LEVERAGE}x`);
   }
 
   const client = getClient();
@@ -555,15 +499,11 @@ export async function setLeverage(symbol: string, leverage: number): Promise<voi
     sellLeverage: String(leverage),
   });
 
-  // retCode 110043 = "Set leverage not modified" — не ошибка
   if (res.retCode !== 0 && res.retCode !== 110043) {
-    throw new Error(`Ошибка установки плеча: ${res.retMsg}`);
+    throw new Error(`Failed to set leverage: ${res.retMsg}`);
   }
 }
 
-/**
- * Сбросить клиент (для тестов).
- */
 export function resetClient(): void {
   _client = null;
 }

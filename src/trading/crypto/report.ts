@@ -1,16 +1,3 @@
-/**
- * Crypto Report — часовой отчёт в Telegram.
- *
- * Собирает баланс, позиции, статистику, рыночные данные.
- * Форматирует и отправляет через OpenClaw Gateway.
- *
- * Использование:
- *   tsx src/trading/crypto/report.ts
- *   tsx src/trading/crypto/report.ts --format=json
- *
- * Мигрировано из scripts/crypto_report.js
- */
-
 import { createLogger } from '../../utils/logger.js';
 import { sendViaOpenClaw } from '../../utils/telegram.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
@@ -19,8 +6,6 @@ import * as state from './state.js';
 
 const log = createLogger('crypto-report');
 
-// ─── CLI ──────────────────────────────────────────────────────
-
 function getArg(name: string, def: string): string {
   const prefix = `--${name}=`;
   const found = process.argv.find((a: string) => a.startsWith(prefix));
@@ -28,8 +13,6 @@ function getArg(name: string, def: string): string {
 }
 
 const FORMAT = getArg('format', 'text');
-
-// ─── Типы ─────────────────────────────────────────────────────
 
 interface MarketSnapshot {
   price: number;
@@ -65,12 +48,9 @@ interface ReportData {
   lastMonitor: string | null;
 }
 
-// ─── Сбор данных ──────────────────────────────────────────────
-
 async function collectData(): Promise<ReportData> {
   state.load();
 
-  // Баланс
   try {
     const balance = await getBalance();
     state.updateBalance({
@@ -79,10 +59,9 @@ async function collectData(): Promise<ReportData> {
       totalPerpUPL: String(balance.unrealisedPnl),
     });
   } catch (err) {
-    log.warn('Не удалось получить баланс', { error: (err as Error).message });
+    log.warn('Failed to get balance', { error: (err as Error).message });
   }
 
-  // Позиции
   try {
     const positions = await getPositions();
     state.updatePositions(
@@ -99,10 +78,9 @@ async function collectData(): Promise<ReportData> {
       })),
     );
   } catch (err) {
-    log.warn('Не удалось получить позиции', { error: (err as Error).message });
+    log.warn('Failed to get positions', { error: (err as Error).message });
   }
 
-  // Рыночные данные для основных пар
   const market: Record<string, MarketSnapshot> = {};
   const topPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
@@ -118,7 +96,7 @@ async function collectData(): Promise<ReportData> {
         };
       }
     } catch {
-      // Skip failed pair
+      /* ignored */
     }
   }
 
@@ -135,8 +113,6 @@ async function collectData(): Promise<ReportData> {
     lastMonitor: s.lastMonitor,
   };
 }
-
-// ─── Форматирование: Telegram ─────────────────────────────────
 
 function fmt(val: number | string): string {
   const n = typeof val === 'string' ? parseFloat(val) : val;
@@ -161,7 +137,6 @@ function formatTelegramReport(data: ReportData): string {
   lines.push(`🕐 ${timeStr}`);
   lines.push('');
 
-  // Статус
   if (data.killSwitch) {
     lines.push('🚨 *KILL SWITCH АКТИВЕН — торговля остановлена!*');
     lines.push('');
@@ -171,14 +146,12 @@ function formatTelegramReport(data: ReportData): string {
     lines.push('');
   }
 
-  // Баланс
   lines.push('💰 *Баланс*');
   lines.push(`  Equity: $${fmt(data.balance.total)}`);
   lines.push(`  Доступно: $${fmt(data.balance.available)}`);
   lines.push(`  Unrealized P&L: $${fmt(data.balance.unrealizedPnl)}`);
   lines.push('');
 
-  // Позиции
   if (data.positions.length > 0) {
     lines.push(`📈 *Открытые позиции (${data.positions.length})*`);
     for (const p of data.positions) {
@@ -193,7 +166,6 @@ function formatTelegramReport(data: ReportData): string {
   }
   lines.push('');
 
-  // Дневная статистика
   lines.push('📅 *Дневная статистика*');
   lines.push(`  Сделок: ${data.daily.trades} (✅ ${data.daily.wins} / ❌ ${data.daily.losses})`);
   lines.push(`  P&L: $${fmt(data.daily.totalPnl)}`);
@@ -204,7 +176,6 @@ function formatTelegramReport(data: ReportData): string {
   }
   lines.push('');
 
-  // Рынок
   const marketEntries = Object.entries(data.market);
   if (marketEntries.length > 0) {
     lines.push('🌐 *Рынок*');
@@ -219,7 +190,6 @@ function formatTelegramReport(data: ReportData): string {
     lines.push('');
   }
 
-  // Режим
   lines.push(`⚙️ Режим: *${config.mode === 'execute' ? 'FULL-AUTO 🤖' : 'DRY-RUN 🔍'}*`);
   if (data.lastMonitor) {
     const ago = Math.round((Date.now() - new Date(data.lastMonitor).getTime()) / 60000);
@@ -228,8 +198,6 @@ function formatTelegramReport(data: ReportData): string {
 
   return lines.join('\n');
 }
-
-// ─── Форматирование: JSON ─────────────────────────────────────
 
 function formatJsonReport(data: ReportData): Record<string, unknown> {
   return {
@@ -246,12 +214,9 @@ function formatJsonReport(data: ReportData): Record<string, unknown> {
   };
 }
 
-// ─── Main ─────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const data = await collectData();
 
-  // Обновить lastReport
   const s = state.get();
   s.lastReport = new Date().toISOString();
   state.save();
@@ -273,6 +238,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  log.error(`Ошибка генерации отчёта: ${err instanceof Error ? err.message : String(err)}`);
+  log.error(`Report generation error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

@@ -1,16 +1,3 @@
-/**
- * Forex Trade CLI — торговые команды через cTrader.
- *
- * Использование:
- *   tsx src/trading/forex/trade.ts --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
- *   tsx src/trading/forex/trade.ts --action close --position-id 123456
- *   tsx src/trading/forex/trade.ts --action close-all
- *   tsx src/trading/forex/trade.ts --action modify --position-id 123456 --sl-pips 30
- *   tsx src/trading/forex/trade.ts --action status
- *
- * Мигрировано из scripts/mt5_trade.py
- */
-
 import { createLogger } from '../../utils/logger.js';
 import {
   closeAll,
@@ -23,8 +10,6 @@ import {
 } from './client.js';
 
 const log = createLogger('forex-trade');
-
-// ─── CLI parsing ─────────────────────────────────────────────
 
 function getArg(name: string): string | undefined {
   const prefix = `--${name}=`;
@@ -40,23 +25,18 @@ function getNumArg(name: string): number | undefined {
 function getRequiredArg(name: string): string {
   const val = getArg(name);
   if (val === undefined) {
-    console.error(JSON.stringify({ error: `--${name} обязателен` }));
+    console.error(JSON.stringify({ error: `--${name} is required` }));
     process.exit(1);
   }
   return val;
 }
 
-// ─── Validation ──────────────────────────────────────────────
-
 function validateRisk(lots: number, slPips?: number): { ok: boolean; error?: string } {
-  if (lots > 10.0) return { ok: false, error: `Лот ${lots} слишком большой. Макс 10.0` };
-  if (lots < 0.01) return { ok: false, error: `Лот ${lots} слишком маленький. Мин 0.01` };
-  if (!slPips || slPips <= 0)
-    return { ok: false, error: 'SL обязателен! Позиция без Stop Loss запрещена.' };
+  if (lots > 10.0) return { ok: false, error: `Lot size ${lots} too large. Max 10.0` };
+  if (lots < 0.01) return { ok: false, error: `Lot size ${lots} too small. Min 0.01` };
+  if (!slPips || slPips <= 0) return { ok: false, error: 'SL required! Positions without Stop Loss are forbidden.' };
   return { ok: true };
 }
-
-// ─── Actions ─────────────────────────────────────────────────
 
 async function actionOpen(): Promise<void> {
   const pair = getRequiredArg('pair').toUpperCase();
@@ -79,16 +59,7 @@ async function actionOpen(): Promise<void> {
     tp: tpPips ? { pips: tpPips } : undefined,
   });
 
-  console.log(
-    JSON.stringify(
-      {
-        ...result,
-        timestamp: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
+  console.log(JSON.stringify({ ...result, timestamp: new Date().toISOString() }, null, 2));
 }
 
 async function actionClose(): Promise<void> {
@@ -99,12 +70,7 @@ async function actionClose(): Promise<void> {
 
   console.log(
     JSON.stringify(
-      {
-        status: 'CLOSED',
-        positionId,
-        partial: partialLots,
-        timestamp: new Date().toISOString(),
-      },
+      { status: 'CLOSED', positionId, partial: partialLots, timestamp: new Date().toISOString() },
       null,
       2,
     ),
@@ -113,16 +79,7 @@ async function actionClose(): Promise<void> {
 
 async function actionCloseAll(): Promise<void> {
   await closeAll();
-  console.log(
-    JSON.stringify(
-      {
-        status: 'ALL_CLOSED',
-        timestamp: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
+  console.log(JSON.stringify({ status: 'ALL_CLOSED', timestamp: new Date().toISOString() }, null, 2));
 }
 
 async function actionModify(): Promise<void> {
@@ -138,13 +95,7 @@ async function actionModify(): Promise<void> {
 
   console.log(
     JSON.stringify(
-      {
-        status: 'MODIFIED',
-        positionId,
-        slPips,
-        tpPips,
-        timestamp: new Date().toISOString(),
-      },
+      { status: 'MODIFIED', positionId, slPips, tpPips, timestamp: new Date().toISOString() },
       null,
       2,
     ),
@@ -168,8 +119,6 @@ async function actionStatus(): Promise<void> {
     ),
   );
 }
-
-// ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const action = getArg('action') ?? 'status';
@@ -195,7 +144,7 @@ async function main(): Promise<void> {
       default:
         console.error(
           JSON.stringify({
-            error: `Неизвестное действие: ${action}`,
+            error: `Unknown action: ${action}`,
             available: ['open', 'close', 'close-all', 'modify', 'status'],
           }),
         );
@@ -207,6 +156,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  log.error(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
+  log.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

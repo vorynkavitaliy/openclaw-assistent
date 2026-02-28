@@ -1,23 +1,3 @@
-/**
- * Forex Monitor — мониторинг позиций и рисков (FTMO-совместимый).
- *
- * Функционал:
- *   1. Проверка дродауна (дневной + общий)
- *   2. Обновление позиций
- *   3. Проверка рисков (SL, позиция без SL, перегрузка)
- *   4. Управление открытыми (partial close, trailing)
- *   5. Анализ рынка + вход (если mode=execute)
- *
- * Использование:
- *   tsx src/trading/forex/monitor.ts --heartbeat
- *   tsx src/trading/forex/monitor.ts --positions
- *   tsx src/trading/forex/monitor.ts --risk-check
- *   tsx src/trading/forex/monitor.ts --trade --dry-run
- *   tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
- *
- * Мигрировано из scripts/mt5_monitor.py
- */
-
 import { createLogger } from '../../utils/logger.js';
 import type { AccountInfo } from '../shared/types.js';
 import {
@@ -34,8 +14,6 @@ import config from './config.js';
 
 const log = createLogger('forex-monitor');
 
-// ─── CLI ──────────────────────────────────────────────────────
-
 function hasFlag(name: string): boolean {
   return process.argv.includes(`--${name}`);
 }
@@ -47,8 +25,6 @@ function getArg(name: string): string | undefined {
 }
 
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
-
-// ─── Типы ─────────────────────────────────────────────────────
 
 interface RiskAlert {
   level: 'CRITICAL' | 'WARNING' | 'INFO';
@@ -68,39 +44,31 @@ interface HeartbeatReport {
   tradingAllowed: boolean;
 }
 
-// ─── Risk checks ─────────────────────────────────────────────
-
 function checkPositionRisks(positions: PositionWithId[], balance: number): RiskAlert[] {
   const alerts: RiskAlert[] = [];
 
   for (const pos of positions) {
     const sl = parseFloat(pos.stopLoss ?? '0');
     const entry = parseFloat(pos.entryPrice);
-    const size = parseFloat(pos.size); // lots
+    const size = parseFloat(pos.size);
 
-    // Позиция без SL — критично
     if (sl === 0) {
       alerts.push({
         level: 'CRITICAL',
-        message: `⚠️ ПОЗИЦИЯ БЕЗ STOP LOSS! ${pos.symbol} ${pos.side} ${size} lots`,
-        details: {
-          symbol: pos.symbol,
-          positionId: pos.positionId,
-        },
+        message: `NO STOP LOSS: ${pos.symbol} ${pos.side} ${size} lots`,
+        details: { symbol: pos.symbol, positionId: pos.positionId },
       });
     }
 
-    // Риск > maxRiskPerTradePct
     if (sl > 0 && entry > 0 && balance > 0) {
       const pipDiff = Math.abs(entry - sl);
-      // Упрощённый расчёт: ~$10/pip per lot для мажоров
       const riskUsd = pipDiff * 10000 * size * 10;
       const riskPct = (riskUsd / balance) * 100;
 
       if (riskPct > config.maxRiskPerTradePct) {
         alerts.push({
           level: 'WARNING',
-          message: `⚠️ Риск ${riskPct.toFixed(1)}% > ${config.maxRiskPerTradePct}% | ${pos.symbol}`,
+          message: `Risk ${riskPct.toFixed(1)}% > ${config.maxRiskPerTradePct}% | ${pos.symbol}`,
           details: { symbol: pos.symbol, riskPct: riskPct.toFixed(2) },
         });
       }
@@ -120,21 +88,19 @@ function checkDrawdown(account: AccountInfo): RiskAlert[] {
   if (drawdownPct >= config.maxDailyDrawdownPct) {
     alerts.push({
       level: 'CRITICAL',
-      message: `🚨 ДРОДАУН ${drawdownPct.toFixed(1)}% ДОСТИГ ЛИМИТА ${config.maxDailyDrawdownPct}%! СТОП!`,
+      message: `DRAWDOWN ${drawdownPct.toFixed(1)}% HIT LIMIT ${config.maxDailyDrawdownPct}%! STOP!`,
       details: { drawdownPct: drawdownPct.toFixed(2), limit: config.maxDailyDrawdownPct },
     });
   } else if (drawdownPct >= config.maxDailyDrawdownPct * 0.75) {
     alerts.push({
       level: 'WARNING',
-      message: `⚠️ Дродаун ${drawdownPct.toFixed(1)}% приближается к лимиту ${config.maxDailyDrawdownPct}%`,
+      message: `Drawdown ${drawdownPct.toFixed(1)}% approaching limit ${config.maxDailyDrawdownPct}%`,
       details: { drawdownPct: drawdownPct.toFixed(2) },
     });
   }
 
   return alerts;
 }
-
-// ─── Heartbeat ───────────────────────────────────────────────
 
 async function heartbeat(): Promise<HeartbeatReport> {
   const account = await getBalance();
@@ -169,8 +135,6 @@ async function heartbeat(): Promise<HeartbeatReport> {
   };
 }
 
-// ─── Trading logic ───────────────────────────────────────────
-
 interface TradeSignal {
   pair: string;
   side: 'Buy' | 'Sell';
@@ -196,7 +160,6 @@ async function analyzeForTrade(pair: string): Promise<TradeSignal | null> {
 
   if (trendBias === 'UNKNOWN') return null;
 
-  // LONG
   if (trendBias === 'BULLISH' && priceVsEma === 'ABOVE' && rsi15m < 40) {
     const slPips = Math.max(Math.round(atr15m * 10000 * 1.5), 20);
     const tpPips = slPips * config.minRR;
@@ -204,15 +167,14 @@ async function analyzeForTrade(pair: string): Promise<TradeSignal | null> {
     return {
       pair,
       side: 'Buy',
-      lots: 0.01, // будет пересчитано через equity % risk
+      lots: 0.01,
       slPips,
       tpPips,
       rr: config.minRR,
-      reason: `BULLISH 4h + RSI15m=${rsi15m.toFixed(1)} перепродан`,
+      reason: `BULLISH H4 + RSI15m=${rsi15m.toFixed(1)} oversold`,
     };
   }
 
-  // SHORT
   if (trendBias === 'BEARISH' && priceVsEma === 'BELOW' && rsi15m > 60) {
     const slPips = Math.max(Math.round(atr15m * 10000 * 1.5), 20);
     const tpPips = slPips * config.minRR;
@@ -224,7 +186,7 @@ async function analyzeForTrade(pair: string): Promise<TradeSignal | null> {
       slPips,
       tpPips,
       rr: config.minRR,
-      reason: `BEARISH 4h + RSI15m=${rsi15m.toFixed(1)} перекуплен`,
+      reason: `BEARISH H4 + RSI15m=${rsi15m.toFixed(1)} overbought`,
     };
   }
 
@@ -233,35 +195,34 @@ async function analyzeForTrade(pair: string): Promise<TradeSignal | null> {
 
 async function executeTrades(): Promise<void> {
   const pairs = getArg('pair') ? [getArg('pair')!.toUpperCase()] : config.pairs;
-
   const account = await getBalance();
   const positions = await getPositions();
 
   if (positions.length >= config.maxOpenPositions) {
-    log.info(`Макс позиций (${config.maxOpenPositions}). Пропуск.`);
+    log.info(`Max positions reached (${config.maxOpenPositions}). Skipping.`);
     return;
   }
 
-  // Check drawdown
   const ddAlerts = checkDrawdown(account);
   if (ddAlerts.some((a) => a.level === 'CRITICAL')) {
-    log.warn('Дродаун критический — торговля заблокирована');
+    log.warn('Critical drawdown — trading blocked');
     return;
   }
 
   const signals: TradeSignal[] = [];
+
   for (const pair of pairs) {
-    // Skip if already have position
     if (positions.some((p) => p.symbol === pair)) continue;
+
     try {
       const sig = await analyzeForTrade(pair);
       if (sig) signals.push(sig);
     } catch (err) {
-      log.warn(`Ошибка анализа ${pair}: ${(err as Error).message}`);
+      log.warn(`Analysis error ${pair}: ${(err as Error).message}`);
     }
   }
 
-  log.info(`Сигналов: ${signals.length}`);
+  log.info(`Signals: ${signals.length}`);
 
   for (const sig of signals) {
     if (DRY_RUN) {
@@ -279,14 +240,12 @@ async function executeTrades(): Promise<void> {
         sl: { pips: sig.slPips },
         tp: { pips: sig.tpPips },
       });
-      log.info(`Ордер открыт: ${result.orderId} ${sig.pair} ${sig.side}`);
+      log.info(`Order opened: ${result.orderId} ${sig.pair} ${sig.side}`);
     } catch (err) {
-      log.error(`Ошибка ордера ${sig.pair}: ${(err as Error).message}`);
+      log.error(`Order error ${sig.pair}: ${(err as Error).message}`);
     }
   }
 }
-
-// ─── Manage positions ────────────────────────────────────────
 
 async function manageOpenPositions(): Promise<void> {
   const positions = await getPositions();
@@ -302,7 +261,6 @@ async function manageOpenPositions(): Promise<void> {
     const slDistance = Math.abs(entry - sl);
     if (slDistance === 0) continue;
 
-    // Simplified 1R calc for forex ($ per pip × lots)
     const oneR = slDistance * 10000 * size * 10;
     if (oneR === 0) continue;
 
@@ -310,34 +268,30 @@ async function manageOpenPositions(): Promise<void> {
     const positionId = pos.positionId;
     if (!positionId) continue;
 
-    // Partial close at +1R
     if (currentR >= config.partialCloseAtR && !DRY_RUN) {
       const partialLots = size * config.partialClosePercent;
       if (partialLots >= 0.01) {
         try {
           await closePosition(positionId, partialLots);
-          await modifyPosition(positionId, { sl: { pips: 0 } }); // breakeven
+          await modifyPosition(positionId, { sl: { pips: 0 } });
           log.info(`Partial close ${pos.symbol} ${partialLots} lots at ${currentR.toFixed(1)}R`);
         } catch (err) {
-          log.warn(`Ошибка partial close ${pos.symbol}: ${(err as Error).message}`);
+          log.warn(`Partial close error ${pos.symbol}: ${(err as Error).message}`);
         }
       }
     }
 
-    // Trailing stop at +1.5R
     if (currentR >= config.trailingStartR && !DRY_RUN) {
       try {
         const trailPips = Math.round(slDistance * config.trailingDistanceR * 10000);
         await modifyPosition(positionId, { sl: { pips: trailPips } });
         log.info(`Trailing SL ${pos.symbol} to ${trailPips} pips at ${currentR.toFixed(1)}R`);
       } catch (err) {
-        log.warn(`Ошибка trailing ${pos.symbol}: ${(err as Error).message}`);
+        log.warn(`Trailing error ${pos.symbol}: ${(err as Error).message}`);
       }
     }
   }
 }
-
-// ─── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   try {
@@ -368,7 +322,6 @@ async function main(): Promise<void> {
       await manageOpenPositions();
       await executeTrades();
     } else {
-      // По умолчанию — heartbeat
       const report = await heartbeat();
       console.log(JSON.stringify(report, null, 2));
     }
@@ -378,6 +331,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  log.error(`Критическая ошибка: ${err instanceof Error ? err.message : String(err)}`);
+  log.error(`Critical error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

@@ -1,8 +1,3 @@
-/**
- * Загрузка credentials и конфигурации.
- * Читает из ~/.openclaw/credentials.json и env vars.
- */
-
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -73,24 +68,18 @@ let _cache: CredentialsFile | null = null;
 function loadCredentialsFile(): CredentialsFile {
   if (_cache) return _cache;
 
-  if (!fs.existsSync(CREDENTIALS_PATH)) {
-    return {};
-  }
+  if (!fs.existsSync(CREDENTIALS_PATH)) return {};
 
   try {
     const raw = fs.readFileSync(CREDENTIALS_PATH, 'utf8');
     _cache = JSON.parse(raw) as CredentialsFile;
     return _cache;
   } catch {
-    console.error(`[config] Ошибка чтения credentials из ${CREDENTIALS_PATH}`);
+    console.error(`[config] Failed to read credentials from ${CREDENTIALS_PATH}`);
     return {};
   }
 }
 
-/**
- * Загрузить Bybit credentials.
- * Приоритет: env vars > credentials.json
- */
 export function getBybitCredentials(): BybitCredentials {
   const file = loadCredentialsFile();
 
@@ -108,9 +97,6 @@ export function getBybitCredentials(): BybitCredentials {
   };
 }
 
-/**
- * Загрузить OANDA credentials.
- */
 export function getOandaCredentials(): OandaCredentials {
   const file = loadCredentialsFile();
 
@@ -124,10 +110,6 @@ export function getOandaCredentials(): OandaCredentials {
   };
 }
 
-/**
- * Загрузить cTrader FIX credentials.
- * Приоритет: env vars > credentials.json
- */
 export function getCTraderCredentials(): CTraderCredentials {
   const file = loadCredentialsFile();
   const ct = file.ctrader;
@@ -155,17 +137,11 @@ export function getCTraderCredentials(): CTraderCredentials {
   };
 }
 
-/**
- * Получить base URL для Bybit API.
- */
 export function getBybitBaseUrl(): string {
   const creds = getBybitCredentials();
   return creds.testnet ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
 }
 
-/**
- * Сбросить кеш credentials (для тестов).
- */
 export function resetCredentialsCache(): void {
   _cache = null;
 }

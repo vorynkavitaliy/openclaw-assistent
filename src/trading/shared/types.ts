@@ -1,10 +1,3 @@
-/**
- * Общие торговые типы для всех модулей.
- * Используются в crypto, forex и shared модулях.
- */
-
-// ─── Рыночные данные ──────────────────────────────────────────
-
 export interface OHLC {
   time: string;
   open: number;
@@ -30,10 +23,8 @@ export interface MarketInfo {
   lastFundingTime?: string;
   openInterest?: number;
   oiTimestamp?: string;
-  fundingSignal?: 'ПЕРЕГРЕТ_ЛОНГИ' | 'ПЕРЕГРЕТ_ШОРТЫ' | 'НЕЙТРАЛЬНО';
+  fundingSignal?: 'LONGS_OVERHEATED' | 'SHORTS_OVERHEATED' | 'NEUTRAL';
 }
-
-// ─── Индикаторы ───────────────────────────────────────────────
 
 export interface Indicators {
   ema200: number | null;
@@ -71,8 +62,6 @@ export interface MarketAnalysis {
   timestamp: string;
 }
 
-// ─── Ордера ───────────────────────────────────────────────────
-
 export type OrderSide = 'Buy' | 'Sell';
 export type OrderType = 'Market' | 'Limit';
 export type PositionSide = 'long' | 'short';
@@ -98,8 +87,6 @@ export interface OrderResult {
   status: string;
 }
 
-// ─── Позиции ──────────────────────────────────────────────────
-
 export interface Position {
   symbol: string;
   side: PositionSide;
@@ -114,8 +101,6 @@ export interface Position {
   createdTime?: string;
 }
 
-// ─── Аккаунт ──────────────────────────────────────────────────
-
 export interface AccountInfo {
   totalEquity: number;
   availableBalance: number;
@@ -123,8 +108,6 @@ export interface AccountInfo {
   unrealisedPnl: number;
   currency: string;
 }
-
-// ─── Торговые сигналы ─────────────────────────────────────────
 
 export interface TradeSignal {
   pair: string;
@@ -137,8 +120,6 @@ export interface TradeSignal {
   reason: string;
   timeframe: string;
 }
-
-// ─── Трейд-запись ─────────────────────────────────────────────
 
 export interface TradeRecord {
   id: string;
@@ -155,8 +136,6 @@ export interface TradeRecord {
   closeTime?: string;
 }
 
-// ─── Состояние торговли ───────────────────────────────────────
-
 export interface TradingState {
   date: string;
   balance: number;
@@ -170,8 +149,6 @@ export interface TradingState {
   positions: Position[];
   lastUpdate: string;
 }
-
-// ─── Конфигурация ─────────────────────────────────────────────
 
 export interface TradingConfig {
   pairs: string[];
@@ -206,15 +183,11 @@ export interface TradingConfig {
   telegramEnabled: boolean;
 }
 
-// ─── Events ───────────────────────────────────────────────────
-
 export interface TradingEvent {
   type: string;
   timestamp: string;
   data: Record<string, unknown>;
 }
-
-// ─── Timeframe map ────────────────────────────────────────────
 
 export const TIMEFRAME_MAP: Record<string, string> = {
   '1': '1',
@@ -230,7 +203,6 @@ export const TIMEFRAME_MAP: Record<string, string> = {
   D: 'D',
   W: 'W',
   M: 'M',
-  // Aliases
   '1m': '1',
   '3m': '3',
   '5m': '5',

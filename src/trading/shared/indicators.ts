@@ -1,22 +1,8 @@
-/**
- * Технические индикаторы: EMA, RSI, ATR.
- * Переписано из bybit_get_data.py на TypeScript.
- */
-
-/**
- * Вычисляет EMA (Exponential Moving Average).
- * @param prices - массив цен закрытия
- * @param period - период EMA
- * @returns массив значений EMA (длина: prices.length - period + 1)
- */
 export function calculateEma(prices: number[], period: number): number[] {
-  if (prices.length < period) {
-    return [];
-  }
+  if (prices.length < period) return [];
 
   const k = 2 / (period + 1);
 
-  // Первое значение EMA — простая средняя за period баров
   let sum = 0;
   for (let i = 0; i < period; i++) {
     sum += prices[i];
@@ -31,16 +17,8 @@ export function calculateEma(prices: number[], period: number): number[] {
   return ema;
 }
 
-/**
- * Вычисляет RSI (Relative Strength Index).
- * @param closes - массив цен закрытия
- * @param period - период RSI (по умолчанию 14)
- * @returns текущее значение RSI (0-100)
- */
 export function calculateRsi(closes: number[], period: number = 14): number {
-  if (closes.length < period + 1) {
-    return 50.0;
-  }
+  if (closes.length < period + 1) return 50.0;
 
   const deltas: number[] = [];
   for (let i = 1; i < closes.length; i++) {
@@ -54,31 +32,20 @@ export function calculateRsi(closes: number[], period: number = 14): number {
   const avgGain = gains.length > 0 ? gains.reduce((a, b) => a + b, 0) / period : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / period : 0;
 
-  if (avgLoss === 0) {
-    return 100.0;
-  }
+  if (avgLoss === 0) return 100.0;
 
   const rs = avgGain / avgLoss;
+
   return Math.round((100 - 100 / (1 + rs)) * 100) / 100;
 }
 
-/**
- * Вычисляет ATR (Average True Range).
- * @param highs - массив максимумов
- * @param lows - массив минимумов
- * @param closes - массив цен закрытия
- * @param period - период ATR (по умолчанию 14)
- * @returns текущее значение ATR
- */
 export function calculateAtr(
   highs: number[],
   lows: number[],
   closes: number[],
   period: number = 14,
 ): number {
-  if (highs.length < period + 1) {
-    return 0.0;
-  }
+  if (highs.length < period + 1) return 0.0;
 
   const trs: number[] = [];
   for (let i = 1; i < highs.length; i++) {
@@ -91,16 +58,10 @@ export function calculateAtr(
   }
 
   const recentTrs = trs.slice(-period);
+
   return Math.round((recentTrs.reduce((a, b) => a + b, 0) / period) * 100) / 100;
 }
 
-/**
- * Вычисляет уровни поддержки и сопротивления из последних N баров.
- * @param highs - массив максимумов
- * @param lows - массив минимумов
- * @param lookback - количество баров для анализа (по умолчанию 20)
- * @returns объект с уровнями support и resistance
- */
 export function calculateSupportResistance(
   highs: number[],
   lows: number[],
@@ -116,30 +77,24 @@ export function calculateSupportResistance(
   };
 }
 
-/**
- * Определяет направление тренда по EMA.
- */
 export function getEmaTrend(
   ema50: number | null,
   ema200: number | null,
 ): 'BULLISH' | 'BEARISH' | 'UNKNOWN' {
   if (ema50 === null || ema200 === null) return 'UNKNOWN';
+
   return ema50 > ema200 ? 'BULLISH' : 'BEARISH';
 }
 
-/**
- * Определяет положение цены относительно EMA200.
- */
 export function getPriceVsEma(price: number, ema200: number | null): 'ABOVE' | 'BELOW' | 'UNKNOWN' {
   if (ema200 === null) return 'UNKNOWN';
+
   return price > ema200 ? 'ABOVE' : 'BELOW';
 }
 
-/**
- * Определяет зону RSI.
- */
 export function getRsiZone(rsi: number): 'OVERBOUGHT' | 'OVERSOLD' | 'NEUTRAL' {
   if (rsi > 70) return 'OVERBOUGHT';
   if (rsi < 30) return 'OVERSOLD';
+
   return 'NEUTRAL';
 }

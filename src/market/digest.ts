@@ -1,19 +1,4 @@
-/**
- * Market Digest — создаёт JSON-дайджест без web_search/web_fetch.
- *
- * Источники:
- *   - Macro: ForexFactory calendar XML (публичные зеркала)
- *   - Crypto news: RSS feeds (CoinDesk, Cointelegraph) через rss-parser
- *
- * Использование:
- *   tsx src/market/digest.ts --hours=48 --max-news=20
- *
- * Мигрировано из scripts/market_digest.py
- */
-
 import Parser from 'rss-parser';
-
-// ─── Конфиг ───────────────────────────────────────────────────
 
 const FF_XML_URLS = [
   'https://nfs.faireconomy.media/ff_calendar_thisweek.xml',
@@ -27,8 +12,6 @@ const RSS_FEEDS: Array<[string, string]> = [
 
 const USER_AGENT =
   'openclaw-assistent/market-digest (+https://github.com/vorynkavitaliy/openclaw-assistent)';
-
-// ─── Типы ─────────────────────────────────────────────────────
 
 interface MacroEvent {
   title: string;
@@ -59,19 +42,16 @@ interface DigestOutput {
   news: { recent: NewsItem[]; errors: string[] };
 }
 
-// ─── CLI args ─────────────────────────────────────────────────
-
 function getNumArg(name: string, defaultVal: number): number {
   const prefix = `--${name}=`;
   const found = process.argv.find((a: string) => a.startsWith(prefix));
   return found ? parseInt(found.slice(prefix.length), 10) || defaultVal : defaultVal;
 }
 
-// ─── HTTP ─────────────────────────────────────────────────────
-
 async function httpGet(url: string, timeoutMs = 20_000): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/xml,text/xml,text/html,*/*' },
@@ -84,10 +64,7 @@ async function httpGet(url: string, timeoutMs = 20_000): Promise<string> {
   }
 }
 
-// ─── ForexFactory XML ─────────────────────────────────────────
-
 function parseFFCalendar(xmlText: string): MacroEvent[] {
-  // Minimal XML parsing via regex — no heavy dependency needed for simple structure
   const events: MacroEvent[] = [];
   const eventRegex = /<event>([\s\S]*?)<\/event>/g;
   let match: RegExpExecArray | null;
@@ -109,7 +86,6 @@ function parseFFCalendar(xmlText: string): MacroEvent[] {
       if (tsRaw && /^\d+$/.test(tsRaw)) {
         ts = parseInt(tsRaw, 10);
       } else {
-        // Parse MM-DD-YYYY HH:MM as UTC
         const parsed = Date.parse(`${dateS} ${timeS} UTC`);
         if (!isNaN(parsed)) ts = Math.floor(parsed / 1000);
       }
@@ -132,8 +108,6 @@ function parseFFCalendar(xmlText: string): MacroEvent[] {
   return events;
 }
 
-// ─── RSS ──────────────────────────────────────────────────────
-
 async function fetchRSS(source: string, url: string): Promise<NewsItem[]> {
   const parser = new Parser({
     headers: { 'User-Agent': USER_AGENT },
@@ -141,6 +115,7 @@ async function fetchRSS(source: string, url: string): Promise<NewsItem[]> {
   });
 
   const feed = await parser.parseURL(url);
+
   return (feed.items ?? []).map((item) => {
     let ts: number | null = null;
     if (item.pubDate) {
@@ -158,8 +133,6 @@ async function fetchRSS(source: string, url: string): Promise<NewsItem[]> {
   });
 }
 
-// ─── Main ─────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const hours = getNumArg('hours', 48);
   const maxNews = getNumArg('max-news', 20);
@@ -170,7 +143,6 @@ async function main(): Promise<void> {
   const sinceTs = nowTs - hours * 3600;
   const untilTs = nowTs + hours * 3600;
 
-  // --- Macro ---
   const macroEvents: MacroEvent[] = [];
   const macroErrors: string[] = [];
 
@@ -183,16 +155,13 @@ async function main(): Promise<void> {
     }
   }
 
-  // Upcoming events (now → now + hours)
   const upcoming = macroEvents
     .filter((e) => e.timestamp !== null && e.timestamp >= nowTs && e.timestamp <= untilTs)
     .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
     .slice(0, maxEvents);
 
-  // Raw sample for visibility even if timestamps are missing
   const rawSample = macroEvents.filter((e) => e.title).slice(0, maxEvents);
 
-  // --- News ---
   const newsItems: NewsItem[] = [];
   const newsErrors: string[] = [];
 
@@ -210,7 +179,6 @@ async function main(): Promise<void> {
     .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
     .slice(0, maxNews);
 
-  // --- Output ---
   const output: DigestOutput = {
     status: 'OK',
     generatedAt: now.toISOString(),
@@ -223,6 +191,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`Ошибка: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

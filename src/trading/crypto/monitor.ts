@@ -1,21 +1,3 @@
-/**
- * Crypto Monitor — автономный мониторинг рынка (каждые 10 минут).
- *
- * Выполняет:
- *   1. Проверку kill-switch / stop-day
- *   2. Обновление баланса и позиций
- *   3. Управление открытыми позициями (partial close, trailing, SL на б/у)
- *   4. Анализ рынка по всем парам (тренд + вход)
- *   5. Открытие сделок при наличии сигнала (mode=execute)
- *
- * Использование:
- *   tsx src/trading/crypto/monitor.ts
- *   tsx src/trading/crypto/monitor.ts --dry-run
- *   tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
- *
- * Мигрировано из scripts/crypto_monitor.js
- */
-
 import { createLogger } from '../../utils/logger.js';
 import {
   getBalance,
@@ -32,8 +14,6 @@ import * as state from './state.js';
 
 const log = createLogger('crypto-monitor');
 
-// ─── CLI ──────────────────────────────────────────────────────
-
 function getArg(name: string): string | undefined {
   const prefix = `--${name}=`;
   const found = process.argv.find((a: string) => a.startsWith(prefix));
@@ -46,8 +26,6 @@ function hasFlag(name: string): boolean {
 
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
-
-// ─── Типы ─────────────────────────────────────────────────────
 
 interface TradeSignalInternal {
   pair: string;
@@ -70,24 +48,20 @@ interface SignalResult extends TradeSignalInternal {
   qty?: string;
 }
 
-// ─── Шаг 1: Статус и лимиты ──────────────────────────────────
-
 function checkStatus(): { ok: boolean; reason: string } {
   state.load();
 
   if (state.isKillSwitchActive()) {
-    return { ok: false, reason: 'KILL_SWITCH активен' };
+    return { ok: false, reason: 'KILL_SWITCH active' };
   }
 
   const s = state.get();
   if (s.daily.stopDay) {
-    return { ok: false, reason: `СТОП-ДЕНЬ: ${s.daily.stopDayReason}` };
+    return { ok: false, reason: `STOP_DAY: ${s.daily.stopDayReason}` };
   }
 
   return { ok: true, reason: 'OK' };
 }
-
-// ─── Шаг 2: Обновить баланс + позиции ───────────────────────
 
 async function refreshAccount(): Promise<void> {
   try {
@@ -99,7 +73,7 @@ async function refreshAccount(): Promise<void> {
       totalPerpUPL: String(balance.unrealisedPnl),
     });
   } catch (err) {
-    log.warn('Не удалось получить баланс', { error: (err as Error).message });
+    log.warn('Failed to get balance', { error: (err as Error).message });
   }
 
   try {
@@ -118,11 +92,9 @@ async function refreshAccount(): Promise<void> {
       })),
     );
   } catch (err) {
-    log.warn('Не удалось получить позиции', { error: (err as Error).message });
+    log.warn('Failed to get positions', { error: (err as Error).message });
   }
 }
-
-// ─── Шаг 3: Управление открытыми позициями ───────────────────
 
 async function managePositions(): Promise<Array<Record<string, unknown>>> {
   const s = state.get();
@@ -142,7 +114,6 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
     const oneR = slDistance * size;
     const currentR = uPnl / oneR;
 
-    // Partial close при +1R
     if (currentR >= config.partialCloseAtR && !DRY_RUN) {
       const partialQty = (size * config.partialClosePercent).toFixed(getQtyPrecision(pos.symbol));
       if (parseFloat(partialQty) > 0) {
@@ -156,7 +127,6 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
             result: 'OK',
           });
 
-          // Передвинуть SL на безубыток
           await modifyPosition(pos.symbol, String(entry));
           actions.push({
             type: 'sl_breakeven',
@@ -181,7 +151,6 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
       }
     }
 
-    // Trailing stop после +1.5R
     if (currentR >= config.trailingStartR && !DRY_RUN) {
       const mark = parseFloat(pos.markPrice) || 0;
       const trailingDistance = slDistance * config.trailingDistanceR;
@@ -225,8 +194,6 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
   return actions;
 }
 
-// ─── Шаг 4: Анализ рынка ────────────────────────────────────
-
 async function analyzeMarket(): Promise<TradeSignalInternal[]> {
   const pairs = SINGLE_PAIR ? [SINGLE_PAIR.toUpperCase()] : config.pairs;
   const signals: TradeSignalInternal[] = [];
@@ -244,7 +211,6 @@ async function analyzeMarket(): Promise<TradeSignalInternal[]> {
 }
 
 async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
-  // Multi-timeframe анализ
   const [h4, m15, mkt] = await Promise.all([
     getMarketAnalysis(pair, '240', 100),
     getMarketAnalysis(pair, '15', 100),
@@ -261,14 +227,11 @@ async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
   const currentPrice = m15.currentPrice;
   const fundingRate = mkt?.fundingRate ?? 0;
 
-  // Нет тренда — не торгуем
   if (trendBias === 'UNKNOWN') return null;
 
-  // Funding rate фильтр
   if (trendBias === 'BULLISH' && fundingRate > config.maxFundingRate) return null;
   if (trendBias === 'BEARISH' && fundingRate < config.minFundingRate) return null;
 
-  // LONG сигнал
   if (trendBias === 'BULLISH' && priceVsEma === 'ABOVE') {
     const support = m15.levels.support;
     const distToSupport = support > 0 ? ((currentPrice - support) / currentPrice) * 100 : 999;
@@ -285,7 +248,7 @@ async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
         sl: roundPrice(sl, pair),
         tp: roundPrice(tp, pair),
         rr: config.minRR,
-        reason: `BULLISH тренд 4h + RSI15m=${rsi15m.toFixed(1)} + поддержка ${support}`,
+        reason: `BULLISH trend H4 + RSI15m=${rsi15m.toFixed(1)} + support ${support}`,
         funding: fundingRate,
         atr: atr15m,
         trendBias,
@@ -295,7 +258,6 @@ async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
     }
   }
 
-  // SHORT сигнал
   if (trendBias === 'BEARISH' && priceVsEma === 'BELOW') {
     const resistance = m15.levels.resistance;
     const distToResistance =
@@ -313,7 +275,7 @@ async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
         sl: roundPrice(sl, pair),
         tp: roundPrice(tp, pair),
         rr: config.minRR,
-        reason: `BEARISH тренд 4h + RSI15m=${rsi15m.toFixed(1)} + сопротивление ${resistance}`,
+        reason: `BEARISH trend H4 + RSI15m=${rsi15m.toFixed(1)} + resistance ${resistance}`,
         funding: fundingRate,
         atr: atr15m,
         trendBias,
@@ -326,11 +288,9 @@ async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
   return null;
 }
 
-// ─── Шаг 5: Исполнение сигналов ──────────────────────────────
-
 async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalResult[]> {
   if (DRY_RUN) {
-    return signals.map((s) => ({ ...s, action: 'DRY_RUN (не исполнено)' }));
+    return signals.map((s) => ({ ...s, action: 'DRY_RUN (not executed)' }));
   }
 
   const tradePerm = state.canTrade();
@@ -347,37 +307,32 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
       continue;
     }
 
-    // Проверяем нет ли уже позиции по этой паре
     const s = state.get();
     const existing = s.positions.find((p) => p.symbol === sig.pair);
     if (existing) {
-      results.push({ ...sig, action: 'SKIP: уже есть позиция' });
+      results.push({ ...sig, action: 'SKIP: position already open' });
       continue;
     }
 
-    // Рассчитываем размер позиции
     const qty = state.calcPositionSize(sig.entryPrice, sig.sl);
     if (qty <= 0) {
-      results.push({ ...sig, action: 'SKIP: не удалось рассчитать qty' });
+      results.push({ ...sig, action: 'SKIP: failed to calculate qty' });
       continue;
     }
 
-    // Проверяем риск
     const slDist = Math.abs(sig.entryPrice - sig.sl);
     const risk = slDist * qty;
     if (risk > config.maxRiskPerTrade) {
       results.push({
         ...sig,
-        action: `SKIP: риск $${risk.toFixed(2)} > макс $${config.maxRiskPerTrade}`,
+        action: `SKIP: risk $${risk.toFixed(2)} > max $${config.maxRiskPerTrade}`,
       });
       continue;
     }
 
     try {
-      // Установить плечо
       await setLeverage(sig.pair, config.defaultLeverage);
 
-      // Открыть ордер
       const qtyStr = formatQty(qty, sig.pair);
       const orderRes = await submitOrder({
         symbol: sig.pair,
@@ -408,8 +363,6 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
   return results;
 }
 
-// ─── Utils ────────────────────────────────────────────────────
-
 function getQtyPrecision(symbol: string): number {
   if (symbol.startsWith('BTC')) return 3;
   if (symbol.startsWith('ETH')) return 2;
@@ -430,8 +383,6 @@ function roundPrice(val: number, symbol: string): number {
   return parseFloat(val.toFixed(4));
 }
 
-// ─── Main ─────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const startTime = Date.now();
   const report: Record<string, unknown> = {
@@ -439,7 +390,6 @@ async function main(): Promise<void> {
     mode: DRY_RUN ? 'dry-run' : 'execute',
   };
 
-  // 1. Проверка статуса
   const status = checkStatus();
   report.status = status;
   if (!status.ok) {
@@ -448,24 +398,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. Обновить аккаунт
   await refreshAccount();
   report.balance = state.get().balance;
   report.openPositions = state.get().positions.length;
 
-  // 3. Управление позициями
   const posActions = await managePositions();
   report.positionActions = posActions;
 
-  // 4. Анализ рынка
   const signals = await analyzeMarket();
   report.signals = signals;
 
-  // 5. Исполнение
   const execResults = await executeSignals(signals);
   report.execution = execResults;
 
-  // 6. Обновить lastMonitor
   const s = state.get();
   s.lastMonitor = new Date().toISOString();
   state.save();
@@ -485,6 +430,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  log.error(`Критическая ошибка: ${err instanceof Error ? err.message : String(err)}`);
+  log.error(`Critical error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

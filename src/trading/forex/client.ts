@@ -1,14 +1,6 @@
 import { getCTraderCredentials } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
-import {
-  calculateAtr,
-  calculateEma,
-  calculateRsi,
-  calculateSupportResistance,
-  getEmaTrend,
-  getPriceVsEma,
-  getRsiZone,
-} from '../shared/indicators.js';
+import { buildMarketAnalysis } from '../shared/indicators.js';
 import type {
   AccountInfo,
   MarketAnalysis,
@@ -26,18 +18,20 @@ export interface PositionWithId extends OurPosition {
 }
 
 export interface SlTpSpec {
-  pips?: number;
-  price?: number;
+  pips?: number | undefined;
+  price?: number | undefined;
 }
 
 export interface ModifyOptions {
-  sl?: SlTpSpec;
-  tp?: SlTpSpec;
+  sl?: SlTpSpec | undefined;
+  tp?: SlTpSpec | undefined;
 }
 
 const LOTS_TO_UNITS = 100_000;
 const XAU_LOTS_TO_UNITS = 100;
 const INITIAL_BALANCE = parseFloat(process.env.FTMO_INITIAL_BALANCE ?? '10000');
+const MARGIN_FACTOR = 0.9;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 function pipSize(symbol: string): number {
   const s = symbol.toUpperCase();
@@ -173,7 +167,7 @@ export async function loadSymbols(): Promise<void> {
     ],
     MsgType.SecurityList,
     reqId,
-    20000,
+    REQUEST_TIMEOUT_MS * 2,
   );
 
   for (const rpt of reports) {
@@ -222,43 +216,7 @@ export async function getMarketAnalysis(
 ): Promise<MarketAnalysis | null> {
   try {
     const candles = await getKlines(symbol, timeframe, count);
-    if (candles.length < 20) return null;
-
-    const closes = candles.map((c) => c.close);
-    const highs = candles.map((c) => c.high);
-    const lows = candles.map((c) => c.low);
-
-    const ema200 = calculateEma(closes, 200);
-    const ema50 = calculateEma(closes, 50);
-    const ema20 = calculateEma(closes, 20);
-    const rsi14 = calculateRsi(closes, 14);
-    const atr14 = calculateAtr(highs, lows, closes, 14);
-    const levels = calculateSupportResistance(highs, lows, 20);
-    const currentPrice = closes[closes.length - 1];
-    const lastCandle = candles[candles.length - 1];
-
-    return {
-      pair: symbol,
-      timeframe,
-      barsCount: candles.length,
-      source: 'cTrader-FIX',
-      currentPrice,
-      lastBar: lastCandle,
-      indicators: {
-        ema200: ema200[ema200.length - 1] ?? 0,
-        ema50: ema50[ema50.length - 1] ?? 0,
-        ema20: ema20[ema20.length - 1] ?? 0,
-        rsi14,
-        atr14,
-      },
-      levels,
-      bias: {
-        emaTrend: getEmaTrend(ema50[ema50.length - 1] ?? null, ema200[ema200.length - 1] ?? null),
-        priceVsEma200: getPriceVsEma(currentPrice, ema200[ema200.length - 1] ?? null),
-        rsiZone: getRsiZone(rsi14),
-      },
-      timestamp: new Date().toISOString(),
-    };
+    return buildMarketAnalysis(candles, { pair: symbol, timeframe, source: 'cTrader-FIX' });
   } catch (err) {
     log.warn(`Analysis error ${symbol} ${timeframe}`, { error: (err as Error).message });
     return null;
@@ -277,7 +235,7 @@ export async function getBalance(): Promise<AccountInfo> {
 
   return {
     totalEquity: Math.round(equity * 100) / 100,
-    availableBalance: Math.round(equity * 0.9 * 100) / 100,
+    availableBalance: Math.round(equity * MARGIN_FACTOR * 100) / 100,
     totalWalletBalance: walletBalance,
     unrealisedPnl: Math.round(totalUnrealisedPnl * 100) / 100,
     currency: 'USD',
@@ -293,7 +251,7 @@ export async function getPositions(): Promise<PositionWithId[]> {
     [[Tag.PosReqID, reqId]],
     MsgType.PositionReport,
     reqId,
-    15000,
+    REQUEST_TIMEOUT_MS,
   );
 
   if (reports.length === 0) {
@@ -356,8 +314,8 @@ export async function submitOrder(params: {
   symbol: string;
   side: 'Buy' | 'Sell';
   lots: number;
-  sl?: SlTpSpec;
-  tp?: SlTpSpec;
+  sl?: SlTpSpec | undefined;
+  tp?: SlTpSpec | undefined;
 }): Promise<OrderResult> {
   const session = await getTradeSession();
   const clOrdId = nextReqId('ord');
@@ -391,7 +349,7 @@ export async function submitOrder(params: {
     fields,
     MsgType.ExecutionReport,
     clOrdId,
-    15000,
+    REQUEST_TIMEOUT_MS,
   );
 
   const execType = execReport.getString(Tag.ExecType);
@@ -420,9 +378,7 @@ export async function submitOrder(params: {
       if (posId) {
         try {
           logSlTpLimitation(slPriceFromPips, tpPriceFromPips);
-          log.info(
-            `SL/TP set: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`,
-          );
+          log.info(`SL/TP set: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`);
         } catch (err) {
           log.warn(`Failed to set SL/TP after fill: ${(err as Error).message}`);
         }
@@ -476,7 +432,7 @@ export async function closePosition(
     fields,
     MsgType.ExecutionReport,
     clOrdId,
-    15000,
+    REQUEST_TIMEOUT_MS,
   );
 
   const execType = execReport.getString(Tag.ExecType);
@@ -487,10 +443,7 @@ export async function closePosition(
   log.info(`Position ${positionId} closed`, { partial: partialLots });
 }
 
-function logSlTpLimitation(
-  slPrice: number | undefined,
-  tpPrice: number | undefined,
-): void {
+function logSlTpLimitation(slPrice: number | undefined, tpPrice: number | undefined): void {
   if (slPrice || tpPrice) {
     log.warn(
       `SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'} — ` +

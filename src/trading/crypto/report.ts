@@ -1,18 +1,14 @@
+import { getArgOrDefault } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
-import { sendViaOpenClaw } from '../../utils/telegram.js';
+import { runMain } from '../../utils/process.js';
+import { fmt, fmtPrice, sendViaOpenClaw } from '../../utils/telegram.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
 import config from './config.js';
 import * as state from './state.js';
 
 const log = createLogger('crypto-report');
 
-function getArg(name: string, def: string): string {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : def;
-}
-
-const FORMAT = getArg('format', 'text');
+const FORMAT = getArgOrDefault('format', 'text');
 
 interface MarketSnapshot {
   price: number;
@@ -30,8 +26,8 @@ interface ReportData {
     entryPrice: string;
     leverage: string;
     unrealisedPnl: string;
-    stopLoss?: string;
-    takeProfit?: string;
+    stopLoss?: string | undefined;
+    takeProfit?: string | undefined;
   }>;
   daily: {
     trades: number;
@@ -112,20 +108,6 @@ async function collectData(): Promise<ReportData> {
     killSwitch: state.isKillSwitchActive(),
     lastMonitor: s.lastMonitor,
   };
-}
-
-function fmt(val: number | string): string {
-  const n = typeof val === 'string' ? parseFloat(val) : val;
-  if (isNaN(n)) return '0.00';
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtPrice(val: number): string {
-  if (val >= 1000)
-    return val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  if (val >= 1)
-    return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return val.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
 function formatTelegramReport(data: ReportData): string {
@@ -237,7 +219,4 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  log.error(`Report generation error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main, () => state.save());

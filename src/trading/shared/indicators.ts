@@ -1,3 +1,5 @@
+import type { MarketAnalysis, OHLC } from './types.js';
+
 export function calculateEma(prices: number[], period: number): number[] {
   if (prices.length < period) return [];
 
@@ -5,13 +7,13 @@ export function calculateEma(prices: number[], period: number): number[] {
 
   let sum = 0;
   for (let i = 0; i < period; i++) {
-    sum += prices[i];
+    sum += prices[i]!;
   }
 
   const ema: number[] = [sum / period];
 
   for (let i = period; i < prices.length; i++) {
-    ema.push(prices[i] * k + ema[ema.length - 1] * (1 - k));
+    ema.push(prices[i]! * k + ema[ema.length - 1]! * (1 - k));
   }
 
   return ema;
@@ -22,7 +24,7 @@ export function calculateRsi(closes: number[], period: number = 14): number {
 
   const deltas: number[] = [];
   for (let i = 1; i < closes.length; i++) {
-    deltas.push(closes[i] - closes[i - 1]);
+    deltas.push(closes[i]! - closes[i - 1]!);
   }
 
   const recentDeltas = deltas.slice(-period);
@@ -50,9 +52,9 @@ export function calculateAtr(
   const trs: number[] = [];
   for (let i = 1; i < highs.length; i++) {
     const tr = Math.max(
-      highs[i] - lows[i],
-      Math.abs(highs[i] - closes[i - 1]),
-      Math.abs(lows[i] - closes[i - 1]),
+      highs[i]! - lows[i]!,
+      Math.abs(highs[i]! - closes[i - 1]!),
+      Math.abs(lows[i]! - closes[i - 1]!),
     );
     trs.push(tr);
   }
@@ -97,4 +99,46 @@ export function getRsiZone(rsi: number): 'OVERBOUGHT' | 'OVERSOLD' | 'NEUTRAL' {
   if (rsi < 30) return 'OVERSOLD';
 
   return 'NEUTRAL';
+}
+
+export function buildMarketAnalysis(
+  candles: OHLC[],
+  params: { pair: string; timeframe: string; source: string },
+): MarketAnalysis | null {
+  if (candles.length < 20) return null;
+
+  const closes = candles.map((c) => c.close);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
+
+  const ema200 = calculateEma(closes, 200);
+  const ema50 = calculateEma(closes, 50);
+  const ema20 = calculateEma(closes, 20);
+  const rsi14 = calculateRsi(closes, 14);
+  const atr14 = calculateAtr(highs, lows, closes, 14);
+  const levels = calculateSupportResistance(highs, lows);
+
+  const currentPrice = closes[closes.length - 1]!;
+  const lastBar = candles[candles.length - 1]!;
+
+  const ema200Val = ema200.length > 0 ? Math.round(ema200[ema200.length - 1]! * 100) / 100 : null;
+  const ema50Val = ema50.length > 0 ? Math.round(ema50[ema50.length - 1]! * 100) / 100 : null;
+  const ema20Val = ema20.length > 0 ? Math.round(ema20[ema20.length - 1]! * 100) / 100 : null;
+
+  return {
+    pair: params.pair,
+    timeframe: params.timeframe,
+    barsCount: candles.length,
+    source: params.source,
+    currentPrice: Math.round(currentPrice * 100) / 100,
+    lastBar,
+    indicators: { ema200: ema200Val, ema50: ema50Val, ema20: ema20Val, rsi14, atr14 },
+    levels,
+    bias: {
+      emaTrend: getEmaTrend(ema50Val, ema200Val),
+      priceVsEma200: getPriceVsEma(currentPrice, ema200Val),
+      rsiZone: getRsiZone(rsi14),
+    },
+    timestamp: new Date().toISOString(),
+  };
 }

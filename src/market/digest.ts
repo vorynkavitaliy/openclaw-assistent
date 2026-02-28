@@ -1,4 +1,7 @@
 import Parser from 'rss-parser';
+import { getNumArgOrDefault } from '../utils/args.js';
+import { runMain } from '../utils/process.js';
+import { retryAsync } from '../utils/retry.js';
 
 const FF_XML_URLS = [
   'https://nfs.faireconomy.media/ff_calendar_thisweek.xml',
@@ -42,26 +45,25 @@ interface DigestOutput {
   news: { recent: NewsItem[]; errors: string[] };
 }
 
-function getNumArg(name: string, defaultVal: number): number {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? parseInt(found.slice(prefix.length), 10) || defaultVal : defaultVal;
-}
-
 async function httpGet(url: string, timeoutMs = 20_000): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return retryAsync(
+    async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/xml,text/xml,text/html,*/*' },
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
-  }
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': USER_AGENT, Accept: 'application/xml,text/xml,text/html,*/*' },
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        return await res.text();
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    { retries: 2, backoffMs: 1000 },
+  );
 }
 
 function parseFFCalendar(xmlText: string): MacroEvent[] {
@@ -70,11 +72,11 @@ function parseFFCalendar(xmlText: string): MacroEvent[] {
   let match: RegExpExecArray | null;
 
   while ((match = eventRegex.exec(xmlText)) !== null) {
-    const block = match[1];
+    const block = match[1] ?? '';
 
     const tag = (name: string): string => {
       const m = block.match(new RegExp(`<${name}>([^<]*)</${name}>`));
-      return m ? m[1].trim() : '';
+      return m ? (m[1] ?? '').trim() : '';
     };
 
     const dateS = tag('date');
@@ -134,9 +136,9 @@ async function fetchRSS(source: string, url: string): Promise<NewsItem[]> {
 }
 
 async function main(): Promise<void> {
-  const hours = getNumArg('hours', 48);
-  const maxNews = getNumArg('max-news', 20);
-  const maxEvents = getNumArg('max-events', 50);
+  const hours = getNumArgOrDefault('hours', 48);
+  const maxNews = getNumArgOrDefault('max-news', 20);
+  const maxEvents = getNumArgOrDefault('max-events', 50);
 
   const now = new Date();
   const nowTs = Math.floor(now.getTime() / 1000);
@@ -190,7 +192,4 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(output, null, 2));
 }
 
-main().catch((err) => {
-  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main);

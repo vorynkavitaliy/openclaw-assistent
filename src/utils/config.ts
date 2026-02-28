@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createLogger } from './logger.js';
+
+const log = createLogger('config');
 
 export interface BybitCredentials {
   apiKey: string;
@@ -75,7 +78,7 @@ function loadCredentialsFile(): CredentialsFile {
     _cache = JSON.parse(raw) as CredentialsFile;
     return _cache;
   } catch {
-    console.error(`[config] Failed to read credentials from ${CREDENTIALS_PATH}`);
+    log.error(`Failed to read credentials from ${CREDENTIALS_PATH}`);
     return {};
   }
 }
@@ -83,9 +86,18 @@ function loadCredentialsFile(): CredentialsFile {
 export function getBybitCredentials(): BybitCredentials {
   const file = loadCredentialsFile();
 
+  const apiKey = process.env.BYBIT_API_KEY ?? file.bybit?.apiKey ?? '';
+  const apiSecret = process.env.BYBIT_API_SECRET ?? file.bybit?.apiSecret ?? '';
+
+  if (!apiKey || !apiSecret) {
+    log.warn(
+      'Bybit credentials missing — API calls will fail. Set BYBIT_API_KEY/BYBIT_API_SECRET or add them to credentials.json.',
+    );
+  }
+
   return {
-    apiKey: process.env.BYBIT_API_KEY ?? file.bybit?.apiKey ?? '',
-    apiSecret: process.env.BYBIT_API_SECRET ?? file.bybit?.apiSecret ?? '',
+    apiKey,
+    apiSecret,
     testnet:
       process.env.BYBIT_TESTNET !== undefined
         ? process.env.BYBIT_TESTNET.toLowerCase() === 'true'
@@ -114,11 +126,20 @@ export function getCTraderCredentials(): CTraderCredentials {
   const file = loadCredentialsFile();
   const ct = file.ctrader;
 
+  const login = process.env.CTRADER_LOGIN ?? ct?.login ?? '';
+  const password = process.env.CTRADER_PASSWORD ?? ct?.password ?? '';
+
+  if (!login || !password) {
+    log.warn(
+      'cTrader credentials missing — FIX connections will fail. Set CTRADER_LOGIN/CTRADER_PASSWORD or add them to credentials.json.',
+    );
+  }
+
   return {
-    login: process.env.CTRADER_LOGIN ?? ct?.login ?? '',
+    login,
     ctraderId: process.env.CTRADER_ID ?? ct?.ctraderId ?? '',
-    password: process.env.CTRADER_PASSWORD ?? ct?.password ?? '',
-    fixPassword: process.env.CTRADER_FIX_PASSWORD ?? ct?.fixPassword ?? ct?.password ?? '',
+    password,
+    fixPassword: process.env.CTRADER_FIX_PASSWORD ?? ct?.fixPassword ?? password,
     fix: {
       host: process.env.CTRADER_FIX_HOST ?? ct?.fix?.host ?? '',
       quote: {

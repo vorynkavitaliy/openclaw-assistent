@@ -1,4 +1,6 @@
+import { getArg, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
+import { runMain } from '../../utils/process.js';
 import type { AccountInfo } from '../shared/types.js';
 import {
   closePosition,
@@ -14,17 +16,10 @@ import config from './config.js';
 
 const log = createLogger('forex-monitor');
 
-function hasFlag(name: string): boolean {
-  return process.argv.includes(`--${name}`);
-}
-
-function getArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : undefined;
-}
-
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
+
+const PIP_VALUE_PER_LOT = 10;
+const STANDARD_PIP_MULTIPLIER = 10_000;
 
 interface RiskAlert {
   level: 'CRITICAL' | 'WARNING' | 'INFO';
@@ -62,7 +57,7 @@ function checkPositionRisks(positions: PositionWithId[], balance: number): RiskA
 
     if (sl > 0 && entry > 0 && balance > 0) {
       const pipDiff = Math.abs(entry - sl);
-      const riskUsd = pipDiff * 10000 * size * 10;
+      const riskUsd = pipDiff * STANDARD_PIP_MULTIPLIER * size * PIP_VALUE_PER_LOT;
       const riskPct = (riskUsd / balance) * 100;
 
       if (riskPct > config.maxRiskPerTradePct) {
@@ -226,7 +221,7 @@ async function executeTrades(): Promise<void> {
 
   for (const sig of signals) {
     if (DRY_RUN) {
-      console.log(
+      log.info(
         `[DRY-RUN] ${sig.side} ${sig.pair} | SL=${sig.slPips}p TP=${sig.tpPips}p | ${sig.reason}`,
       );
       continue;
@@ -261,7 +256,7 @@ async function manageOpenPositions(): Promise<void> {
     const slDistance = Math.abs(entry - sl);
     if (slDistance === 0) continue;
 
-    const oneR = slDistance * 10000 * size * 10;
+    const oneR = slDistance * STANDARD_PIP_MULTIPLIER * size * PIP_VALUE_PER_LOT;
     if (oneR === 0) continue;
 
     const currentR = uPnl / oneR;
@@ -294,43 +289,36 @@ async function manageOpenPositions(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  try {
-    if (hasFlag('heartbeat')) {
-      const report = await heartbeat();
-      console.log(JSON.stringify(report, null, 2));
-    } else if (hasFlag('positions')) {
-      const positions = await getPositions();
-      console.log(JSON.stringify({ positions, count: positions.length }, null, 2));
-    } else if (hasFlag('account')) {
-      const account = await getBalance();
-      console.log(JSON.stringify(account, null, 2));
-    } else if (hasFlag('risk-check')) {
-      const report = await heartbeat();
-      console.log(
-        JSON.stringify(
-          {
-            alerts: report.alerts,
-            riskStatus: report.riskStatus,
-            tradingAllowed: report.tradingAllowed,
-            drawdownPct: report.drawdownPct,
-          },
-          null,
-          2,
-        ),
-      );
-    } else if (hasFlag('trade')) {
-      await manageOpenPositions();
-      await executeTrades();
-    } else {
-      const report = await heartbeat();
-      console.log(JSON.stringify(report, null, 2));
-    }
-  } finally {
-    disconnect();
+  if (hasFlag('heartbeat')) {
+    const report = await heartbeat();
+    console.log(JSON.stringify(report, null, 2));
+  } else if (hasFlag('positions')) {
+    const positions = await getPositions();
+    console.log(JSON.stringify({ positions, count: positions.length }, null, 2));
+  } else if (hasFlag('account')) {
+    const account = await getBalance();
+    console.log(JSON.stringify(account, null, 2));
+  } else if (hasFlag('risk-check')) {
+    const report = await heartbeat();
+    console.log(
+      JSON.stringify(
+        {
+          alerts: report.alerts,
+          riskStatus: report.riskStatus,
+          tradingAllowed: report.tradingAllowed,
+          drawdownPct: report.drawdownPct,
+        },
+        null,
+        2,
+      ),
+    );
+  } else if (hasFlag('trade')) {
+    await manageOpenPositions();
+    await executeTrades();
+  } else {
+    const report = await heartbeat();
+    console.log(JSON.stringify(report, null, 2));
   }
 }
 
-main().catch((err) => {
-  log.error(`Critical error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main, disconnect);

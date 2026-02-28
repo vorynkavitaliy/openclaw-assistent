@@ -6,15 +6,8 @@ import {
 } from 'bybit-api';
 import { getBybitBaseUrl, getBybitCredentials } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
-import {
-  calculateAtr,
-  calculateEma,
-  calculateRsi,
-  calculateSupportResistance,
-  getEmaTrend,
-  getPriceVsEma,
-  getRsiZone,
-} from '../shared/indicators.js';
+import { retryAsync } from '../../utils/retry.js';
+import { buildMarketAnalysis } from '../shared/indicators.js';
 import type {
   AccountInfo,
   MarketAnalysis,
@@ -29,6 +22,8 @@ const log = createLogger('bybit-client');
 
 const MAX_LEVERAGE = 5;
 const CATEGORY = 'linear' as const;
+const API_TIMEOUT_MS = 10_000;
+const FUNDING_SIGNAL_THRESHOLD = 0.0003;
 
 interface BybitApiResponse {
   retCode: number;
@@ -73,10 +68,14 @@ async function apiGet(
   }
 
   try {
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'OpenClaw/1.0' },
-      signal: AbortSignal.timeout(10000),
-    });
+    const resp = await retryAsync(
+      () =>
+        fetch(url, {
+          headers: { 'User-Agent': 'OpenClaw/1.0' },
+          signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        }),
+      { retries: 2, backoffMs: 500 },
+    );
 
     const data = (await resp.json()) as BybitApiResponse;
 
@@ -115,13 +114,13 @@ export async function getKlines(
   for (const item of [...list].reverse()) {
     try {
       rows.push({
-        time: new Date(parseInt(item[0])).toISOString(),
-        open: parseFloat(item[1]),
-        high: parseFloat(item[2]),
-        low: parseFloat(item[3]),
-        close: parseFloat(item[4]),
-        volume: parseFloat(item[5]),
-        turnover: parseFloat(item[6]),
+        time: new Date(parseInt(item[0] ?? '0')).toISOString(),
+        open: parseFloat(item[1] ?? '0'),
+        high: parseFloat(item[2] ?? '0'),
+        low: parseFloat(item[3] ?? '0'),
+        close: parseFloat(item[4] ?? '0'),
+        volume: parseFloat(item[5] ?? '0'),
+        turnover: parseFloat(item[6] ?? '0'),
       });
     } catch {
       continue;
@@ -147,6 +146,7 @@ export async function getMarketInfo(symbol: string): Promise<MarketInfo | null> 
   if (tickerList.length === 0) return null;
 
   const t = tickerList[0];
+  if (!t) return null;
   const info: MarketInfo = {
     lastPrice: parseFloat(t.lastPrice ?? '0'),
     price24hPct: parseFloat(t.price24hPcnt ?? '0') * 100,
@@ -162,20 +162,22 @@ export async function getMarketInfo(symbol: string): Promise<MarketInfo | null> 
 
   const fundingList = (funding.list ?? []) as Record<string, string>[];
   if (fundingList.length > 0) {
-    info.lastFundingRate = parseFloat(fundingList[0].fundingRate ?? '0');
-    info.lastFundingTime = fundingList[0].fundingRateTimestamp ?? '';
+    const f0 = fundingList[0]!;
+    info.lastFundingRate = parseFloat(f0.fundingRate ?? '0');
+    info.lastFundingTime = f0.fundingRateTimestamp ?? '';
   }
 
   const oiList = (oi.list ?? []) as Record<string, string>[];
   if (oiList.length > 0) {
-    info.openInterest = parseFloat(oiList[0].openInterest ?? '0');
-    info.oiTimestamp = oiList[0].timestamp ?? '';
+    const o0 = oiList[0]!;
+    info.openInterest = parseFloat(o0.openInterest ?? '0');
+    info.oiTimestamp = o0.timestamp ?? '';
   }
 
   const fr = info.fundingRate;
-  if (fr > 0.0003) {
+  if (fr > FUNDING_SIGNAL_THRESHOLD) {
     info.fundingSignal = 'LONGS_OVERHEATED';
-  } else if (fr < -0.0003) {
+  } else if (fr < -FUNDING_SIGNAL_THRESHOLD) {
     info.fundingSignal = 'SHORTS_OVERHEATED';
   } else {
     info.fundingSignal = 'NEUTRAL';
@@ -190,49 +192,12 @@ export async function getMarketAnalysis(
   bars: number = 100,
 ): Promise<MarketAnalysis | null> {
   const rows = await getKlines(symbol, timeframe, bars);
-  if (rows.length === 0) return null;
-
-  const closes = rows.map((r) => r.close);
-  const highs = rows.map((r) => r.high);
-  const lows = rows.map((r) => r.low);
-
-  const ema200 = calculateEma(closes, 200);
-  const ema50 = calculateEma(closes, 50);
-  const ema20 = calculateEma(closes, 20);
-  const rsi14 = calculateRsi(closes, 14);
-  const atr14 = calculateAtr(highs, lows, closes, 14);
-
-  const currentPrice = closes[closes.length - 1];
-  const ema200Val = ema200.length > 0 ? Math.round(ema200[ema200.length - 1] * 100) / 100 : null;
-  const ema50Val = ema50.length > 0 ? Math.round(ema50[ema50.length - 1] * 100) / 100 : null;
-  const ema20Val = ema20.length > 0 ? Math.round(ema20[ema20.length - 1] * 100) / 100 : null;
-
-  const levels = calculateSupportResistance(highs, lows);
-
   const mappedInterval = TF_MAP[timeframe] ?? timeframe;
-
-  return {
+  return buildMarketAnalysis(rows, {
     pair: symbol,
     timeframe: mappedInterval,
-    barsCount: rows.length,
     source: 'BYBIT_API_V5',
-    currentPrice: Math.round(currentPrice * 100) / 100,
-    lastBar: rows[rows.length - 1],
-    indicators: {
-      ema200: ema200Val,
-      ema50: ema50Val,
-      ema20: ema20Val,
-      rsi14,
-      atr14,
-    },
-    levels,
-    bias: {
-      emaTrend: getEmaTrend(ema50Val, ema200Val),
-      priceVsEma200: getPriceVsEma(currentPrice, ema200Val),
-      rsiZone: getRsiZone(rsi14),
-    },
-    timestamp: new Date().toISOString(),
-  };
+  });
 }
 
 export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
@@ -247,10 +212,10 @@ export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
   if (!account) throw new Error('Account not found');
 
   return {
-    totalEquity: parseFloat(account.totalEquity || '0'),
-    availableBalance: parseFloat(account.totalAvailableBalance || '0'),
-    totalWalletBalance: parseFloat(account.totalWalletBalance || '0'),
-    unrealisedPnl: parseFloat(account.totalPerpUPL || '0'),
+    totalEquity: parseFloat(account.totalEquity ?? '0'),
+    availableBalance: parseFloat(account.totalAvailableBalance ?? '0'),
+    totalWalletBalance: parseFloat(account.totalWalletBalance ?? '0'),
+    unrealisedPnl: parseFloat(account.totalPerpUPL ?? '0'),
     currency: coin,
   };
 }
@@ -268,18 +233,18 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
   const list = ((res.result as { list?: unknown[] })?.list ?? []) as Array<Record<string, string>>;
 
   return list
-    .filter((p) => parseFloat(p.size) > 0)
+    .filter((p) => parseFloat(p.size ?? '0') > 0)
     .map((p) => ({
-      symbol: p.symbol,
+      symbol: p.symbol ?? '',
       side: p.side === 'Buy' ? 'long' : 'short',
-      size: p.size,
-      entryPrice: p.avgPrice,
-      markPrice: p.markPrice,
-      unrealisedPnl: p.unrealisedPnl,
-      leverage: p.leverage,
-      liqPrice: p.liqPrice,
-      stopLoss: p.stopLoss,
-      takeProfit: p.takeProfit,
+      size: p.size ?? '0',
+      entryPrice: p.avgPrice ?? '0',
+      markPrice: p.markPrice ?? '0',
+      unrealisedPnl: p.unrealisedPnl ?? '0',
+      leverage: p.leverage ?? '0',
+      liqPrice: p.liqPrice ?? '0',
+      stopLoss: p.stopLoss ?? '0',
+      takeProfit: p.takeProfit ?? '0',
     }));
 }
 
@@ -337,7 +302,7 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
     Record<string, string>
   >;
-  const pos = list.find((p) => parseFloat(p.size) > 0);
+  const pos = list.find((p) => parseFloat(p.size ?? '0') > 0);
 
   if (!pos) throw new Error(`No open position for ${symbol}`);
 
@@ -348,7 +313,7 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
     symbol: symbol.toUpperCase(),
     side: closeSide,
     orderType: 'Market',
-    qty: pos.size,
+    qty: pos.size ?? '0',
     timeInForce: 'GTC',
     reduceOnly: true,
   });
@@ -362,7 +327,7 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
     symbol: symbol.toUpperCase(),
     side: closeSide,
     orderType: 'Market',
-    qty: pos.size,
+    qty: pos.size ?? '0',
     status: 'CLOSED',
   };
 }
@@ -378,7 +343,7 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
     Record<string, string>
   >;
-  const pos = list.find((p) => parseFloat(p.size) > 0);
+  const pos = list.find((p) => parseFloat(p.size ?? '0') > 0);
 
   if (!pos) throw new Error(`No open position for ${symbol}`);
 
@@ -445,7 +410,7 @@ export async function closeAllPositions(): Promise<{
   const list = ((posRes.result as { list?: unknown[] })?.list ?? []) as Array<
     Record<string, string>
   >;
-  const openPositions = list.filter((p) => parseFloat(p.size) > 0);
+  const openPositions = list.filter((p) => parseFloat(p.size ?? '0') > 0);
 
   if (openPositions.length === 0) {
     return { closed: 0, total: 0, details: [] };
@@ -458,22 +423,22 @@ export async function closeAllPositions(): Promise<{
     try {
       const res = await client.submitOrder({
         category: CATEGORY,
-        symbol: pos.symbol,
+        symbol: pos.symbol ?? '',
         side: closeSide,
         orderType: 'Market',
-        qty: pos.size,
+        qty: pos.size ?? '0',
         timeInForce: 'GTC',
         reduceOnly: true,
       });
       details.push({
-        symbol: pos.symbol,
-        qty: pos.size,
+        symbol: pos.symbol ?? '',
+        qty: pos.size ?? '0',
         result: res.retCode === 0 ? 'OK' : res.retMsg,
       });
     } catch (err) {
       details.push({
-        symbol: pos.symbol,
-        qty: pos.size,
+        symbol: pos.symbol ?? '',
+        qty: pos.size ?? '0',
         result: err instanceof Error ? err.message : String(err),
       });
     }

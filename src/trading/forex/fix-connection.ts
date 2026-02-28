@@ -6,6 +6,8 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('fix');
 
 const SOH = '\x01';
+const LOGON_TIMEOUT_MS = 10_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const FIX_VERSION = 'FIX.4.4';
 
 export const Tag = {
@@ -291,8 +293,7 @@ export function parseFixMessages(buffer: Buffer): {
     pos = endIdx + 1;
   }
 
-  const remaining =
-    pos < data.length ? Buffer.from(data.substring(pos), 'ascii') : Buffer.alloc(0);
+  const remaining = pos < data.length ? Buffer.from(data.substring(pos), 'ascii') : Buffer.alloc(0);
 
   return { messages, remaining };
 }
@@ -376,7 +377,7 @@ export class FixSession extends EventEmitter {
       const logonTimeout = setTimeout(() => {
         reject(new Error(`Logon timeout (${this.config.senderSubID})`));
         this.cleanup();
-      }, 10000);
+      }, LOGON_TIMEOUT_MS);
 
       this.once('logon', () => {
         clearTimeout(logonTimeout);
@@ -430,7 +431,7 @@ export class FixSession extends EventEmitter {
     fields: [number, string | number][],
     responseType: string,
     reqId: string,
-    timeoutMs = 10000,
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Promise<FixMessage> {
     return new Promise((resolve, reject) => {
       const key = `${responseType}:${reqId}`;

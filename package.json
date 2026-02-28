@@ -6,15 +6,19 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.ts'",
+    "clean": "rm -rf dist",
     "test": "vitest",
     "test:run": "vitest run",
+    "trade:forex:monitor": "tsx src/trading/forex/monitor.ts",
+    "trade:forex:trade": "tsx src/trading/forex/trade.ts",
     "trade:crypto:monitor": "tsx src/trading/crypto/monitor.ts",
     "trade:crypto:kill": "tsx src/trading/crypto/killswitch.ts",
     "trade:crypto:report": "tsx src/trading/crypto/report.ts",
-    "trade:forex:monitor": "tsx src/trading/forex/monitor.ts",
     "market:digest": "tsx src/market/digest.ts"
   },
   "repository": {

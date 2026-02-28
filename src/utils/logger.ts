@@ -16,7 +16,20 @@ const LOG_COLORS: Record<LogLevel, string> = {
 
 const RESET = '\x1b[0m';
 
-let currentLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) ?? 'info';
+const VALID_LEVELS = new Set<string>(Object.keys(LOG_LEVELS));
+
+function resolveLogLevel(): LogLevel {
+  const env = process.env.LOG_LEVEL;
+  if (!env) return 'info';
+  const lower = env.toLowerCase();
+  if (VALID_LEVELS.has(lower)) return lower as LogLevel;
+  console.warn(
+    `[config] Invalid LOG_LEVEL "${env}". Expected: ${[...VALID_LEVELS].join(', ')}. Defaulting to "info".`,
+  );
+  return 'info';
+}
+
+let currentLevel: LogLevel = resolveLogLevel();
 
 export function setLogLevel(level: LogLevel): void {
   currentLevel = level;

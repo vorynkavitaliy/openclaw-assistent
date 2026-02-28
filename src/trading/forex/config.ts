@@ -1,17 +1,10 @@
-export interface ForexConfig {
-  mode: 'execute' | 'dry-run';
-  pairs: string[];
-  defaultLeverage: number;
+import type { BaseTradingConfig } from '../shared/types.js';
+
+export interface ForexConfig extends BaseTradingConfig {
   maxRiskPerTradePct: number;
-  maxOpenPositions: number;
   maxTradesPerDay: number;
   maxDailyDrawdownPct: number;
   maxTotalDrawdownPct: number;
-  minRR: number;
-  partialClosePercent: number;
-  partialCloseAtR: number;
-  trailingStartR: number;
-  trailingDistanceR: number;
   trendTimeframe: string;
   entryTimeframe: string;
   environment: 'demo' | 'live';

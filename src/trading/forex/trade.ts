@@ -1,4 +1,5 @@
-import { createLogger } from '../../utils/logger.js';
+import { getArg, getNumArg, getRequiredArg } from '../../utils/args.js';
+import { runMain } from '../../utils/process.js';
 import {
   closeAll,
   closePosition,
@@ -9,32 +10,11 @@ import {
   submitOrder,
 } from './client.js';
 
-const log = createLogger('forex-trade');
-
-function getArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : undefined;
-}
-
-function getNumArg(name: string): number | undefined {
-  const val = getArg(name);
-  return val !== undefined ? parseFloat(val) : undefined;
-}
-
-function getRequiredArg(name: string): string {
-  const val = getArg(name);
-  if (val === undefined) {
-    console.error(JSON.stringify({ error: `--${name} is required` }));
-    process.exit(1);
-  }
-  return val;
-}
-
 function validateRisk(lots: number, slPips?: number): { ok: boolean; error?: string } {
   if (lots > 10.0) return { ok: false, error: `Lot size ${lots} too large. Max 10.0` };
   if (lots < 0.01) return { ok: false, error: `Lot size ${lots} too small. Min 0.01` };
-  if (!slPips || slPips <= 0) return { ok: false, error: 'SL required! Positions without Stop Loss are forbidden.' };
+  if (!slPips || slPips <= 0)
+    return { ok: false, error: 'SL required! Positions without Stop Loss are forbidden.' };
   return { ok: true };
 }
 
@@ -79,7 +59,9 @@ async function actionClose(): Promise<void> {
 
 async function actionCloseAll(): Promise<void> {
   await closeAll();
-  console.log(JSON.stringify({ status: 'ALL_CLOSED', timestamp: new Date().toISOString() }, null, 2));
+  console.log(
+    JSON.stringify({ status: 'ALL_CLOSED', timestamp: new Date().toISOString() }, null, 2),
+  );
 }
 
 async function actionModify(): Promise<void> {
@@ -123,39 +105,28 @@ async function actionStatus(): Promise<void> {
 async function main(): Promise<void> {
   const action = getArg('action') ?? 'status';
 
-  try {
-    switch (action) {
-      case 'open':
-        await actionOpen();
-        break;
-      case 'close':
-        await actionClose();
-        break;
-      case 'close-all':
-      case 'close_all':
-        await actionCloseAll();
-        break;
-      case 'modify':
-        await actionModify();
-        break;
-      case 'status':
-        await actionStatus();
-        break;
-      default:
-        console.error(
-          JSON.stringify({
-            error: `Unknown action: ${action}`,
-            available: ['open', 'close', 'close-all', 'modify', 'status'],
-          }),
-        );
-        process.exit(1);
-    }
-  } finally {
-    disconnect();
+  switch (action) {
+    case 'open':
+      await actionOpen();
+      break;
+    case 'close':
+      await actionClose();
+      break;
+    case 'close-all':
+    case 'close_all':
+      await actionCloseAll();
+      break;
+    case 'modify':
+      await actionModify();
+      break;
+    case 'status':
+      await actionStatus();
+      break;
+    default:
+      throw new Error(
+        `Unknown action: ${action}. Available: open, close, close-all, modify, status`,
+      );
   }
 }
 
-main().catch((err) => {
-  log.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main, disconnect);

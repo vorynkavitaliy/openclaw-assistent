@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from '../../utils/logger.js';
+import type { PositionSide } from '../shared/types.js';
 import config from './config.js';
 
 const log = createLogger('crypto-state');
@@ -33,14 +34,14 @@ interface BalanceSnapshot {
 
 interface PositionSnapshot {
   symbol: string;
-  side: string;
+  side: PositionSide;
   size: string;
   entryPrice: string;
   markPrice: string;
   unrealisedPnl: string;
   leverage: string;
-  stopLoss?: string;
-  takeProfit?: string;
+  stopLoss?: string | undefined;
+  takeProfit?: string | undefined;
 }
 
 interface CryptoState {
@@ -220,19 +221,19 @@ export function updatePositions(
     symbol: string;
     side: string;
     size: string;
-    entryPrice?: string;
-    avgPrice?: string;
+    entryPrice?: string | undefined;
+    avgPrice?: string | undefined;
     markPrice: string;
     unrealisedPnl: string;
     leverage: string;
-    stopLoss?: string;
-    takeProfit?: string;
+    stopLoss?: string | undefined;
+    takeProfit?: string | undefined;
   }>,
 ): void {
   const s = get();
   s.positions = positions.map((p) => ({
     symbol: p.symbol,
-    side: p.side,
+    side: p.side as PositionSide,
     size: p.size,
     entryPrice: p.entryPrice ?? p.avgPrice ?? '0',
     markPrice: p.markPrice,
@@ -321,6 +322,8 @@ export function deactivateKillSwitch(): void {
   }
 }
 
+const MAX_EVENTS_FILE_BYTES = 5 * 1024 * 1024;
+
 export function logEvent(type: string, data: EventData): void {
   ensureDataDir();
   const event = {
@@ -329,6 +332,21 @@ export function logEvent(type: string, data: EventData): void {
     ...data,
   };
   fs.appendFileSync(EVENTS_FILE, JSON.stringify(event) + '\n', 'utf-8');
+  rotateEventsIfNeeded();
+}
+
+function rotateEventsIfNeeded(): void {
+  try {
+    const stats = fs.statSync(EVENTS_FILE);
+    if (stats.size > MAX_EVENTS_FILE_BYTES) {
+      const lines = fs.readFileSync(EVENTS_FILE, 'utf-8').trim().split('\n');
+      const kept = lines.slice(-Math.floor(lines.length / 2));
+      fs.writeFileSync(EVENTS_FILE, kept.join('\n') + '\n', 'utf-8');
+      log.info(`Events file rotated: ${lines.length} → ${kept.length} entries`);
+    }
+  } catch {
+    /* rotation is best-effort */
+  }
 }
 
 export function getRecentEvents(count: number = 50): StoredEvent[] {

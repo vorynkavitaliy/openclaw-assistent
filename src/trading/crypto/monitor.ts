@@ -1,4 +1,6 @@
+import { getArg, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
+import { runMain } from '../../utils/process.js';
 import {
   getBalance,
   getMarketAnalysis,
@@ -13,16 +15,6 @@ import config from './config.js';
 import * as state from './state.js';
 
 const log = createLogger('crypto-monitor');
-
-function getArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : undefined;
-}
-
-function hasFlag(name: string): boolean {
-  return process.argv.includes(`--${name}`);
-}
 
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
@@ -156,7 +148,7 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
       const trailingDistance = slDistance * config.trailingDistanceR;
 
       try {
-        if (pos.side === 'Buy' || pos.side === 'long') {
+        if (pos.side === 'long') {
           const newSl = mark - trailingDistance;
           if (newSl > sl) {
             await modifyPosition(pos.symbol, newSl.toFixed(2));
@@ -429,7 +421,4 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((err) => {
-  log.error(`Critical error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main, () => state.save());

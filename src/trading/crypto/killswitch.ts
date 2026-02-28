@@ -1,19 +1,11 @@
+import { getArg, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
+import { runMain } from '../../utils/process.js';
 import { closeAllPositions, getBalance, getPositions } from './bybit-client.js';
 import config from './config.js';
 import * as state from './state.js';
 
 const log = createLogger('killswitch');
-
-function getArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a: string) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : undefined;
-}
-
-function hasFlag(name: string): boolean {
-  return process.argv.includes(`--${name}`);
-}
 
 async function showStatus(): Promise<void> {
   state.load();
@@ -95,7 +87,4 @@ async function main(): Promise<void> {
   await showStatus();
 }
 
-main().catch((err) => {
-  log.error(`Critical error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-});
+runMain(main, () => state.save());

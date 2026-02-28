@@ -71,10 +71,10 @@ export interface OrderParams {
   side: OrderSide;
   orderType: OrderType;
   qty: string;
-  price?: string;
-  stopLoss?: string;
-  takeProfit?: string;
-  leverage?: number;
+  price?: string | undefined;
+  stopLoss?: string | undefined;
+  takeProfit?: string | undefined;
+  leverage?: number | undefined;
 }
 
 export interface OrderResult {
@@ -83,7 +83,7 @@ export interface OrderResult {
   side: OrderSide;
   orderType: OrderType;
   qty: string;
-  price?: string;
+  price?: string | undefined;
   status: string;
 }
 
@@ -95,10 +95,10 @@ export interface Position {
   markPrice: string;
   unrealisedPnl: string;
   leverage: string;
-  stopLoss?: string;
-  takeProfit?: string;
-  liqPrice?: string;
-  createdTime?: string;
+  stopLoss?: string | undefined;
+  takeProfit?: string | undefined;
+  liqPrice?: string | undefined;
+  createdTime?: string | undefined;
 }
 
 export interface AccountInfo {
@@ -150,8 +150,19 @@ export interface TradingState {
   lastUpdate: string;
 }
 
-export interface TradingConfig {
+export interface BaseTradingConfig {
+  mode: 'execute' | 'dry-run';
   pairs: string[];
+  defaultLeverage: number;
+  maxOpenPositions: number;
+  minRR: number;
+  partialCloseAtR: number;
+  partialClosePercent: number;
+  trailingStartR: number;
+  trailingDistanceR: number;
+}
+
+export interface TradingConfig extends BaseTradingConfig {
   allowedOrderTypes: OrderType[];
   monitorIntervalMin: number;
   reportIntervalMin: number;
@@ -160,18 +171,10 @@ export interface TradingConfig {
   maxDailyLoss: number;
   maxStopsPerDay: number;
   maxRiskPerTrade: number;
-  maxOpenPositions: number;
   maxLeverage: number;
-  defaultLeverage: number;
-  minRR: number;
-  partialCloseAtR: number;
-  partialClosePercent: number;
-  trailingStartR: number;
-  trailingDistanceR: number;
   maxFundingRate: number;
   minFundingRate: number;
   maxSpreadPercent: number;
-  mode: 'execute' | 'dry-run';
   demoTrading: boolean;
   trendTF: string;
   zonesTF: string;

@@ -1,8 +1,8 @@
 {
   "tasks": [
     {
-      "id": "TASK-002",
-      "title": "10-дневный авто-трейдинг (крипто): +$100/день, лимит -$50/день или 2 стопа",
+      "id": "TASK-008",
+      "title": "10 дней авто-трейдинг (крипто): +$100/день, лимит -$50/день или 2 стопа",
       "description": "Срок: 10 дней.\nЦель: каждый день пытаться заработать +$100.\nБюджет/депозит бота: $10,000.\nБиржа: Bybit (настройки у агента уже есть).\n\nСделки:\n- Минимум 2 сделки в день (не меньше).\n- Торговать активно (не ждать сетап сутками), но без избыточного риска.\n\nРиск и стопы:\n- Stop Loss обязателен на КАЖДУЮ сделку.\n- Stop Loss на сделку: не более $300 (hard cap).\n- Дневная просадка: не более $50 ИЛИ 2 словленных стопа (что наступит раньше).\n- При достижении -$50 realised P&L или 2 стопов → остановить торговлю до следующего дня.\n- Фактический риск/SL на сделку подбирать так, чтобы не нарушить дневной лимит -$50 (обычно значительно меньше $300).\n\nДокументация:\n- Строго следовать документации владельца (в корне скиллов crypto-trader; ключевой файл: skills/crypto-trading/HYROTRADE_RULES.md).\n\nАвтоторговля:\n- FULL-AUTO, без напоминаний от владельца.\n\nОтчётность:\n- Каждые 2 часа отчёт о выполненной работе.\n- Отчёт должен быть и в Task Board, и в Telegram владельцу (через orchestrator).\n\nАналитика:\n- 1 раз в день агент может ставить задачу market-analyst для уточнения рыночных данных перед решениями.\n\nФормат 2-часового отчёта (минимум):\n- P&L за период и за день (realised/unrealised), число сделок сегодня, число стопов сегодня\n- Открытые позиции (пара/направление/вход/SL/TP/размер/текущее P&L)\n- Использованные сигналы/ТФ (4h/1h/15m/5m)\n- Статус лимитов: сколько осталось до -$50 и сколько стопов осталось\n- План до следующего отчёта / причины бездействия (если сделок не было)\n",
       "type": "task",
       "status": "in_progress",
@@ -22,30 +22,30 @@
       "comments": [
         {
           "author": "crypto-trader",
-          "timestamp": "2026-02-28T21:49:15Z",
-          "text": "Взял в работу (in_progress). Heartbeat 21:49 UTC: позиций нет, DD=0%, сигналы Smart Money по BTC/ETH/SOL не подтверждены → сделок не открывал."
+          "timestamp": "2026-02-28T22:09:53Z",
+          "text": "Взял в работу (in_progress). Heartbeat 22:09 UTC: позиций нет, DD=0%, сигналов Smart Money по BTC/ETH/SOL нет → сделок не открывал."
         }
       ],
       "history": [
         {
-          "timestamp": "2026-02-28T21:42:57Z",
+          "timestamp": "2026-02-28T21:59:44Z",
           "agent": "orchestrator",
           "action": "created"
         },
         {
-          "timestamp": "2026-02-28T21:48:41Z",
+          "timestamp": "2026-02-28T22:09:18Z",
           "agent": "crypto-trader",
           "action": "status_changed",
           "from": "todo",
           "to": "in_progress"
         }
       ],
-      "created_at": "2026-02-28T21:42:57Z",
-      "updated_at": "2026-02-28T21:49:15Z"
+      "created_at": "2026-02-28T21:59:44Z",
+      "updated_at": "2026-02-28T22:09:53Z"
     },
     {
-      "id": "TASK-003",
-      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 21:48 UTC",
+      "id": "TASK-009",
+      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:08 UTC",
       "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
       "type": "task",
       "status": "done",
@@ -62,25 +62,25 @@
       "comments": [],
       "history": [
         {
-          "timestamp": "2026-02-28T21:48:15Z",
+          "timestamp": "2026-02-28T22:08:50Z",
           "agent": "forex-trader",
           "action": "created"
         },
         {
-          "timestamp": "2026-02-28T21:48:22Z",
+          "timestamp": "2026-02-28T22:08:58Z",
           "agent": "forex-trader",
           "action": "status_changed",
           "from": "todo",
           "to": "done"
         }
       ],
-      "created_at": "2026-02-28T21:48:15Z",
-      "updated_at": "2026-02-28T21:48:22Z"
+      "created_at": "2026-02-28T22:08:50Z",
+      "updated_at": "2026-02-28T22:08:58Z"
     },
     {
-      "id": "TASK-004",
-      "title": "Heartbeat 2026-02-28 21:49 UTC — мониторинг",
-      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.000613% | ETH +0.001398% | SOL -0.008201%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
+      "id": "TASK-010",
+      "title": "Heartbeat 2026-02-28 22:09 UTC — мониторинг",
+      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001257% | ETH +0.001241% | SOL -0.007700%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
       "type": "task",
       "status": "todo",
       "assignee": "orchestrator",
@@ -96,13 +96,264 @@
       "comments": [],
       "history": [
         {
-          "timestamp": "2026-02-28T21:49:08Z",
+          "timestamp": "2026-02-28T22:09:47Z",
           "agent": "crypto-trader",
           "action": "created"
         }
       ],
-      "created_at": "2026-02-28T21:49:08Z",
-      "updated_at": "2026-02-28T21:49:08Z"
+      "created_at": "2026-02-28T22:09:47Z",
+      "updated_at": "2026-02-28T22:09:47Z"
+    },
+    {
+      "id": "TASK-011",
+      "title": "Проверить ситуацию в Дубае: взрывы/боевые действия?",
+      "description": "Нужно срочно проверить актуальную обстановку в Дубае (ОАЭ): есть ли сообщения о взрывах, ракетных ударах, боевых действиях, закрытии аэропортов/воздушного пространства, массовых эвакуациях.\\n\\nВыход: короткое резюме (что известно/не подтверждено), список источников (ссылки), время публикаций, оценка достоверности (официальные vs соцсети).\\n\\nПриоритет: high.\\nФормат: ответить в Task Board + короткий TELEGRAM SUMMARY.",
+      "type": "task",
+      "status": "done",
+      "assignee": "market-analyst",
+      "reporter": "orchestrator",
+      "priority": "high",
+      "labels": [
+        "news",
+        "uae",
+        "dubai",
+        "security"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:17:18Z",
+          "text": "Проверка (2026-02-28 22:16 UTC): по BBC News RSS есть материал 'Luxury Dubai hotel hit as Iran launches retaliatory strikes across region' (pubDate 18:15 GMT) — сообщается о попадании по luxury hotel в Dubai (Fairmont The Palm) на фоне иранских ответных ударов. Дополнительно: Al Jazeera RSS публикует серию новостей об ударах US/Israel по Ирану и ответных атаках Ирана (публ. ~20:29–21:52 UTC), включая упоминания ударов по Gulf states. Вывод: сообщения об инциденте/ударе по Дубаю присутствуют в крупных источниках; риск эскалации и волатильности на открытии высокий."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:18:26Z",
+          "text": "Проверка (2026-02-28 ~22:17 UTC):\n\nОФИЦИАЛЬНО (Dubai Airports): опубликована серия оперативных обновлений по DXB/DWC.\n- 2026-02-28 21:56 UTC: «a concourse at DXB sustained minor damage in an incident… quickly contained… emergency response… 4 staff injuries… terminals previously cleared» (официальный liveblog).\n- 2026-02-28 12:01 UTC: «all flight operations at DXB and DWC are suspended until further notice».\n- 2026-02-28 10:42 UTC: частичное закрытие воздушного пространства ОАЭ как precautionary measure amid regional security developments; отмены/задержки.\n\nСсылки: \n- Passenger Advisory (главная): https://www.dubaiairports.ae/ \n- Оперативные обновления (страница): https://media.dubaiairports.ae/da-operations-affected-by-regional-airspace-closure/ \n\nПо состоянию на этот момент: подтверждён «инцидент» и повреждение в одном конкорсе DXB + травмы персонала; официальная формулировка не уточняет причину (взрыв/удар/иное). Наличие региональных ограничений по воздушному пространству подтверждается теми же официальными сообщениями.\n\nСМИ/соцсети: без прямого доступа к поиску (Brave API key отсутствует) не удалось надёжно подтвердить/опровергнуть сообщения в Reuters/AP/BBC и соцсетях; Google News RSS показывает много сенсационных/разнородных источников, требует верификации. Рекомендуется: подтвердить по Reuters/AP/BBC и официальным аккаунтам Dubai Police/GCAA при наличии браузера/поиска."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:13:36Z",
+          "agent": "orchestrator",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:17:07Z",
+          "agent": "market-analyst",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "timestamp": "2026-02-28T22:17:18Z",
+          "agent": "market-analyst",
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
+        },
+        {
+          "timestamp": "2026-02-28T22:18:18Z",
+          "agent": "market-analyst",
+          "action": "status_changed",
+          "from": "done",
+          "to": "in_progress"
+        },
+        {
+          "timestamp": "2026-02-28T22:18:29Z",
+          "agent": "market-analyst",
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-02-28T22:13:36Z",
+      "updated_at": "2026-02-28T22:18:29Z"
+    },
+    {
+      "id": "TASK-012",
+      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:15 UTC",
+      "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
+      "type": "task",
+      "status": "done",
+      "assignee": "forex-trader",
+      "reporter": "forex-trader",
+      "priority": "low",
+      "labels": [
+        "forex",
+        "heartbeat",
+        "monitoring"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:15:47Z",
+          "agent": "forex-trader",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:15:56Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-02-28T22:15:47Z",
+      "updated_at": "2026-02-28T22:15:56Z"
+    },
+    {
+      "id": "TASK-013",
+      "title": "Heartbeat 2026-02-28 22:16 UTC — мониторинг",
+      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001471% | ETH +0.001091% | SOL -0.007380%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
+      "type": "task",
+      "status": "done",
+      "assignee": "orchestrator",
+      "reporter": "crypto-trader",
+      "priority": "low",
+      "labels": [
+        "crypto",
+        "heartbeat",
+        "report"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:16:41Z",
+          "agent": "crypto-trader",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:17:59Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-02-28T22:16:41Z",
+      "updated_at": "2026-02-28T22:17:59Z"
+    },
+    {
+      "id": "TASK-014",
+      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:17 UTC",
+      "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
+      "type": "task",
+      "status": "done",
+      "assignee": "forex-trader",
+      "reporter": "forex-trader",
+      "priority": "low",
+      "labels": [
+        "forex",
+        "heartbeat",
+        "monitoring"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:17:59Z",
+          "agent": "forex-trader",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:18:05Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-02-28T22:17:59Z",
+      "updated_at": "2026-02-28T22:18:05Z"
+    },
+    {
+      "id": "TASK-015",
+      "title": "Heartbeat 2026-02-28 22:18 UTC — мониторинг",
+      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001526% | ETH +0.001212% | SOL -0.007272%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
+      "type": "task",
+      "status": "todo",
+      "assignee": "orchestrator",
+      "reporter": "crypto-trader",
+      "priority": "low",
+      "labels": [
+        "crypto",
+        "heartbeat",
+        "report"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:18:42Z",
+          "agent": "crypto-trader",
+          "action": "created"
+        }
+      ],
+      "created_at": "2026-02-28T22:18:42Z",
+      "updated_at": "2026-02-28T22:18:42Z"
+    },
+    {
+      "id": "TASK-016",
+      "title": "⚠️ Geo escalation: Iran retaliation incl. Dubai hit (BBC) — risk-off + gap risk on open",
+      "description": "Update 2026-02-28 22:18 UTC. Источники: BBC RSS — 'Luxury Dubai hotel hit as Iran launches retaliatory strikes across region' (18:15 GMT) + 'What we know so far...' (22:12 GMT). Al Jazeera RSS подтверждает продолжение ударов/ответных атак (публикации ~20:29–21:52 UTC). Макро-импликации: усиление risk-off, вероятны гэпы на открытии FX; чувствительность нефти/золота; safe-haven спрос (USD/JPY/CHF) vs риск-валюты.",
+      "type": "task",
+      "status": "todo",
+      "assignee": "forex-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:19:09Z",
+          "agent": "market-analyst",
+          "action": "created"
+        }
+      ],
+      "created_at": "2026-02-28T22:19:09Z",
+      "updated_at": "2026-02-28T22:19:09Z"
+    },
+    {
+      "id": "TASK-017",
+      "title": "⚠️ Crypto risk: geopolitics (Iran ↔ Gulf, Dubai hit) + Extreme Fear (F&G=11)",
+      "description": "Update 2026-02-28 22:18 UTC. Метрики: Fear&Greed=11 (Extreme Fear, alternative.me), BTC Dominance ~56.25% (CoinGecko). Новости: BBC/AlJazeera — региональная эскалация и сообщения об ударах/ответных атаках, включая Dubai hit. Импликации: повышенная волатильность, возможные резкие движения BTC/ETH и альтов на тонкой ликвидности; следить за нефтью/доходностями/долларом.",
+      "type": "task",
+      "status": "todo",
+      "assignee": "crypto-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics",
+        "crypto"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-02-28T22:19:09Z",
+          "agent": "market-analyst",
+          "action": "created"
+        }
+      ],
+      "created_at": "2026-02-28T22:19:09Z",
+      "updated_at": "2026-02-28T22:19:09Z"
     }
   ]
 }

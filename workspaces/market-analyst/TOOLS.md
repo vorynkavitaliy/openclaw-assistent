@@ -3,10 +3,12 @@
 ## Инструменты
 
 ### Нативные tools агента
+
 - **web_search** — поиск актуальных данных и новостей
 - **web_fetch** — загрузка контента по URL
 
 ### OpenClaw tools
+
 - **sessions_send** — отправка отчётов Forex Trader
 - **sessions_history** — контекст предыдущих взаимодействий
 - **memory_search** — поиск в памяти по прошлым анализам
@@ -14,26 +16,30 @@
 ## Источники данных
 
 ### Экономический календарь
+
 - ForexFactory: https://www.forexfactory.com/calendar
 - Investing.com: https://www.investing.com/economic-calendar/
 - FXStreet: https://www.fxstreet.com/economic-calendar
 
 ### Новостные агрегаторы
+
 - Reuters Financial: reuters.com
 - Bloomberg Markets: bloomberg.com
 - ForexLive: forexlive.com
 
 ### Центробанки
-| ЦБ | Валюта | URL |
-|----|--------|-----|
-| Fed | USD | federalreserve.gov |
-| ECB | EUR | ecb.europa.eu |
-| BoE | GBP | bankofengland.co.uk |
-| BoJ | JPY | boj.or.jp/en |
-| SNB | CHF | snb.ch/en |
-| RBA | AUD | rba.gov.au |
+
+| ЦБ  | Валюта | URL                 |
+| --- | ------ | ------------------- |
+| Fed | USD    | federalreserve.gov  |
+| ECB | EUR    | ecb.europa.eu       |
+| BoE | GBP    | bankofengland.co.uk |
+| BoJ | JPY    | boj.or.jp/en        |
+| SNB | CHF    | snb.ch/en           |
+| RBA | AUD    | rba.gov.au          |
 
 ### Индексы и корреляции
+
 - DXY (US Dollar Index)
 - US10Y (10-Year Treasury Yield)
 - VIX (Volatility Index)

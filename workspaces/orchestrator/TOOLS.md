@@ -70,11 +70,11 @@ npx tsx src/market/digest.ts
 
 ## Правила маршрутизации
 
-| Тема | Агент |
-|------|-------|
-| Торговля крипто | crypto-trader |
-| Торговля форекс | forex-trader |
-| Анализ рынка | market-analyst |
+| Тема                    | Агент                                |
+| ----------------------- | ------------------------------------ |
+| Торговля крипто         | crypto-trader                        |
+| Торговля форекс         | forex-trader                         |
+| Анализ рынка            | market-analyst                       |
 | Разработка (новые фичи) | tech-lead → backend-dev/frontend-dev |
-| Тестирование | qa-tester |
-| Баги в коде | tech-lead |
+| Тестирование            | qa-tester                            |
+| Баги в коде             | tech-lead                            |

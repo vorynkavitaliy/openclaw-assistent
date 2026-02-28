@@ -13,7 +13,7 @@
 
 ```bash
 # Запросить анализ у market-analyst (Task Board + мгновенно)
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent forex-trader create \
   --title "Анализ макрофона EURUSD" \
   --assignee market-analyst --priority high --labels "analysis,forex"
 ```
@@ -24,7 +24,7 @@ sessions_send target=market-analyst message="TASK-XXX: Нужен фундаме
 
 ```bash
 # Отчёт о сделке для orchestrator
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent forex-trader create \
   --title "EURUSD BUY открыт @ 1.0850" \
   --assignee orchestrator --priority medium --labels "forex,trade,report"
 ```
@@ -52,13 +52,13 @@ sessions_send target=orchestrator message="Сделка EURUSD BUY @ 1.0850. Д�
 
 ```bash
 # Создать задачу для market-analyst
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent forex-trader create \
   --title "Фундаментальный анализ [PAIR]" \
   --description "Нужен: macro bias, календарь, риски, сентимент" \
   --assignee market-analyst --priority high --labels "analysis,forex"
 
 # Проверить результат
-bash skills/taskboard/scripts/taskboard.sh list --assignee forex-trader --status done
+bash skills/taskboard/scripts/taskboard.sh --agent forex-trader list --assignee forex-trader --status done
 ← Получить отчёт: macro bias, календарь, риски, сентимент
 Если "красные новости" в ближайшие 30 мин → СТОП, не торговать
 ```
@@ -294,7 +294,7 @@ M5  → УТОЧНИ ВХОД (подтверждение паттерном, м
 Перед каждой сделкой запрашивай фундаментальный анализ через Task Board:
 
 ```bash
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent forex-trader create \
   --title "Экономический календарь и фон для [PAIR]" \
   --assignee market-analyst --priority high --labels "analysis,forex"
 ```

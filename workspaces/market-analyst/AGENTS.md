@@ -26,8 +26,8 @@
 
 ```bash
 # Ответить на запрос трейдера (Task Board + мгновенно)
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
-bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Отчёт: ..."
+bash skills/taskboard/scripts/taskboard.sh --agent market-analyst update TASK-XXX --status done
+bash skills/taskboard/scripts/taskboard.sh --agent market-analyst comment TASK-XXX "Отчёт: ..."
 ```
 
 ```
@@ -36,7 +36,7 @@ sessions_send target=crypto-trader message="TASK-XXX выполнен. Отчё�
 
 ```bash
 # Создать алерт для трейдеров (мгновенно!)
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent market-analyst create \
   --title "⚠️ High Impact: NFP через 30 мин" \
   --assignee forex-trader --priority critical --labels "alert,macro"
 ```

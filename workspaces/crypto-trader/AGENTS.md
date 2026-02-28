@@ -12,7 +12,7 @@
 
 ```bash
 # Запросить анализ у market-analyst (Task Board + мгновенно)
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent crypto-trader create \
   --title "Анализ макрофона BTC" \
   --assignee market-analyst --priority high --labels "analysis,btc"
 ```
@@ -23,7 +23,7 @@ sessions_send target=market-analyst message="TASK-XXX: Нужен фундаме
 
 ```bash
 # Отчёт о сделке для orchestrator
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent crypto-trader create \
   --title "BTCUSDT LONG открыт @ $98,500" \
   --assignee orchestrator --priority medium --labels "crypto,trade,report"
 ```
@@ -52,13 +52,13 @@ sessions_send target=orchestrator message="Сделка BTCUSDT LONG @ $98,500. 
 
 ```bash
 # Создать задачу для market-analyst
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent crypto-trader create \
   --title "Фундаментальный анализ [PAIR]" \
   --description "Нужен: macro bias, calendar, риски, сентимент, on-chain" \
   --assignee market-analyst --priority high --labels "analysis,crypto"
 
 # Проверить результат
-bash skills/taskboard/scripts/taskboard.sh list --assignee crypto-trader --status done
+bash skills/taskboard/scripts/taskboard.sh --agent crypto-trader list --assignee crypto-trader --status done
 ← Получить отчёт: macro bias, calendar, риски, сентимент, on-chain
 Если "красные новости" (FOMC, CPI, крупные разлоки) в ближайшие 30 мин → СТОП, не торговать
 ```
@@ -276,7 +276,7 @@ Qty = (Баланс * 0.02) / |Цена_входа - SL|
 Перед каждой сделкой запрашивай фундаментальный анализ через Task Board:
 
 ```bash
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent crypto-trader create \
   --title "Крипто-фон и макро для [PAIR]" \
   --assignee market-analyst --priority high --labels "analysis,crypto"
 ```

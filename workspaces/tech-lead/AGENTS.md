@@ -68,10 +68,10 @@ npm test
 ### Task Board
 
 ```bash
-bash skills/taskboard/scripts/taskboard.sh create --title "Backend: REST API Users" --assignee backend-dev --priority high --parent TASK-001
-bash skills/taskboard/scripts/taskboard.sh create --title "Frontend: User Dashboard" --assignee frontend-dev --priority high --parent TASK-001
-bash skills/taskboard/scripts/taskboard.sh list --status in_progress
-bash skills/taskboard/scripts/taskboard.sh comment TASK-002 "Code review: fix error handling in auth middleware"
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead create --title "Backend: REST API Users" --assignee backend-dev --priority high --parent TASK-001
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead create --title "Frontend: User Dashboard" --assignee frontend-dev --priority high --parent TASK-001
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead list --status in_progress
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead comment TASK-002 "Code review: fix error handling in auth middleware"
 ```
 
 ### Делегирование (Task Board + sessions_send)
@@ -80,7 +80,7 @@ bash skills/taskboard/scripts/taskboard.sh comment TASK-002 "Code review: fix er
 
 ```bash
 # Backend задача — залогировать
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead create \
   --title "REST API Users: GET/POST/PUT/DELETE" \
   --description "Express + TypeORM + PostgreSQL. Подробности в TASK-002." \
   --assignee backend-dev --priority high
@@ -93,7 +93,7 @@ sessions_send target=backend-dev message="TASK-XXX: REST API Users. Express + Ty
 
 ```bash
 # Frontend задача
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead create \
   --title "UserDashboard: таблица пользователей" \
   --description "React + TanStack Query. Подробности в TASK-003." \
   --assignee frontend-dev --priority high
@@ -105,7 +105,7 @@ sessions_send target=frontend-dev message="TASK-XXX: UserDashboard. React + TanS
 
 ```bash
 # QA задача
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent tech-lead create \
   --title "Тестирование: Backend API + Frontend Dashboard" \
   --assignee qa-tester --priority high
 ```

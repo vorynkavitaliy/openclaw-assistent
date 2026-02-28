@@ -5,7 +5,7 @@
 1. **Task Board проверка** — найди зависшие задачи (in_progress > 2 часов):
 
    ```bash
-   bash skills/taskboard/scripts/taskboard.sh list --status in_progress
+   bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status in_progress
    ```
 
    Если задача зависла — уведоми пользователя и пингни исполнителя.

@@ -37,8 +37,29 @@ now_iso() {
 }
 
 # ─── Получить имя текущего агента ────────────────────────────
+# Приоритет: 1) глобальный --agent параметр  2) OPENCLAW_AGENT_ID
+# 3) парсинг OPENCLAW_AGENT_DIR  4) "unknown"
+_GLOBAL_AGENT=""
+
 get_agent_name() {
-  echo "${OPENCLAW_AGENT_ID:-unknown}"
+  if [[ -n "$_GLOBAL_AGENT" ]]; then
+    echo "$_GLOBAL_AGENT"
+    return
+  fi
+  if [[ -n "${OPENCLAW_AGENT_ID:-}" ]]; then
+    echo "$OPENCLAW_AGENT_ID"
+    return
+  fi
+  # Попробовать извлечь из OPENCLAW_AGENT_DIR: /root/.openclaw/agents/<id>/agent
+  if [[ -n "${OPENCLAW_AGENT_DIR:-}" ]]; then
+    local dir_name
+    dir_name=$(basename "$(dirname "$OPENCLAW_AGENT_DIR")")
+    if [[ "$dir_name" != "." && "$dir_name" != "/" ]]; then
+      echo "$dir_name"
+      return
+    fi
+  fi
+  echo "unknown"
 }
 
 # ─── CREATE ──────────────────────────────────────────────────
@@ -214,6 +235,8 @@ cmd_update() {
       --status)
         local old_status new_status="$2"
         old_status=$(jq -r --arg id "$id" '.tasks[] | select(.id == $id) | .status' "$TASKS_FILE")
+        local task_title
+        task_title=$(jq -r --arg id "$id" '.tasks[] | select(.id == $id) | .title' "$TASKS_FILE")
         tmp=$(mktemp)
         jq --arg id "$id" --arg val "$new_status" --arg now "$now" --arg agent "$agent" --arg old "$old_status" \
           '(.tasks[] | select(.id == $id)) |= (
@@ -222,6 +245,8 @@ cmd_update() {
             .history += [{timestamp: $now, agent: $agent, action: "status_changed", from: $old, to: $val}]
           )' "$TASKS_FILE" > "$tmp"
         mv "$tmp" "$TASKS_FILE"
+        # Уведомление для orchestrator
+        emit_notification "$id" "$old_status" "$new_status" "$agent" "$task_title"
         echo "✅ Статус $id: $old_status → $new_status"
         shift 2
         ;;
@@ -346,30 +371,123 @@ cmd_delete() {
   echo "🗑️ Задача $id удалена"
 }
 
+# ─── NOTIFICATIONS ───────────────────────────────────────────
+# Показать последние изменения статусов (для orchestrator heartbeat)
+NOTIFICATIONS_FILE="${DATA_DIR}/notifications.json"
+
+init_notifications() {
+  if [[ ! -f "$NOTIFICATIONS_FILE" ]]; then
+    echo '{"events":[]}' > "$NOTIFICATIONS_FILE"
+  fi
+}
+
+# Записать уведомление о смене статуса
+emit_notification() {
+  local task_id="$1" from_status="$2" to_status="$3" agent="$4" title="$5"
+  local now
+  now=$(now_iso)
+
+  init_notifications
+
+  local tmp
+  tmp=$(mktemp)
+  jq --arg id "$task_id" --arg from "$from_status" --arg to "$to_status" \
+     --arg agent "$agent" --arg title "$title" --arg ts "$now" \
+    '.events += [{
+      task_id: $id,
+      title: $title,
+      from: $from,
+      to: $to,
+      agent: $agent,
+      timestamp: $ts,
+      seen: false
+    }]' "$NOTIFICATIONS_FILE" > "$tmp"
+  mv "$tmp" "$NOTIFICATIONS_FILE"
+}
+
+cmd_notifications() {
+  init_notifications
+
+  local unseen_only=false ack=false limit=20
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --unseen) unseen_only=true; shift ;;
+      --ack) ack=true; shift ;;
+      --limit) limit="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  if [[ "$ack" == true ]]; then
+    local tmp
+    tmp=$(mktemp)
+    jq '.events |= map(.seen = true)' "$NOTIFICATIONS_FILE" > "$tmp"
+    mv "$tmp" "$NOTIFICATIONS_FILE"
+    echo "✅ Все уведомления отмечены как прочитанные"
+    return
+  fi
+
+  local filter=".events"
+  if [[ "$unseen_only" == true ]]; then
+    filter=".events | map(select(.seen == false))"
+  fi
+  filter="$filter | sort_by(.timestamp) | reverse | .[:$limit]"
+
+  local result
+  result=$(jq "$filter" "$NOTIFICATIONS_FILE")
+  local count
+  count=$(echo "$result" | jq 'length')
+
+  if [[ "$count" -eq 0 ]]; then
+    echo "📭 Нет новых уведомлений"
+    return
+  fi
+
+  echo "🔔 Уведомления ($count):"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "$result" | jq -r '.[] | "[\(.timestamp)] \(.task_id): \(.from) → \(.to) (\(.agent)) — \(.title)"'
+}
+
 # ─── MAIN ────────────────────────────────────────────────────
 init_data
+
+# Парсинг глобальных опций (до команды)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent) _GLOBAL_AGENT="$2"; shift 2 ;;
+    *) break ;;
+  esac
+done
 
 command="${1:-help}"
 shift || true
 
 case "$command" in
-  create)   cmd_create "$@" ;;
-  list)     cmd_list "$@" ;;
-  get)      cmd_get "$@" ;;
-  update)   cmd_update "$@" ;;
-  comment)  cmd_comment "$@" ;;
-  stats)    cmd_stats ;;
-  delete)   cmd_delete "$@" ;;
+  create)        cmd_create "$@" ;;
+  list)          cmd_list "$@" ;;
+  get)           cmd_get "$@" ;;
+  update)        cmd_update "$@" ;;
+  comment)       cmd_comment "$@" ;;
+  stats)         cmd_stats ;;
+  delete)        cmd_delete "$@" ;;
+  notifications) cmd_notifications "$@" ;;
   help|*)
     echo "📋 Task Board — Управление задачами"
     echo ""
+    echo "Глобальные опции (перед командой):"
+    echo "  --agent agent-id    Указать ID агента (рекомендуется)"
+    echo ""
     echo "Команды:"
-    echo "  create   --title '...' --assignee agent-id [--description '...'] [--type task] [--priority medium] [--labels 'a,b'] [--parent TASK-001]"
-    echo "  list     [--assignee agent-id] [--status todo] [--priority high] [--type bug]"
-    echo "  get      TASK-001"
-    echo "  update   TASK-001 --status in_progress [--priority high] [--assignee agent-id]"
-    echo "  comment  TASK-001 'Комментарий'"
+    echo "  create        --title '...' --assignee agent-id [--description '...'] [--type task] [--priority medium] [--labels 'a,b'] [--parent TASK-001]"
+    echo "  list          [--assignee agent-id] [--status todo] [--priority high] [--type bug]"
+    echo "  get           TASK-001"
+    echo "  update        TASK-001 --status in_progress [--priority high] [--assignee agent-id]"
+    echo "  comment       TASK-001 'Комментарий'"
+    echo "  notifications [--unseen] [--ack] [--limit N]"
     echo "  stats"
-    echo "  delete   TASK-001"
+    echo "  delete        TASK-001"
+    echo ""
+    echo "Пример: bash taskboard.sh --agent crypto-trader create --title 'BTC LONG' --assignee orchestrator"
     ;;
 esac

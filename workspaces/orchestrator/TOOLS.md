@@ -14,7 +14,7 @@
 
 ```bash
 # 1) Залогировать задачу
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create \
   --title "Проверь текущие позиции" \
   --assignee forex-trader --priority high
 ```
@@ -26,23 +26,23 @@ sessions_send target=forex-trader message="TASK-XXX: Проверь текущи
 
 ```bash
 # Проверить результаты
-bash skills/taskboard/scripts/taskboard.sh list --status done
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status done
 ```
 
 ## Task Board
 
 ```bash
 # Создать задачу
-bash skills/taskboard/scripts/taskboard.sh create --title "..." --assignee developer --priority high
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee developer --priority high
 
 # Обновить статус
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status in-progress
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator update TASK-XXX --status in-progress
 
 # Список задач
-bash skills/taskboard/scripts/taskboard.sh list
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list
 
 # Статистика
-bash skills/taskboard/scripts/taskboard.sh stats
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator stats
 ```
 
 ## Скрипты мониторинга

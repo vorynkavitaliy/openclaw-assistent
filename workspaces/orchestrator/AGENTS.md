@@ -51,10 +51,10 @@
 Используй скилл `taskboard` для управления задачами:
 
 ```bash
-bash skills/taskboard/scripts/taskboard.sh create --title "Название" --description "Описание" --assignee agent-id --priority high
-bash skills/taskboard/scripts/taskboard.sh list --assignee agent-id --status todo
-bash skills/taskboard/scripts/taskboard.sh update TASK-001 --status in_progress
-bash skills/taskboard/scripts/taskboard.sh comment TASK-001 "Текст комментария"
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "Название" --description "Описание" --assignee agent-id --priority high
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --assignee agent-id --status todo
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator update TASK-001 --status in_progress
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator comment TASK-001 "Текст комментария"
 ```
 
 ### Межагентное общение (гибридная модель)
@@ -65,7 +65,7 @@ bash skills/taskboard/scripts/taskboard.sh comment TASK-001 "Текст комм
 
 ```bash
 # Шаг 1: Залогировать в Task Board (трекинг + аудит)
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create \
   --title "Название задачи" --description "Описание" \
   --assignee agent-id --priority high --labels "тип,контекст"
 ```
@@ -77,10 +77,10 @@ sessions_send target=agent-id message="Новая задача TASK-XXX: [опи
 
 ```bash
 # Проверить результаты
-bash skills/taskboard/scripts/taskboard.sh list --status done
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status done
 
 # Обновить статус
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status in_progress
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator update TASK-XXX --status in_progress
 ```
 
 > 💡 Task Board = источник правды (трекинг, история). sessions_send = мгновенная доставка.

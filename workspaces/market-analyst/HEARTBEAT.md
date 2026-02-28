@@ -20,7 +20,7 @@
 
 ```bash
 # Алерт для crypto-trader
-bash skills/taskboard/scripts/taskboard.sh create \
+bash skills/taskboard/scripts/taskboard.sh --agent market-analyst create \
   --title "⚠️ FOMC через 30 мин — не открывать позиции" \
   --assignee crypto-trader --priority critical --labels "alert,macro"
 ```

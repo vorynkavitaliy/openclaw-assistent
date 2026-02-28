@@ -12,14 +12,25 @@ user-invocable: true
 ## Расположение данных
 
 - Файл задач: `{baseDir}/data/tasks.json`
+- Уведомления: `{baseDir}/data/notifications.json`
 - Скрипт управления: `{baseDir}/scripts/taskboard.sh`
+
+## ⚠️ ВАЖНО: Идентификация агента
+
+**ВСЕГДА** передавай `--agent` перед командой. Это записывает твой ID в историю задач.
+
+```bash
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_AGENT_ID команда [аргументы]
+```
+
+Без `--agent` в истории будет записано "unknown" — это нарушает трекинг.
 
 ## Команды
 
 ### Создание задачи
 
 ```bash
-bash {baseDir}/scripts/taskboard.sh create \
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID create \
   --title "Название задачи" \
   --description "Подробное описание" \
   --type "task" \
@@ -58,16 +69,13 @@ bash {baseDir}/scripts/taskboard.sh get TASK-001
 
 ```bash
 # Изменить статус
-bash {baseDir}/scripts/taskboard.sh update TASK-001 --status in_progress
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --status in_progress
 
 # Изменить приоритет
-bash {baseDir}/scripts/taskboard.sh update TASK-001 --priority critical
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --priority critical
 
 # Переназначить
-bash {baseDir}/scripts/taskboard.sh update TASK-001 --assignee frontend-dev
-
-# Несколько полей
-bash {baseDir}/scripts/taskboard.sh update TASK-001 --status review --assignee tech-lead
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --assignee frontend-dev
 ```
 
 Статусы: `backlog` → `todo` → `in_progress` → `review` → `testing` → `done`
@@ -75,18 +83,28 @@ bash {baseDir}/scripts/taskboard.sh update TASK-001 --status review --assignee t
 ### Добавление комментария
 
 ```bash
-bash {baseDir}/scripts/taskboard.sh comment TASK-001 "Текст комментария от агента"
+bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID comment TASK-001 "Текст комментария"
 ```
 
-### Статистика борды
+### Уведомления (для orchestrator)
+
+При каждом изменении статуса скрипт автоматически создаёт уведомление.
+
+```bash
+# Показать непрочитанные уведомления
+bash {baseDir}/scripts/taskboard.sh notifications --unseen
+
+# Все уведомления (последние 20)
+bash {baseDir}/scripts/taskboard.sh notifications
+
+# Отметить все как прочитанные
+bash {baseDir}/scripts/taskboard.sh notifications --ack
+```
+
+### Статистика и удаление
 
 ```bash
 bash {baseDir}/scripts/taskboard.sh stats
-```
-
-### Удаление задачи
-
-```bash
 bash {baseDir}/scripts/taskboard.sh delete TASK-001
 ```
 

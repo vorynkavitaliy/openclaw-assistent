@@ -31,3 +31,4 @@ __pycache__/
 # OpenClaw auto-generated templates (можно добавить, если полезны)
 # USER.md
 # HEARTBEAT.md
+skills/taskboard/data/telegram.conf

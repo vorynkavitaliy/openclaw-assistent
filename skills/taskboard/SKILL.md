@@ -13,6 +13,7 @@ user-invocable: true
 
 - Файл задач: `{baseDir}/data/tasks.json`
 - Уведомления: `{baseDir}/data/notifications.json`
+- Telegram конфиг: `{baseDir}/data/telegram.conf` (gitignored)
 - Скрипт управления: `{baseDir}/scripts/taskboard.sh`
 
 ## Идентификация агента
@@ -110,6 +111,40 @@ bash {baseDir}/scripts/taskboard.sh notifications --ack
 bash {baseDir}/scripts/taskboard.sh stats
 bash {baseDir}/scripts/taskboard.sh delete TASK-001
 ```
+
+## Telegram-уведомления
+
+Все действия с задачами автоматически отправляются в Telegram пользователю.
+
+**Что уведомляется:**
+
+- Создание задачи
+- Изменение статуса
+- Изменение приоритета
+- Переназначение исполнителя
+- Комментарии
+- Удаление задачи
+
+**Визуальная система (emoji по агентам):**
+| Агент | Emoji |
+|-------|-------|
+| orchestrator | 🎯 |
+| crypto-trader | ₿ |
+| forex-trader | 💱 |
+| market-analyst | 📊 |
+| tech-lead | 👨‍💻 |
+| backend-dev | ⚙️ |
+| frontend-dev | 🎨 |
+| qa-tester | 🧪 |
+
+**Конфигурация:** `{baseDir}/data/telegram.conf` (gitignored, не коммитить):
+
+```bash
+TG_BOT_TOKEN="bot-token-here"
+TG_CHAT_ID="chat-id-here"
+```
+
+Если `telegram.conf` отсутствует или пуст — уведомления тихо пропускаются.
 
 ## Правила использования
 

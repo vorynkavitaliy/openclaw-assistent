@@ -10,6 +10,126 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="${SCRIPT_DIR}/../data"
 TASKS_FILE="${DATA_DIR}/tasks.json"
 COUNTER_FILE="${DATA_DIR}/counter.txt"
+TELEGRAM_CONF="${DATA_DIR}/telegram.conf"
+
+# ─── Emoji агентов (визуальная идентификация) ────────────────
+agent_emoji() {
+  case "${1:-}" in
+    orchestrator)    echo "🎯" ;;
+    crypto-trader)   echo "₿" ;;
+    forex-trader)    echo "💱" ;;
+    market-analyst)  echo "📊" ;;
+    tech-lead)       echo "👨‍💻" ;;
+    backend-dev)     echo "⚙️" ;;
+    frontend-dev)    echo "🎨" ;;
+    qa-tester)       echo "🧪" ;;
+    *)               echo "🤖" ;;
+  esac
+}
+
+status_emoji() {
+  case "${1:-}" in
+    todo)        echo "📋" ;;
+    in_progress) echo "🔄" ;;
+    review)      echo "👀" ;;
+    testing)     echo "🧪" ;;
+    done)        echo "✅" ;;
+    blocked)     echo "🚫" ;;
+    cancelled)   echo "❌" ;;
+    *)           echo "📌" ;;
+  esac
+}
+
+priority_emoji() {
+  case "${1:-}" in
+    critical) echo "🔴" ;;
+    high)     echo "🟠" ;;
+    medium)   echo "🟡" ;;
+    low)      echo "🟢" ;;
+    *)        echo "⚪" ;;
+  esac
+}
+
+# ─── Telegram ────────────────────────────────────────────────
+load_telegram_conf() {
+  if [[ -f "$TELEGRAM_CONF" ]]; then
+    # shellcheck source=/dev/null
+    source "$TELEGRAM_CONF"
+  fi
+}
+
+send_telegram() {
+  local text="$1"
+  load_telegram_conf
+  # Нужны TG_BOT_TOKEN и TG_CHAT_ID
+  if [[ -z "${TG_BOT_TOKEN:-}" || -z "${TG_CHAT_ID:-}" ]]; then
+    return 0  # Telegram не настроен — тихо пропускаем
+  fi
+  # Преобразовать \n в реальные переносы строк
+  local formatted
+  formatted=$(printf '%b' "$text")
+  # Отправка (async, не блокируем скрипт)
+  curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+    -d "chat_id=${TG_CHAT_ID}" \
+    -d "parse_mode=HTML" \
+    --data-urlencode "text=${formatted}" \
+    -d "disable_web_page_preview=true" \
+    > /dev/null 2>&1 &
+}
+
+# Форматированное уведомление о действии
+notify_action() {
+  local action="$1" agent="$2"
+  shift 2
+  local emoji
+  emoji=$(agent_emoji "$agent")
+  local header="${emoji} <b>${agent}</b>"
+
+  case "$action" in
+    create)
+      local id="$1" title="$2" assignee="$3" priority="$4"
+      local p_emoji s_emoji
+      p_emoji=$(priority_emoji "$priority")
+      s_emoji=$(status_emoji "todo")
+      local msg="${header} создал задачу\n\n"
+      msg+="${s_emoji} <b>${id}</b>  ${p_emoji} ${priority}\n"
+      msg+="<b>${title}</b>"
+      if [[ -n "$assignee" ]]; then
+        local a_emoji
+        a_emoji=$(agent_emoji "$assignee")
+        msg+="\n→ ${a_emoji} ${assignee}"
+      fi
+      send_telegram "$msg"
+      ;;
+    status)
+      local id="$1" title="$2" from="$3" to="$4"
+      local from_e to_e
+      from_e=$(status_emoji "$from")
+      to_e=$(status_emoji "$to")
+      send_telegram "${header} сменил статус\n\n<b>${id}</b>: ${from_e} ${from} → ${to_e} ${to}\n${title}"
+      ;;
+    comment)
+      local id="$1" text="$2"
+      send_telegram "${header} 💬\n\n<b>${id}</b>\n${text}"
+      ;;
+    priority)
+      local id="$1" new_priority="$2"
+      local p_emoji
+      p_emoji=$(priority_emoji "$new_priority")
+      send_telegram "${header} сменил приоритет\n\n<b>${id}</b> → ${p_emoji} ${new_priority}"
+      ;;
+    assignee)
+      local id="$1" new_assignee="$2"
+      local a_emoji
+      a_emoji=$(agent_emoji "$new_assignee")
+      send_telegram "${header} переназначил\n\n<b>${id}</b> → ${a_emoji} ${new_assignee}"
+      ;;
+    delete)
+      local id="$1"
+      send_telegram "${header} 🗑 удалил <b>${id}</b>"
+      ;;
+  esac
+}
 
 # ─── Инициализация ───────────────────────────────────────────
 init_data() {
@@ -167,6 +287,7 @@ cmd_create() {
 
   echo "✅ Задача создана: $id"
   echo "$task" | jq '.'
+  notify_action "create" "$agent" "$id" "$title" "$assignee" "$priority"
 }
 
 # ─── LIST ────────────────────────────────────────────────────
@@ -264,6 +385,7 @@ cmd_update() {
         # Уведомление для orchestrator
         emit_notification "$id" "$old_status" "$new_status" "$agent" "$task_title"
         echo "✅ Статус $id: $old_status → $new_status"
+        notify_action "status" "$agent" "$id" "$task_title" "$old_status" "$new_status"
         shift 2
         ;;
       --priority)
@@ -276,6 +398,7 @@ cmd_update() {
           )' "$TASKS_FILE" > "$tmp"
         mv "$tmp" "$TASKS_FILE"
         echo "✅ Приоритет $id: $2"
+        notify_action "priority" "$agent" "$id" "$2"
         shift 2
         ;;
       --assignee)
@@ -288,6 +411,7 @@ cmd_update() {
           )' "$TASKS_FILE" > "$tmp"
         mv "$tmp" "$TASKS_FILE"
         echo "✅ Assignee $id: $2"
+        notify_action "assignee" "$agent" "$id" "$2"
         shift 2
         ;;
       --title)
@@ -337,6 +461,7 @@ cmd_comment() {
   mv "$tmp" "$TASKS_FILE"
 
   echo "💬 Комментарий добавлен к $id"
+  notify_action "comment" "$agent" "$id" "$text"
 }
 
 # ─── STATS ───────────────────────────────────────────────────
@@ -384,7 +509,10 @@ cmd_delete() {
   jq --arg id "$id" '.tasks |= map(select(.id != $id))' "$TASKS_FILE" > "$tmp"
   mv "$tmp" "$TASKS_FILE"
 
+  local agent
+  agent=$(get_agent_name)
   echo "🗑️ Задача $id удалена"
+  notify_action "delete" "$agent" "$id"
 }
 
 # ─── NOTIFICATIONS ───────────────────────────────────────────

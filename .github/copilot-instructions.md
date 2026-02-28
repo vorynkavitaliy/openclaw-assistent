@@ -1,85 +1,61 @@
 # OpenClaw AI Assistant — Copilot Instructions
 
-Это многоагентная AI-система на основе платформы OpenClaw для автоматизации торговли и разработки. Язык проекта — русский.
+Многоагентная AI-система на платформе OpenClaw для автоматизации торговли. Язык проекта — русский.
 
-## Архитектура
+## Стек
 
-- **Runtime**: Node.js ≥ 20.19, OpenClaw 2026.2.22-2, TypeScript
-- **Конфигурация**: `openclaw.json` (JSON5 формат) — шаблон в корне; реальный конфиг в `~/.openclaw/openclaw.json`
-- **Gateway**: порт 18789, Telegram channel через `@openclaw/telegram`
-- **Telegram Bot**: @hyrotraders_bot
+- **Runtime**: Node.js ≥ 20, TypeScript 5, ES Modules (`"type": "module"`)
+- **Зависимости**: `bybit-api` (крипто), `rss-parser` (дайджест)
+- **Инструменты**: ESLint + Prettier, Vitest, tsx
+- **OpenClaw**: v2026.2.22-2, Gateway порт 18789, Telegram @hyrotraders_bot
+- **Конфиг**: шаблон `openclaw.json` в корне; реальный конфиг в `~/.openclaw/openclaw.json`
 
-## Структура проекта
+## Структура src/
 
 ```
-openclaw-ai-assistent/
-├── workspaces/          # Рабочие пространства агентов (каждый содержит SOUL.md, AGENTS.md, TOOLS.md, IDENTITY.md)
-│   ├── orchestrator/    # Главный координатор — маршрутизирует задачи
-│   ├── forex-trader/    # Торговля на Forex через MT5 WebTerminal
-│   ├── crypto-trader/   # Торговля криптовалютами
-│   ├── market-analyst/  # Анализ рынков
-│   ├── tech-lead/       # Управление разработкой → делегирует backend-dev, frontend-dev, qa-tester
-│   ├── backend-dev/     # Backend разработка (Node.js, TypeScript, Express/Fastify)
-│   ├── frontend-dev/    # Frontend разработка (React/Next.js, TailwindCSS)
-│   └── qa-tester/       # QA тестирование (Jest/Vitest, Playwright)
-├── skills/              # Наборы инструкций для агентов
-├── scripts/             # Служебные скрипты (setup.sh, fix_config.py)
-├── .github/             # GitHub конфигурация, документация, CI/CD, Copilot инструкции
-│   ├── docs/            # Полная документация (rules, skills, protocols, architecture)
-│   ├── agents/          # Профили агентов
-│   ├── instructions/    # Path-specific инструкции для Copilot
-│   └── workflows/       # GitHub Actions
-└── openclaw.json        # Шаблон конфигурации (НЕ содержит реальных credentials)
+src/
+├── trading/
+│   ├── crypto/         — Bybit (bybit-api): monitor, killswitch, report, state, config
+│   ├── forex/          — cTrader/FIX4.4: client, fix-connection, monitor, trade, config
+│   └── shared/         — types.ts, indicators.ts (EMA/RSI/ATR), risk.ts, index.ts
+├── market/digest.ts    — RSS market digest (rss-parser)
+└── utils/              — config.ts, logger.ts, telegram.ts, index.ts
 ```
 
-## Структура workspace агента
+## Агенты
 
-Каждый агент в `workspaces/{agent-id}/` имеет:
+```
+User (Telegram) → orchestrator → developer | qa-tester | analyst
+```
 
-- **SOUL.md** — личность, стиль общения, принципы агента
-- **AGENTS.md** — роль, задачи, инструменты, workflow
-- **TOOLS.md** — API endpoints, credentials в safe-формате (скрыто 80%: `7467…umn4`)
-- **IDENTITY.md** — имя, эмодзи, версия
+- **orchestrator** — маршрутизация задач, Task Board, Telegram
+- **developer** — TypeScript/Node.js разработка всех модулей src/
+- **qa-tester** — Vitest тесты, ESLint, TypeScript build
+- **analyst** — планирование задач, анализ рынка (Bybit/cTrader данные)
 
-## Основные команды OpenClaw
+## Ключевые npm скрипты
 
 ```bash
-openclaw status              # Проверить состояние системы
-openclaw status --deep       # Детальный аудит всех подсистем
-openclaw gateway start|stop|restart  # Управление Gateway
-openclaw agent --agent <id> --message "text"  # Тестировать агента
-openclaw logs --follow       # Логи в реальном времени
+npm run build                  # tsc компиляция
+npm run lint                   # ESLint src/
+npm run test:run               # Vitest (все тесты)
+npm run trade:crypto:monitor   # Bybit мониторинг
+npm run trade:crypto:kill      # Killswitch (закрыть все крипто-позиции)
+npm run trade:forex:monitor    # cTrader мониторинг
+npm run market:digest          # RSS дайджест рынка
 ```
 
-## Правила безопасности (КРИТИЧНО!)
+## Правила безопасности (КРИТИЧНО)
 
-- **НИКОГДА** не коммить реальные пароли, токены, API ключи
-- Credentials хранить ТОЛЬКО в `~/.openclaw/openclaw.json` или env vars
-- В файлах использовать safe-формат: `7467…umn4` (скрыть 80%)
-- Файл `keys.md` — **не коммитить**, должен быть в `.gitignore`
-- При обнаружении утечки — немедленно ревокнуть credential
+- **НИКОГДА** не коммитить реальные API ключи, токены, пароли
+- Credentials только в `~/.openclaw/openclaw.json` или env vars
+- В документации safe-формат: `7467…umn4` (скрыть 80%)
+- `keys.md` в `.gitignore` — не коммитить
 
-## Конвенции
+## Конвенции кода
 
-- **Коммиты**: Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`)
-- **Агенты**: именование `<role>-<specialization>` (forex-trader, backend-dev)
-- **Язык**: документация и коммуникация агентов на русском
-- **Стек разработки**: TypeScript, ESLint + Prettier, conventional commits
-
-## Документация
-
-Вся документация проекта находится в `.github/docs/`:
-
-- `rules/security.md` — правила безопасности (обязательно!)
-- `rules/architecture.md` — архитектурные правила
-- `rules/code-review.md` — стандарты code review
-- `skills/` — навыки и практики для конкретных задач
-- `protocols/task-envelope.md` — формат передачи задач между агентами
-
-## Иерархия агентов
-
-```
-User (Telegram) → Orchestrator → forex-trader, crypto-trader, tech-lead (→ backend-dev, frontend-dev, qa-tester), market-analyst
-```
-
-Orchestrator координирует всех. Tech Lead управляет dev-командой.
+- Импорты с расширением `.js` (ES Module требование)
+- Логгер: `createLogger('module-name')` из `utils/logger.ts`
+- Типы: использовать из `src/trading/shared/types.ts`
+- Коммиты: `feat(crypto):`, `fix(forex):`, `refactor(shared):`, `test(indicators):`
+- Перед коммитом: `npm run lint && npm run build`

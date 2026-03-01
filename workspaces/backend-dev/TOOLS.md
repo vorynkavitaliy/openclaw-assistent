@@ -1,6 +1,6 @@
 # TOOLS.md — Backend Dev Environment
 
-## Инструменты
+## Tools
 
 ### Runtime
 
@@ -8,22 +8,22 @@
 - Python 3.10+
 - npm / pnpm
 
-### Базы данных
+### Databases
 
 - SQLite (OpenClaw memory)
-- `[настроить PostgreSQL/MySQL если используется]`
+- `[configure PostgreSQL/MySQL if used]`
 
 ### API
 
 - OpenClaw Gateway: http://127.0.0.1:18789
-- `[настроить внешние API если нужны]`
+- `[configure external APIs if needed]`
 
-### Тестирование
+### Testing
 
 - Jest / Vitest
-- pytest (для Python)
+- pytest (for Python)
 
-## Коммуникация
+## Communication
 
-- Получает задачи от **tech-lead** через **sessions_send** (мгновенно) + **Task Board** (трекинг)
-- Отчитывается через **sessions_send** + обновление **Task Board**
+- Receives tasks from **tech-lead** via **sessions_send** (instant) + **Task Board** (tracking)
+- Reports via **sessions_send** + **Task Board** update

@@ -1,19 +1,19 @@
 # TOOLS.md — Crypto Trader Environment
 
-## Архитектура
+## Architecture
 
 ```
 Bybit REST API v5
     ↕
-Node.js SDK (bybit-api) — с поддержкой Demo Trading
+Node.js SDK (bybit-api) — with Demo Trading support
     ↕
-TypeScript модули (src/trading/crypto/)
-├── bybit-client.ts — API обёртка: торговля, данные, мониторинг
-├── monitor.ts      — автономный мониторинг + анализ + исполнение
-├── killswitch.ts   — экстренная остановка + закрытие всех позиций
-├── report.ts       — часовые отчёты Telegram + JSON
-├── state.ts        — персистентное состояние: баланс, лимиты, события
-└── config.ts       — конфигурация из ~/.openclaw/openclaw.json
+TypeScript modules (src/trading/crypto/)
+├── bybit-client.ts — API wrapper: trading, data, monitoring
+├── monitor.ts      — autonomous monitoring + analysis + execution
+├── killswitch.ts   — emergency stop + close all positions
+├── report.ts       — hourly reports Telegram + JSON
+├── state.ts        — persistent state: balance, limits, events
+└── config.ts       — config from ~/.openclaw/openclaw.json
     ↕
 OpenClaw Crypto Trader Agent
     ↕
@@ -26,102 +26,102 @@ Orchestrator → Telegram
 
 - **Mainnet**: https://api.bybit.com
 - **Testnet**: https://api-testnet.bybit.com
-- **Demo Trading**: mainnet + флаг `demoTrading: true` в SDK
+- **Demo Trading**: mainnet + flag `demoTrading: true` in SDK
 - **Docs**: https://bybit-exchange.github.io/docs/v5/intro
 
 ### Credentials
 
-- **Файл**: `~/.openclaw/openclaw.json` → секция `crypto`
-- **Тип аккаунта**: Unified Trading Account (UTA)
-- **Тип торговли**: USDT-M Linear Perpetual
-- **Demo Trading**: ключи от демо-аккаунта Bybit (работают только через Node SDK с `demoTrading: true`)
+- **File**: `~/.openclaw/openclaw.json` → `crypto` section
+- **Account type**: Unified Trading Account (UTA)
+- **Trade type**: USDT-M Linear Perpetual
+- **Demo Trading**: keys from Bybit demo account (work only via Node SDK with `demoTrading: true`)
 
-> ⚠️ Demo Trading ключи НЕ работают с обычным REST API. Только через Node SDK `bybit-api` с параметром `demoTrading: true`.
+> ⚠️ Demo Trading keys DO NOT work with regular REST API. Only via Node SDK `bybit-api` with `demoTrading: true`.
 
 ---
 
-## TypeScript CLI — Мониторинг и торговля
+## TypeScript CLI — Monitoring and Trading
 
-### Мониторинг (основной инструмент)
+### Monitoring (primary tool)
 
 ```bash
-# Полный мониторинг всех пар (dry-run — без исполнения)
+# Full monitoring of all pairs (dry-run — no execution)
 npx tsx src/trading/crypto/monitor.ts --dry-run
 
-# Мониторинг одной пары (dry-run)
+# Monitor single pair (dry-run)
 npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
 
-# Боевой режим — анализ + автоматическое исполнение
+# Live mode — analysis + automatic execution
 npx tsx src/trading/crypto/monitor.ts
 
-# Боевой режим — одна пара
+# Live mode — single pair
 npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
 ```
 
-Monitor автоматически:
+Monitor automatically:
 
-1. Проверяет kill-switch и стоп-день
-2. Обновляет баланс и позиции
-3. Управляет открытыми позициями (частичное закрытие +1R, trailing SL +1.5R, BE)
-4. Делает мультитаймфреймный анализ (4h + 15m)
-5. Исполняет сигналы (если не dry-run)
+1. Checks kill-switch and stop-day
+2. Updates balance and positions
+3. Manages open positions (partial close +1R, trailing SL +1.5R, BE)
+4. Performs multi-timeframe analysis (4h + 15m)
+5. Executes signals (if not dry-run)
 
-### Kill Switch (экстренная остановка)
+### Kill Switch (emergency stop)
 
 ```bash
-# Статус (kill-switch, stop-day, mode, balance, positions)
+# Status (kill-switch, stop-day, mode, balance, positions)
 npx tsx src/trading/crypto/killswitch.ts
 
-# Включить kill-switch (остановить торговлю)
-npx tsx src/trading/crypto/killswitch.ts --on --reason="ручная остановка"
+# Enable kill-switch (stop trading)
+npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
 
-# Закрыть ВСЕ позиции + включить kill-switch
+# Close ALL positions + enable kill-switch
 npx tsx src/trading/crypto/killswitch.ts --close-all
 
-# Выключить kill-switch (возобновить торговлю)
+# Disable kill-switch (resume trading)
 npx tsx src/trading/crypto/killswitch.ts --off
 ```
 
-### Отчёт (Telegram + JSON)
+### Report (Telegram + JSON)
 
 ```bash
-# Часовой отчёт (отправляется в Telegram через Gateway)
+# Hourly report (sent to Telegram via Gateway)
 npx tsx src/trading/crypto/report.ts
 
-# Отчёт в JSON формате (stdout)
+# Report in JSON format (stdout)
 npx tsx src/trading/crypto/report.ts --format=json
 ```
 
-Содержит: баланс, позиции, дневная статистика, рыночные данные BTC/ETH/SOL.
+Contains: balance, positions, daily stats, market data for BTC/ETH/SOL.
 
 ---
 
-## API функции (bybit-client.ts)
+## API Functions (bybit-client.ts)
 
-Доступны как библиотека для других модулей:
+Available as library for other modules:
 
-| Функция                                       | Описание                                |
+| Function                                      | Description                             |
 | --------------------------------------------- | --------------------------------------- |
-| `getKlines(symbol, interval, limit)`          | OHLC свечи                              |
-| `getMarketInfo(symbol)`                       | Тикер, funding rate, OI, funding сигнал |
-| `getMarketAnalysis(symbol, tf, bars)`         | OHLC + EMA/RSI/ATR + trend bias         |
-| `getBalance(coin?)`                           | Баланс (UNIFIED account)                |
-| `getPositions(symbol?)`                       | Открытые позиции                        |
-| `submitOrder({symbol, side, type, qty, ...})` | Создать ордер с SL/TP                   |
-| `closePosition(symbol)`                       | Закрыть позицию                         |
-| `partialClosePosition(symbol, qty)`           | Частичное закрытие                      |
-| `modifyPosition(symbol, sl?, tp?)`            | Изменить SL/TP                          |
-| `closeAllPositions()`                         | Закрыть все USDT позиции                |
-| `setLeverage(symbol, leverage)`               | Установить плечо (макс 5x)              |
+| `getKlines(symbol, interval, limit)`          | OHLC candles                            |
+| `getMarketInfo(symbol)`                       | Ticker, funding rate, OI, funding signal|
+| `getMarketAnalysis(symbol, tf, bars)`         | OHLC + EMA/RSI/ATR + trend bias        |
+| `getBalance(coin?)`                           | Balance (UNIFIED account)               |
+| `getPositions(symbol?)`                       | Open positions                          |
+| `submitOrder({symbol, side, type, qty, ...})` | Create order with SL/TP                 |
+| `closePosition(symbol)`                       | Close position                          |
+| `partialClosePosition(symbol, qty)`           | Partial close                           |
+| `modifyPosition(symbol, sl?, tp?)`            | Modify SL/TP                            |
+| `closeAllPositions()`                         | Close all USDT positions                |
+| `setLeverage(symbol, leverage)`               | Set leverage (max 5x)                   |
 
 ---
 
-## Дополнительные API
+## Additional APIs
 
-### CoinGecko (бесплатный)
+### CoinGecko (free)
 
 ```bash
-# Цены
+# Prices
 curl -s "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
 
 # Bitcoin Dominance
@@ -134,7 +134,7 @@ curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percent
 curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
 ```
 
-### Market Digest (макро + новости)
+### Market Digest (macro + news)
 
 ```bash
 npx tsx src/market/digest.ts --hours=24 --max-news=10
@@ -142,24 +142,24 @@ npx tsx src/market/digest.ts --hours=24 --max-news=10
 
 ---
 
-## Визуальные инструменты (Browser)
+## Visual Tools (Browser)
 
 - **TradingView**: https://www.tradingview.com/chart/
 - **CoinMarketCap**: https://coinmarketcap.com/
 - **DeFi Llama**: https://defillama.com/
 - **Coinglass**: https://www.coinglass.com/ — funding, OI, liquidations
 
-## Таймфреймы (ОБЯЗАТЕЛЬНОЕ ПРАВИЛО)
+## Timeframes (MANDATORY RULE)
 
 ```
-4h  → Определи направление (тренд, зоны поддержки/сопротивления)
-1h  → Определи ключевые уровни и зоны спроса/предложения
-15m → НАЙДИ ТОЧКУ ВХОДА (BOS, CHoCH, Order Block, FVG)
-5m  → УТОЧНИ ВХОД (подтверждение паттерном, минимальный SL)
+4h  → Determine direction (trend, support/resistance zones)
+1h  → Identify key levels and demand/supply zones
+15m → FIND ENTRY POINT (BOS, CHoCH, Order Block, FVG)
+5m  → FINE-TUNE ENTRY (pattern confirmation, minimal SL)
 ```
 
-## Плечо
+## Leverage
 
-- Дефолт: 3x
-- Максимум: 5x
-- **НИКОГДА** больше 5x — ликвидация = потеря всего
+- Default: 3x
+- Maximum: 5x
+- **NEVER** more than 5x — liquidation = total loss

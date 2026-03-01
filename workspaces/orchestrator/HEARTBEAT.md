@@ -1,24 +1,21 @@
-# HEARTBEAT.md — Orchestrator (каждые 30 минут)
+# HEARTBEAT.md — Orchestrator (every 15 minutes)
 
-## При каждом heartbeat:
+## On each heartbeat:
 
-1. **Task Board проверка** — найди зависшие задачи (in_progress > 2 часов):
+1. **Task Board check** — find stuck tasks (in_progress > 2 hours):
 
    ```bash
    bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status in_progress
    ```
 
-   Если задача зависла — уведоми пользователя и пингни исполнителя.
+   If task is stuck — notify user and ping the assignee.
 
-2. **Статус агентов** — проверь что Gateway и каналы работают:
+2. **Agent status** — check that Gateway and channels are working:
 
    ```bash
    openclaw status
    ```
 
-   Если Telegram OFF или Gateway unreachable — отправь алерт пользователю.
+   If Telegram OFF or Gateway unreachable — send alert to user.
 
-3. **Утренний брифинг** (только 09:00 UTC+3) — отправь пользователю:
-   - Статус всех открытых позиций (crypto + forex)
-   - Активные задачи на Task Board
-   - Важные новости рынка от market-analyst
+3. **If no stuck tasks and no user requests — DO NOTHING.** Save tokens.

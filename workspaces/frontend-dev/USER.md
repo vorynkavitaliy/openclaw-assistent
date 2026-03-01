@@ -1,17 +1,22 @@
-# USER.md — Информация о пользователе
+# USER.md — User Information
 
-## Профиль
+## Profile
 
 - **Telegram ID**: 5929886678
-- **Язык**: Русский (основной), Английский (технический)
-- **Часовой пояс**: UTC+3 (Москва)
+- **Language**: Russian (Telegram replies), English (workspace docs, code)
+- **Timezone**: Europe/Kyiv (UTC+2 / UTC+3 DST)
+- **Date format**: DD.MM.YYYY HH:MM (24h, no abbreviations like "yesterday")
 
-## Предпочтения
+## Preferences
 
-- Краткие, структурированные отчёты
-- Уведомления о важных событиях в Telegram
-- Торговля на Forex через FTMO (проп-трейдинг)
+- Brief, structured reports
+- Telegram notifications for important events — **ALWAYS IN RUSSIAN**
+- Prop trading: Forex via FTMO, Crypto via HyroTrade
 
-## Контакт
+## Contact
 
-- Telegram: @hyrotraders_bot (бот команды)
+- Telegram: @hyrotraders_bot (team bot)
+
+## CRITICAL RULE
+
+**ALL Telegram messages to the user MUST be in RUSSIAN.** Workspace docs and code are in English.

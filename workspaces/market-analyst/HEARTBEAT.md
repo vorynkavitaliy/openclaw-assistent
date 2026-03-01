@@ -1,34 +1,21 @@
-# HEARTBEAT.md — Market Analyst Автономный мониторинг
+# HEARTBEAT.md — Market Analyst Autonomous Monitoring
 
-## Расписание
+## Schedule
 
-| Задача           | Интервал      | Описание                                    |
-| ---------------- | ------------- | ------------------------------------------- |
-| Мониторинг рынка | Каждые 10 мин | Экономический календарь, новости, сентимент |
-| Алерт трейдерам  | По событию    | При важных изменениях → задача в Task Board |
+| Task              | Interval     | Description                                          |
+| ----------------- | ------------ | ---------------------------------------------------- |
+| Market monitoring | Every 30 min | Economic calendar, news, sentiment                   |
+| Trader alerts     | On event     | On important changes → comment to task in Task Board  |
 
-## Heartbeat промпт (каждые 10 мин)
+## Heartbeat prompt (every 30 min)
 
-При каждом heartbeat ты ДОЛЖЕН:
+On each heartbeat you MUST:
 
-1. **Проверить экономический календарь** — ближайшие 4 часа (ForexFactory, Investing.com)
-2. **Проверить ключевые новости** — Forex + Crypto (Reuters, CoinDesk, ForexLive)
+1. **Check economic calendar** — next 4 hours (ForexFactory, Investing.com)
+2. **Check key news** — Forex + Crypto (Reuters, CoinDesk, ForexLive)
 3. **Fear & Greed Index** — `curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'`
 4. **Bitcoin Dominance** — `curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'`
-5. **DXY тренд** — направление доллара (risk-on / risk-off)
-6. **При важных изменениях** → создать задачу в Task Board для трейдеров:
+5. **DXY trend** — dollar direction (risk-on / risk-off)
+6. **If important changes** → add comment to relevant task, notify via sessions_send
 
-```bash
-# Алерт для crypto-trader
-bash skills/taskboard/scripts/taskboard.sh --agent market-analyst create \
-  --title "⚠️ FOMC через 30 мин — не открывать позиции" \
-  --assignee crypto-trader --priority critical --labels "alert,macro"
-```
-
-```
-# Мгновенная доставка алертов
-sessions_send target=crypto-trader message="⚠️ FOMC через 30 мин! Не открывать позиции."
-sessions_send target=forex-trader message="⚠️ NFP через 30 мин! Закрыть позиции."
-```
-
-> ВСЕГДА делай ОБА шага: Task Board (трекинг) + sessions_send (мгновенная доставка).
+> ⚠️ DO NOT create tasks. Only Orchestrator creates tasks. Write alerts as comments.

@@ -1,30 +1,30 @@
 # TOOLS.md — QA Tester Environment
 
-## Инструменты
+## Tools
 
-### Тестирование
+### Testing
 
-- Playwright (E2E тесты)
-- Jest / Vitest (unit тесты)
-- pytest (Python тесты)
+- Playwright (E2E tests)
+- Jest / Vitest (unit tests)
+- pytest (Python tests)
 
 ### Browser
 
-- **browser** tool — визуальная проверка UI
-- Скриншоты: /tmp/openclaw/qa_screenshots/
+- **browser** tool — visual UI verification
+- Screenshots: /tmp/openclaw/qa_screenshots/
 
-### Отчёты
+### Reports
 
-- Bug-репорты через **taskboard**
-- Результаты тестов через **Task Board** (обновление задачи + комментарий)
+- Bug reports via **taskboard**
+- Test results via **Task Board** (task update + comment)
 
-### URLs для тестирования
+### URLs for Testing
 
 - OpenClaw Gateway: http://127.0.0.1:18789
-- `[настроить URL тестируемого приложения]`
+- `[configure target app URL]`
 
-## Коммуникация
+## Communication
 
-- Получает задачи от **tech-lead** и **orchestrator** через **sessions_send** + **Task Board**
-- Создаёт баг-репорты на **Task Board** + отправляет через **sessions_send**
-- Отчитывается через **sessions_send** + обновление **Task Board**
+- Receives tasks from **tech-lead** and **orchestrator** via **sessions_send** + **Task Board**
+- Creates bug reports on **Task Board** + sends via **sessions_send**
+- Reports via **sessions_send** + **Task Board** update

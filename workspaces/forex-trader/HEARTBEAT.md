@@ -1,54 +1,44 @@
-# HEARTBEAT.md — Forex Trader Автономный режим
+# HEARTBEAT.md — Forex Trader Autonomous Mode
 
-## Расписание
+## Schedule
 
-| Задача               | Интервал                  | Описание                                            |
-| -------------------- | ------------------------- | --------------------------------------------------- |
-| Мониторинг рынка     | Каждые 10 мин **(Пн-Пт)** | Анализ пар, управление позициями, открытие/закрытие |
-| Отчёт пользователю   | Каждые 2 часа **(Пн-Пт)** | Через orchestrator: баланс, позиции, P&L, drawdown  |
-| **Выходные (Сб-Вс)** | **НЕ РАБОТАЕТ**           | Форекс рынок закрыт — экономия токенов              |
+| Task                     | Interval                    | Description                                       |
+| ------------------------ | --------------------------- | ------------------------------------------------- |
+| Market monitoring        | Every 10 min **(Mon-Fri)**  | Pair analysis, position management, open/close     |
+| User report              | Every 2 hrs **(Mon-Fri)**   | Via orchestrator: balance, positions, P&L, drawdown |
+| **Weekends (Sat-Sun)**   | **NOT WORKING**             | Forex market closed — save tokens                  |
 
-> ⚡ **Реализация**: Heartbeat вынесен из конфига агента в OpenClaw cron-задачу
-> `forex-trader-heartbeat` с расписанием `*/10 * * * 1-5` (TZ: Europe/Moscow).
-> На выходных агент НЕ вызывается — ноль токенов.
+> ⚡ **Implementation**: Heartbeat moved from agent config to OpenClaw cron job
+> `forex-trader-heartbeat` with schedule `*/10 * * * 1-5` (TZ: Europe/Kyiv).
+> On weekends agent is NOT called — zero tokens.
 
-## Heartbeat промпт (каждые 10 мин, только будни)
+## Heartbeat prompt (every 10 min, weekdays only)
 
-При каждом heartbeat ты ДОЛЖЕН:
+On each heartbeat you MUST:
 
-1. **Проверить открытые позиции**: P&L, SL/TP, drawdown (FTMO лимиты: daily <4%, total <8%)
-2. **Если торговая сессия** (Лондон 10:00-18:00 МСК / НЙ 15:00-23:00 МСК):
-   - Проанализировать пары (EUR/USD, GBP/USD, USD/JPY): H4 тренд → M15 вход → сигналы Smart Money
-   - При найденном сигнале → открыть сделку автоматически (без ожидания пользователя)
-3. **Если вне сессии** — только мониторинг открытых позиций
-4. **Проверить экономический календарь** — ±30 мин от High Impact = не торговать
-5. **Залогировать действия** в Task Board
+1. **Check open positions**: P&L, SL/TP, drawdown (FTMO limits: daily <4%, total <8%)
+2. **If trading session** (London 09:00-17:00 Kyiv / NY 16:00-00:00 Kyiv):
+   - Analyze pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF): H4 trend → M15 entry → Smart Money signals
+   - If signal found → open trade automatically (without waiting for user)
+3. **If outside session** — only monitor open positions
+4. **Check economic calendar** — ±30 min from High Impact = don't trade
+5. **Log actions** as comments to active task in Task Board
 
-> ⚠️ Ты работаешь АВТОНОМНО. Не жди одобрения. Анализируй → решай → исполняй.
-> Правила FTMO: `skills/forex-trading/FTMO_RULES.md`
+> ⚠️ You work AUTONOMOUSLY. Don't wait for approval. Analyze → decide → execute.
+> FTMO rules: `skills/forex-trading/FTMO_RULES.md`
 
-## Управление
+## Management
 
 ```bash
-# Heartbeat — аккаунт, позиции, дродаун, FTMO-алерты
+# Heartbeat — account, positions, drawdown, FTMO alerts
 npx tsx src/trading/forex/monitor.ts --heartbeat
 
-# Мониторинг с анализом
+# Monitoring with analysis
 npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
-# Боевой режим (автоторговля)
+# Live mode (auto-trading)
 npx tsx src/trading/forex/monitor.ts --trade
 
-# Проверка рисков (FTMO max daily/total drawdown)
+# Risk check (FTMO max daily/total drawdown)
 npx tsx src/trading/forex/monitor.ts --risk-check
-```
-
-## Формат алерта
-
-```
-🚨 HEARTBEAT ALERT — Forex Trader
-⏰ Время: [HH:MM MSK]
-⚠️ Тип: [drawdown / no-SL / margin-low / position-risk / FTMO-limit]
-📊 Детали: [описание]
-🔧 Действие: [что предпринято]
 ```

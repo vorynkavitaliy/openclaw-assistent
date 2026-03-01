@@ -1,83 +1,61 @@
 # TOOLS.md — Orchestrator Environment
 
-## Инфраструктура
+## Routing Table
 
-- **Сервер**: srv1427432 (76.13.250.171), Linux 6.8.0
-- **Node.js**: 22.22.0, TypeScript ES2022/NodeNext strict
-- **OpenClaw**: v2026.2.26, Gateway порт 18789 (local loopback)
-- **Telegram**: @hyrotraders_bot
-- **Проект**: /root/Projects/openclaw-assistent
+| Request type             | Agent            | Notes                                   |
+| ------------------------ | ---------------- | --------------------------------------- |
+| Forex trading            | forex-trader     | EUR/USD, GBP/USD, etc.                  |
+| Crypto trading           | crypto-trader    | BTC, ETH, SOL, altcoins                 |
+| Market analysis          | market-analyst   | Macro, calendar, sentiment              |
+| Development              | tech-lead        | They distribute to devs                 |
+| Testing                  | qa-tester        | After development is done               |
+| General questions        | (self)           | Answer directly                         |
 
-## Коммуникация с агентами (гибридная модель)
-
-**Task Board** = трекинг/аудит. **sessions_send** = мгновенная доставка.
+## Task Board Commands
 
 ```bash
-# 1) Залогировать задачу
+# Create task
 bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create \
-  --title "Проверь текущие позиции" \
-  --assignee forex-trader --priority high
-```
+  --title "Task title" --description "What to do" \
+  --assignee agent-id --priority high
 
-```
-# 2) Мгновенно отправить агенту
-sessions_send target=forex-trader message="TASK-XXX: Проверь текущие позиции. Детали на Task Board."
-```
-
-```bash
-# Проверить результаты
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status done
-```
-
-## Task Board
-
-```bash
-# Создать задачу
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee developer --priority high
-
-# Обновить статус
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator update TASK-XXX --status in-progress
-
-# Список задач
+# List tasks
 bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --assignee forex-trader --status in_progress
 
-# Статистика
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator stats
+# Update task
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator update TASK-XXX --status done
+
+# Comment on task
+bash skills/taskboard/scripts/taskboard.sh --agent orchestrator comment TASK-XXX "Comment text"
 ```
 
-## Скрипты мониторинга
+## System Commands
 
 ```bash
-# Статус системы
+# Gateway status
 openclaw status
 
-# Глубокая проверка (каналы, сессии)
-openclaw status --deep
+# Agent list
+openclaw agents
 
-# Логи в реальном времени
-openclaw logs --follow
-
-# Перезапуск шлюза
-openclaw gateway restart
-
-# Крипто отчёт
-npx tsx src/trading/crypto/report.ts
-
-# Рыночный дайджест
-npx tsx src/market/digest.ts
+# Restart gateway (caution!)
+openclaw restart
 ```
 
-## Telegram Gateway API
+## Telegram Gateway
 
-Агент может отправлять сообщения пользователю через стандартные ответы. Все DM от пользователя 5929886678 маршрутизируются в orchestrator (первый в списке агентов, dmPolicy: pairing).
+- Bot: @hyrotraders_bot
+- Chat ID: 5929886678
+- **ALL messages to user MUST be in RUSSIAN**
+- Gateway: http://127.0.0.1:18789
 
-## Правила маршрутизации
+## Inter-Agent Messaging
 
-| Тема                    | Агент                                |
-| ----------------------- | ------------------------------------ |
-| Торговля крипто         | crypto-trader                        |
-| Торговля форекс         | forex-trader                         |
-| Анализ рынка            | market-analyst                       |
-| Разработка (новые фичи) | tech-lead → backend-dev/frontend-dev |
-| Тестирование            | qa-tester                            |
-| Баги в коде             | tech-lead                            |
+```
+# Send to agent
+sessions_send target=agent-id message="Message text"
+
+# Example: delegate to forex-trader
+sessions_send target=forex-trader message="New task TASK-XXX: analyze EUR/USD for BUY setup. Details on Task Board."
+```

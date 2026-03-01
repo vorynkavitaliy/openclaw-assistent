@@ -1,24 +1,24 @@
 # TOOLS.md — Tech Lead Environment
 
-## Инструменты
+## Tools
 
 ### Code Review
 
-- GitHub: `[настроить URL репозитория]`
-- GitLab: `[настроить если используется]`
+- GitHub: `[configure repo URL]`
+- GitLab: `[configure if used]`
 
 ### CI/CD
 
-- GitHub Actions / GitLab CI: `[настроить URL]`
+- GitHub Actions / GitLab CI: `[configure URL]`
 
-### Коммуникация
+### Communication
 
-- **sessions_send** — мгновенное делегирование задач (backend-dev, frontend-dev, qa-tester)
-- **Task Board** — трекинг и аудит всех задач команды
-- ВСЕГДА делай оба шага: Task Board + sessions_send
+- **sessions_send** — instant task delegation (backend-dev, frontend-dev, qa-tester)
+- **Task Board** — tracking and audit of all team tasks
+- ALWAYS do both steps: Task Board + sessions_send
 
-## Стек проекта
+## Project Stack
 
 - Runtime: Node.js >= 20
-- Платформа: OpenClaw (JSON5 config)
-- Языки: JavaScript/TypeScript, Python, Markdown
+- Platform: OpenClaw (JSON5 config)
+- Languages: JavaScript/TypeScript, Python, Markdown

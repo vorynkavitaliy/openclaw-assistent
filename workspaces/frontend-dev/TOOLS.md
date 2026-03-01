@@ -1,8 +1,8 @@
 # TOOLS.md — Frontend Dev Environment
 
-## Инструменты
+## Tools
 
-### Фреймворки
+### Frameworks
 
 - React / Next.js
 - Tailwind CSS
@@ -10,19 +10,19 @@
 
 ### Dev Server
 
-- `[настроить URL dev server: http://localhost:3000]`
+- `[configure dev server URL: http://localhost:3000]`
 
 ### Browser
 
-- **browser** tool — визуальная проверка UI
-- Chrome DevTools через CDP
+- **browser** tool — visual UI checking
+- Chrome DevTools via CDP
 
-### Тестирование
+### Testing
 
 - Playwright (E2E)
 - Jest / Vitest (unit)
 
-## Коммуникация
+## Communication
 
-- Получает задачи от **tech-lead** через **sessions_send** + **Task Board**
-- Отчитывается через **sessions_send** + обновление **Task Board**
+- Receives tasks from **tech-lead** via **sessions_send** + **Task Board**
+- Reports via **sessions_send** + **Task Board** update

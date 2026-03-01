@@ -1,17 +1,17 @@
 # TOOLS.md — Forex Trader Environment
 
-## Архитектура (cTrader Open API)
+## Architecture (cTrader Open API)
 
 ```
 cTrader Open API (Spotware)
     ↕
 ctrader-ts SDK (TypeScript)
     ↕
-TypeScript модули (src/trading/forex/)
-├── client.ts    — cTrader API клиент: подключение, данные, торговля
-├── monitor.ts   — мониторинг: heartbeat, позиции, risk-check, trade
-├── trade.ts     — CLI для ордеров: open, close, modify, status
-└── config.ts    — конфигурация из ~/.openclaw/openclaw.json
+TypeScript modules (src/trading/forex/)
+├── client.ts    — cTrader API client: connection, data, trading
+├── monitor.ts   — monitoring: heartbeat, positions, risk-check, trade
+├── trade.ts     — CLI for orders: open, close, modify, status
+└── config.ts    — config from ~/.openclaw/openclaw.json
     ↕
 OpenClaw Forex Trader Agent
     ↕
@@ -20,57 +20,57 @@ Orchestrator → Telegram
 
 ### cTrader Credentials
 
-- **Файл**: `~/.openclaw/openclaw.json` → секция `forex`
-- **Аутентификация**: `npx ctrader-ts auth` (один раз, OAuth2)
-- **Брокер**: FTMO (проп-трейдинг фирма)
+- **File**: `~/.openclaw/openclaw.json` → `forex` section
+- **Authentication**: `npx ctrader-ts auth` (one-time, OAuth2)
+- **Broker**: FTMO (prop trading firm)
 
 ---
 
-## TypeScript CLI — Мониторинг
+## TypeScript CLI — Monitoring
 
-### Heartbeat (основной)
+### Heartbeat (primary)
 
 ```bash
-# Полный heartbeat — аккаунт, позиции, дродаун, FTMO-алерты
+# Full heartbeat — account, positions, drawdown, FTMO alerts
 npx tsx src/trading/forex/monitor.ts --heartbeat
 
-# Только позиции
+# Positions only
 npx tsx src/trading/forex/monitor.ts --positions
 
-# Только аккаунт
+# Account only
 npx tsx src/trading/forex/monitor.ts --account
 
-# Проверка рисков (FTMO max daily/total drawdown)
+# Risk check (FTMO max daily/total drawdown)
 npx tsx src/trading/forex/monitor.ts --risk-check
 ```
 
-### Торговля (анализ + исполнение)
+### Trading (analysis + execution)
 
 ```bash
-# Анализ + торговля по всем парам (dry-run — без исполнения)
+# Analysis + trading all pairs (dry-run — no execution)
 npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
-# Анализ + торговля по одной паре (dry-run)
+# Analysis + trading single pair (dry-run)
 npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 
-# Боевой режим — анализ + автоматическое исполнение
+# Live mode — analysis + automatic execution
 npx tsx src/trading/forex/monitor.ts --trade
 
-# Боевой режим — одна пара
+# Live mode — single pair
 npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
 ```
 
-Monitor в режиме `--trade` автоматически:
+Monitor in `--trade` mode automatically:
 
-1. Управляет открытыми позициями (частичное закрытие +1R, trailing SL +1.5R, BE)
-2. Сканирует все пары на входные сигналы (4h тренд + M15 RSI)
-3. Исполняет сигналы (если не dry-run)
+1. Manages open positions (partial close +1R, trailing SL +1.5R, BE)
+2. Scans all pairs for entry signals (4h trend + M15 RSI)
+3. Executes signals (if not dry-run)
 
 ---
 
-## TypeScript CLI — Ордера (trade.ts)
+## TypeScript CLI — Orders (trade.ts)
 
-### Открытие позиции
+### Open Position
 
 ```bash
 npx tsx src/trading/forex/trade.ts --action open \
@@ -78,79 +78,79 @@ npx tsx src/trading/forex/trade.ts --action open \
   --sl-pips 50 --tp-pips 100
 ```
 
-Обязательные параметры: `--pair`, `--side` (BUY/SELL), `--sl-pips` (риск-менеджмент).
-Опциональные: `--lots` (по умолчанию 0.01), `--tp-pips`.
+Required: `--pair`, `--side` (BUY/SELL), `--sl-pips` (risk management).
+Optional: `--lots` (default 0.01), `--tp-pips`.
 
-### Закрытие позиции
+### Close Position
 
 ```bash
-# Полное закрытие
+# Full close
 npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
-# Частичное закрытие (50% при +1R)
+# Partial close (50% at +1R)
 npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
 ```
 
-### Модификация SL/TP
+### Modify SL/TP
 
 ```bash
 npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
   --sl-pips 30 --tp-pips 100
 ```
 
-### Закрытие всех позиций (экстренно)
+### Close All Positions (emergency)
 
 ```bash
 npx tsx src/trading/forex/trade.ts --action close-all
 ```
 
-### Статус аккаунта
+### Account Status
 
 ```bash
 npx tsx src/trading/forex/trade.ts --action status
 ```
 
-Все команды возвращают JSON.
+All commands return JSON.
 
 ---
 
-## Market Digest (макро + новости)
+## Market Digest (macro + news)
 
 ```bash
-# Полный дайджест (48 часов)
+# Full digest (48 hours)
 npx tsx src/market/digest.ts
 
-# Дайджест за 24 часа
+# Digest for 24 hours
 npx tsx src/market/digest.ts --hours=24 --max-news=10
 ```
 
-Парсит: ForexFactory Calendar XML + CoinDesk/Cointelegraph RSS.
+Parses: ForexFactory Calendar XML + CoinDesk/Cointelegraph RSS.
 
 ---
 
-## Экономический календарь
+## Economic Calendar
 
-- **Основной источник**: Market Analyst агент (через sessions_send + Task Board)
+- **Primary source**: Market Analyst agent (via sessions_send + Task Board)
 - ForexFactory: https://www.forexfactory.com/calendar
 - Investing.com: https://www.investing.com/economic-calendar/
 
-## Визуальные инструменты (Browser)
+## Visual Tools (Browser)
 
 - **TradingView**: https://www.tradingview.com/chart/
-- **MT5 WebTerminal**: https://mt5-3.ftmo.com/ (только для визуального анализа)
+- **MT5 WebTerminal**: https://mt5-3.ftmo.com/ (visual analysis only)
 
-## Торговые часы (UTC+3 Москва)
+## Trading Hours (Kyiv time, Europe/Kyiv)
 
-- Лондон: 10:00-18:00
-- Нью-Йорк: 15:00-23:00
-- Перекрытие: 15:00-18:00 (лучшее время для торговли)
-- НЕ торговать: 00:00-07:00 (Азия, кроме JPY пар)
+- London: 09:00-17:00
+- New York: 16:00-00:00
+- Overlap: 16:00-17:00 (best trading time)
+- DON'T trade: 01:00-08:00 (Asia, except JPY pairs)
 
-## Таймфреймы (ОБЯЗАТЕЛЬНОЕ ПРАВИЛО)
+## Timeframes (MANDATORY RULE)
 
 ```
-H4  → Определи направление (тренд, зоны поддержки/сопротивления)
-H1  → Определи ключевые уровни и зоны спроса/предложения
-M15 → НАЙДИ ТОЧКУ ВХОДА (BOS, CHoCH, Order Block, FVG)
-M5  → УТОЧНИ ВХОД (подтверждение паттерном, минимальный SL)
+H4  → Determine direction (trend, support/resistance zones)
+H1  → Identify key levels and demand/supply zones
+M15 → FIND ENTRY POINT (BOS, CHoCH, Order Block, FVG)
+M5  → FINE-TUNE ENTRY (pattern confirmation, minimal SL)
 ```

@@ -153,11 +153,20 @@ do_start() {
 EOF
 
   # 4. Telegram notification
+  local params
+  params=$(python3 -c "
+import json
+with open('${PROJECT_DIR}/scripts/data/trading_params.json') as f:
+    p = json.load(f)['forex']
+print(f\"\\u0426\\u0435\\u043b\\u044c: \\${p['daily_target']}/\\u0434\\u0435\\u043d\\u044c, \\u043c\\u0430\\u043a\\u0441 \\u043f\\u0440\\u043e\\u0441\\u0430\\u0434\\u043a\\u0430 \\${p['max_daily_loss']}, SL \\u2264\\${p['max_sl_per_trade']}\")
+" 2>/dev/null || echo "Цель: \$100/день, макс просадка \$50")
+
   send_telegram "🚀 <b>ТОРГОВЛЯ ЗАПУЩЕНА</b>
 ⏰ $(date '+%H:%M %d.%m')
 📊 Crypto: heartbeat 1h (24/7)
 📈 Forex: heartbeat 1h (пн-пт)
-💰 Цель: \$100/день, макс просадка \$50
+💰 ${params}
+📌 Стратегия: лимитные ордера + управление
 🛑 Для остановки: СТОП"
 
   echo -e "${GREEN}✅ Trading started. First heartbeat in ~1h.${NC}"

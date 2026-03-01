@@ -54,19 +54,45 @@ bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
 
 > **COST RULE**: If user does NOT explicitly ask to start trading/monitoring — DO NOT enable heartbeat. Every heartbeat cycle = ~3 API calls × 2 traders.
 
-### Trading Rules (set by user)
+### Trading Rules (DYNAMIC — changeable by user via Telegram)
 
-| Rule              | Value   |
-| ----------------- | ------- |
-| Daily target      | $100    |
-| Max daily loss    | $50     |
-| Max stops/day     | 2       |
-| Max SL per trade  | $300    |
-| Budget per trader | $10,000 |
-| Min trades/day    | 2       |
-| Heartbeat         | 1h      |
-| Forex weekends    | OFF     |
-| Market analyst    | 1x/day  |
+Params stored in `scripts/data/trading_params.json`. User can change any param at runtime.
+
+**When user sends a param change** (e.g. "Цель: $200/день", "SL: $500", "Бюджет: $20K"):
+
+```bash
+# Update param for specific trader or both
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set forex daily_target 200
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set crypto daily_target 200
+
+# Show current params
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh show
+```
+
+Param mapping for user messages:
+| User says | Command |
+| ------------------------------ | -------------------------------------------- |
+| Цель: $200/день | `set forex/crypto daily_target 200` |
+| Макс просадка $100 | `set forex/crypto max_daily_loss 100` |
+| SL макс $500 | `set forex/crypto max_sl_per_trade 500` |
+| Бюджет $20K / $20000 | `set forex/crypto budget 20000` |
+| Мин 3 сделки/день | `set forex/crypto min_trades_day 3` |
+| Плечо 10x | `set crypto max_leverage 10x` |
+| 3 стопа макс | `set forex/crypto max_stops_day 3` |
+
+Default values (loaded on first start):
+
+| Rule             | Default |
+| ---------------- | ------- |
+| daily_target     | $100    |
+| max_daily_loss   | $50     |
+| max_stops_day    | 2       |
+| max_sl_per_trade | $300    |
+| budget           | $10,000 |
+| min_trades_day   | 2       |
+| Heartbeat        | 1h      |
+| Forex weekends   | OFF     |
+| Market analyst   | 1x/day  |
 
 ## Delegation Rules
 

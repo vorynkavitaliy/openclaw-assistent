@@ -79,6 +79,21 @@ bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh cleanup
 ```
 
+## Trading Params Management
+
+User can change trading params at any time via Telegram. Parse intent and update:
+
+```bash
+# Show current params
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh show
+
+# Update specific param
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set forex daily_target 200
+bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set crypto max_sl_per_trade 500
+```
+
+Traders read params from check script output on every heartbeat.
+
 ### Workflow:
 
 1. User asks to start trading → you run `trading_control.sh start` (injects heartbeat configs + enables)

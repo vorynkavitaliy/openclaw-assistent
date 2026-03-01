@@ -8,7 +8,20 @@ set -euo pipefail
 
 PROJECT_DIR="/root/Projects/openclaw-assistent"
 
+PARAMS_FILE="${PROJECT_DIR}/scripts/data/trading_params.json"
+
 echo "=== CRYPTO CHECK $(date '+%Y-%m-%d %H:%M UTC') ==="
+
+# ─── Trading Params (dynamic, set by user) ───────────────────
+echo "=== TRADING PARAMS ==="
+python3 -c "
+import json
+with open('$PARAMS_FILE') as f:
+    p = json.load(f)['crypto']
+for k,v in p.items():
+    print(f'  {k}: {v}')
+" 2>/dev/null || echo "  (params file missing, using defaults)"
+echo ""
 
 echo "STATUS: MARKET_OPEN"
 echo "Time UTC: $(date -u '+%H:%M')"

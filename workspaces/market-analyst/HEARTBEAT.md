@@ -1,21 +1,30 @@
-# HEARTBEAT.md — Market Analyst Autonomous Monitoring
+# HEARTBEAT.md — Market Analyst (NO HEARTBEAT)
 
-## Schedule
+## Mode: On-Demand (no periodic activation)
 
-| Task              | Interval     | Description                                          |
-| ----------------- | ------------ | ---------------------------------------------------- |
-| Market monitoring | Every 30 min | Economic calendar, news, sentiment                   |
-| Trader alerts     | On event     | On important changes → comment to task in Task Board  |
+Market Analyst has **NO heartbeat**. It activates ONLY when Orchestrator sends a direct message via `sessions_send`.
 
-## Heartbeat prompt (every 30 min)
+## When activated:
 
-On each heartbeat you MUST:
+1. Read task from Task Board (Orchestrator creates it before messaging you)
+2. Change task status to `in_progress`
+3. Execute analysis per task requirements
+4. Write results as comment to task
+5. Change task status to `done`
+6. Notify orchestrator: `sessions_send target=orchestrator message="TASK-XXX done. Report on Task Board."`
 
-1. **Check economic calendar** — next 4 hours (ForexFactory, Investing.com)
-2. **Check key news** — Forex + Crypto (Reuters, CoinDesk, ForexLive)
-3. **Fear & Greed Index** — `curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'`
-4. **Bitcoin Dominance** — `curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'`
-5. **DXY trend** — dollar direction (risk-on / risk-off)
-6. **If important changes** → add comment to relevant task, notify via sessions_send
+## Analysis Tools:
 
-> ⚠️ DO NOT create tasks. Only Orchestrator creates tasks. Write alerts as comments.
+```bash
+# Market digest
+cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10
+
+# Fear & Greed Index
+curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
+
+# Bitcoin Dominance
+curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'
+```
+
+> ⚠️ DO NOT create tasks. Only Orchestrator creates tasks.
+> ✅ YOU change your own task statuses (todo → in_progress → done)

@@ -25,13 +25,19 @@ src/
 ## Агенты
 
 ```
-User (Telegram) → orchestrator → developer | qa-tester | analyst
+User (Telegram) → orchestrator (event-driven, no heartbeat)
+                    ├── forex-trader (heartbeat 10m, autonomous trading)
+                    ├── crypto-trader (heartbeat 10m, autonomous trading)
+                    ├── tech-lead (on-demand via sessions_send)
+                    │     ├── backend-dev (on-demand)
+                    │     └── frontend-dev (on-demand)
+                    ├── qa-tester (on-demand via sessions_send)
+                    └── market-analyst (on-demand via sessions_send)
 ```
 
-- **orchestrator** — маршрутизация задач, Task Board, Telegram
-- **developer** — TypeScript/Node.js разработка всех модулей src/
-- **qa-tester** — Vitest тесты, ESLint, TypeScript build
-- **analyst** — планирование задач, анализ рынка (Bybit/cTrader данные)
+- **orchestrator** — event-driven (NO heartbeat), маршрутизация задач, Telegram. Создаёт задачи, но НЕ меняет их статусы.
+- **forex-trader / crypto-trader** — автономная торговля (heartbeat 10m), адаптивный режим (0-1 позиций = полный анализ, 2+ = лёгкий мониторинг), обязательный Telegram отчёт после каждого цикла
+- **tech-lead / backend-dev / frontend-dev / qa-tester / market-analyst** — on-demand (без heartbeat), активируются только через sessions_send
 
 ## Ключевые npm скрипты
 

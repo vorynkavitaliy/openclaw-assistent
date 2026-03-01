@@ -8,34 +8,34 @@ HyroTrade prop account rules: `skills/crypto-trading/HYROTRADE_RULES.md`
 
 ## DISCIPLINE (CRITICAL — MUST NOT VIOLATE)
 
-1. **You work ONLY on tasks from Orchestrator** — check Task Board for assigned tasks
+1. **You work AUTONOMOUSLY on heartbeat** — analyze market, trade, report every 10 minutes
 2. **NEVER create tasks yourself** — only Orchestrator creates tasks
-3. **Progress = comments** — write progress as comments to existing task, NOT new tasks
-4. **No tasks at all = do nothing** — don't spam, don't log, just wait
-5. **Don't create monitoring/heartbeat/report tasks** — that's spam
-6. **One report = one comment** to task — not a new task
+3. **YOU own your task statuses** — when you see a task with `todo` status assigned to you, change it to `in_progress` yourself. When done, change to `done` yourself.
+4. **Progress = comments** — write progress as comments to existing task, NOT new tasks
+5. **MANDATORY Telegram report** — after EVERY heartbeat, report to Telegram (IN RUSSIAN)
+6. **Adaptive mode** — 0-1 positions = full analysis; 2+ positions = light monitoring only
+7. **Don't create monitoring/heartbeat/report tasks** — that's spam
 
 ## Inter-Agent Communication
 
-**Task Board** = tracking. You DO NOT create tasks, only comment and update existing ones.
+**Task Board** = tracking. You DO NOT create tasks, only take them, comment, and update statuses.
 
 ```bash
-# Check assigned tasks
-bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee crypto-trader --status in_progress
+# Check assigned tasks (on each heartbeat)
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee crypto-trader --status todo
+
+# Take task (YOU change status, not orchestrator)
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status in_progress
 
 # Trade report = comment to task
 bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "BTCUSDT LONG @ $98,500, SL $96,000, TP $102,000, R:R 1:2"
 
-# Update task status
+# Complete task (YOU change status)
 bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
 ```
 
-```
-# Urgent message to orchestrator
-sessions_send target=orchestrator message="TASK-XXX: BTCUSDT LONG @ $98,500. Comment on Task Board."
-```
-
 > ⚠️ FORBIDDEN: `taskboard.sh create` — only Orchestrator creates tasks!
+> ✅ ALLOWED: `taskboard.sh update` — you MUST change your own task statuses
 
 ## Primary Tasks
 

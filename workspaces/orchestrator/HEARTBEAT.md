@@ -1,21 +1,32 @@
-# HEARTBEAT.md — Orchestrator (every 15 minutes)
+# HEARTBEAT.md — Orchestrator (NO HEARTBEAT)
 
-## On each heartbeat:
+## Mode: Event-Driven (no periodic activation)
 
-1. **Task Board check** — find stuck tasks (in_progress > 2 hours):
+The Orchestrator has **NO heartbeat**. It activates ONLY when:
 
-   ```bash
-   bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status in_progress
-   ```
+1. **User sends a message** via Telegram
+2. **Agent contacts orchestrator** via `sessions_send`
 
-   If task is stuck — notify user and ping the assignee.
+This saves tokens — orchestrator does NOT run when idle.
 
-2. **Agent status** — check that Gateway and channels are working:
+## When activated by user:
 
-   ```bash
-   openclaw status
-   ```
+1. Parse the request
+2. If trading → create task on Task Board for forex-trader/crypto-trader (they pick up on heartbeat)
+3. If urgent → create task + send `sessions_send` to agent directly
+4. If development → create task + send `sessions_send` to tech-lead
+5. If analysis → create task + send `sessions_send` to market-analyst
+6. Report result to user in Telegram (IN RUSSIAN)
 
-   If Telegram OFF or Gateway unreachable — send alert to user.
+## When activated by agent:
 
-3. **If no stuck tasks and no user requests — DO NOTHING.** Save tokens.
+1. Read agent's message
+2. If agent reports completion → check Task Board → report to user
+3. If agent asks for help → process and respond
+4. If agent reports error → notify user
+
+## Task Status Rules:
+
+- You create tasks with status `todo`
+- You NEVER change task statuses — only the assignee agent does that
+- You only READ statuses and COMMENT on tasks

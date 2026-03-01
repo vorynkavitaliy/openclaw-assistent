@@ -5,7 +5,7 @@
 1. **Task Board check** — find stuck tasks (in_progress > 2 hours):
 
    ```bash
-   bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status in_progress
+   bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh --agent orchestrator list --status in_progress
    ```
 
    If task is stuck — notify user and ping the assignee.

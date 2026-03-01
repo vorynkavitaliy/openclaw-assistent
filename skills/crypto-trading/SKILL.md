@@ -64,16 +64,16 @@ All trading operations are executed via TypeScript CLI:
 
 ```bash
 # Monitoring (analysis + trading, dry-run)
-npx tsx src/trading/crypto/monitor.ts --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --dry-run
 
 # Live mode
-npx tsx src/trading/crypto/monitor.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts
 
 # Kill Switch (emergency stop)
-npx tsx src/trading/crypto/killswitch.ts --close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Report
-npx tsx src/trading/crypto/report.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
 ```
 
 ### Credentials

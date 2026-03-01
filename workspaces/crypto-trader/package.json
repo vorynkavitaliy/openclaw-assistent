@@ -1,0 +1,21 @@
+{
+  "name": "crypto-trader",
+  "version": "1.0.0",
+  "description": "Cryptocurrency trading agent for Bybit API",
+  "type": "module",
+  "scripts": {
+    "monitor": "npx tsx src/trading/crypto/monitor.ts",
+    "report": "npx tsx src/trading/crypto/report.ts",
+    "killswitch": "npx tsx src/trading/crypto/killswitch.ts"
+  },
+  "dependencies": {
+    "bybit-api": "^3.10.25",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.2"
+  }
+}

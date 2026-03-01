@@ -1,3 +1,65 @@
 {
-  "tasks": []
+  "tasks": [
+    {
+      "id": "TASK-111",
+      "title": "Ежедневная автоматическая торговля на Forex",
+      "description": "Цель: заработать 00 в день. Максимальная дневная просадка: 0 или 2 стоп-лосса. Максимальный стоп-лосс на сделку: 00 (бюджет 0,000). Минимум 2 сделки в день. Торговать смело, но не рискованно, без длительного поиска сетапов. Отчет каждые 2 часа. Один раз в день можно запросить анализ у market-analyst.",
+      "type": "task",
+      "status": "in_progress",
+      "assignee": "forex-trader",
+      "reporter": "orchestrator",
+      "priority": "high",
+      "labels": [],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-03-01T09:50:48Z",
+          "agent": "orchestrator",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-03-01T09:50:57Z",
+          "agent": "orchestrator",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ],
+      "created_at": "2026-03-01T09:50:48Z",
+      "updated_at": "2026-03-01T09:50:57Z"
+    },
+    {
+      "id": "TASK-112",
+      "title": "Ежедневная автоматическая торговля криптовалютой",
+      "description": "Цель: заработать 00 в день. Максимальная дневная просадка: 0 или 2 стоп-лосса. Максимальный стоп-лосс на сделку: 00 (бюджет 0,000). Минимум 2 сделки в день. Торговать смело, но не рискованно, без длительного поиска сетапов. Отчет каждые 2 часа. Один раз в день можно запросить анализ у market-analyst.",
+      "type": "task",
+      "status": "in_progress",
+      "assignee": "crypto-trader",
+      "reporter": "orchestrator",
+      "priority": "high",
+      "labels": [],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-03-01T09:50:53Z",
+          "agent": "orchestrator",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-03-01T09:50:59Z",
+          "agent": "orchestrator",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ],
+      "created_at": "2026-03-01T09:50:53Z",
+      "updated_at": "2026-03-01T09:50:59Z"
+    }
+  ],
+  "nextId": 1
 }

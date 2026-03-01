@@ -24,25 +24,25 @@ On each heartbeat you MUST:
 
 ```bash
 # Auto-trading status
-npx tsx src/trading/crypto/killswitch.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts
 
 # Emergency stop (kill-switch)
-npx tsx src/trading/crypto/killswitch.ts --on --reason="reason"
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="reason"
 
 # Kill + close all positions
-npx tsx src/trading/crypto/killswitch.ts --close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Resume trading
-npx tsx src/trading/crypto/killswitch.ts --off
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --off
 
 # Manual monitoring launch
-npx tsx src/trading/crypto/monitor.ts
-npx tsx src/trading/crypto/monitor.ts --dry-run    # no trades
-npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT  # single pair
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --dry-run    # no trades
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT  # single pair
 
 # Manual report
-npx tsx src/trading/crypto/report.ts
-npx tsx src/trading/crypto/report.ts --format=json
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts --format=json
 ```
 
 ## Guard Rails

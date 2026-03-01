@@ -31,14 +31,14 @@ On each heartbeat you MUST:
 
 ```bash
 # Heartbeat — account, positions, drawdown, FTMO alerts
-npx tsx src/trading/forex/monitor.ts --heartbeat
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 
 # Monitoring with analysis
-npx tsx src/trading/forex/monitor.ts --trade --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
 # Live mode (auto-trading)
-npx tsx src/trading/forex/monitor.ts --trade
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
 
 # Risk check (FTMO max daily/total drawdown)
-npx tsx src/trading/forex/monitor.ts --risk-check
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
 ```

@@ -22,13 +22,13 @@ FTMO prop account rules: `skills/forex-trading/FTMO_RULES.md`
 
 ```bash
 # Check assigned tasks
-bash skills/taskboard/scripts/taskboard.sh list --assignee forex-trader --status in_progress
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee forex-trader --status in_progress
 
 # Trade report = comment to task
-bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "EURUSD BUY @ 1.0850, SL 1.0800, TP 1.0950, R:R 1:2"
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "EURUSD BUY @ 1.0850, SL 1.0800, TP 1.0950, R:R 1:2"
 
 # Update task status
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
 ```
 
 > ⚠️ FORBIDDEN: `taskboard.sh create` — only Orchestrator creates tasks!
@@ -52,7 +52,7 @@ Check macro background yourself (DO NOT create task for market-analyst — Orche
 
 ```bash
 # Market digest
-exec → npx tsx src/market/digest.ts --hours=24 --max-news=5
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=5
 ```
 
 If "red news" within 30 min → STOP, don't trade
@@ -62,7 +62,7 @@ If "red news" within 30 min → STOP, don't trade
 Automatic monitoring runs with a single command:
 
 ```
-exec → npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 ← Full analysis: H4 trend (EMA200, structure) + M15 entry (RSI, BOS, FVG)
 ← JSON report: bias, signals, positions, account
 ```
@@ -71,16 +71,16 @@ For separate data views:
 
 ```
 # Heartbeat — account, positions, drawdown, alerts
-exec → npx tsx src/trading/forex/monitor.ts --heartbeat
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 
 # Positions only
-exec → npx tsx src/trading/forex/monitor.ts --positions
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --positions
 
 # Account only
-exec → npx tsx src/trading/forex/monitor.ts --account
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --account
 
 # Risk check (FTMO)
-exec → npx tsx src/trading/forex/monitor.ts --risk-check
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
 ```
 
 > ⚠️ RULE: ALWAYS look for entry on M5 and M15!
@@ -119,7 +119,7 @@ BEFORE opening a trade, MANDATORY:
 4. Ensure no important news (Market Analyst data)
 
 ```
-exec → npx tsx src/trading/forex/trade.ts --action open \
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 ← JSON: positionId, executionPrice, status
@@ -129,19 +129,19 @@ exec → npx tsx src/trading/forex/trade.ts --action open \
 
 ```
 # Heartbeat — account, positions, drawdown, FTMO alerts
-exec → npx tsx src/trading/forex/monitor.ts --heartbeat
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 ← JSON: account, positions, drawdown, riskAlerts
 
 # Positions only
-exec → npx tsx src/trading/forex/monitor.ts --positions
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --positions
 ← JSON: list of open positions with P&L
 
 # Risk check (FTMO max daily/total drawdown)
-exec → npx tsx src/trading/forex/monitor.ts --risk-check
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
 ← JSON: drawdown %, alerts, status
 
 # Account status
-exec → npx tsx src/trading/forex/trade.ts --action status
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
 ← JSON: balance, equity, positions
 ```
 
@@ -149,17 +149,17 @@ exec → npx tsx src/trading/forex/trade.ts --action status
 
 ```
 # Close position
-exec → npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
 # Modify SL/TP (in pips)
-exec → npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
   --sl-pips 30 --tp-pips 100
 
 # Partial close (50% at +1R)
-exec → npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
 
 # Close all positions (emergency)
-exec → npx tsx src/trading/forex/trade.ts --action close-all
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
 ```
 
 ---
@@ -168,7 +168,7 @@ exec → npx tsx src/trading/forex/trade.ts --action close-all
 
 ```
 # Full digest (macro events + forex/crypto news)
-exec → npx tsx src/market/digest.ts --hours=24 --max-news=10
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10
 ← JSON: events (ForexFactory calendar), news (RSS feeds)
 ```
 
@@ -290,7 +290,7 @@ Lot = (Balance * 0.02) / (SL_pips * Pip_value)
 Before each trade, check macro background yourself:
 
 ```bash
-exec → npx tsx src/market/digest.ts --hours=24 --max-news=5
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=5
 ```
 
 Don't trade 30 min before/after:

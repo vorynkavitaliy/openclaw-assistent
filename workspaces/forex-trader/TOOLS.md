@@ -32,32 +32,32 @@ Orchestrator → Telegram
 
 ```bash
 # Full heartbeat — account, positions, drawdown, FTMO alerts
-npx tsx src/trading/forex/monitor.ts --heartbeat
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 
 # Positions only
-npx tsx src/trading/forex/monitor.ts --positions
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --positions
 
 # Account only
-npx tsx src/trading/forex/monitor.ts --account
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --account
 
 # Risk check (FTMO max daily/total drawdown)
-npx tsx src/trading/forex/monitor.ts --risk-check
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
 ```
 
 ### Trading (analysis + execution)
 
 ```bash
 # Analysis + trading all pairs (dry-run — no execution)
-npx tsx src/trading/forex/monitor.ts --trade --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
 # Analysis + trading single pair (dry-run)
-npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 
 # Live mode — analysis + automatic execution
-npx tsx src/trading/forex/monitor.ts --trade
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
 
 # Live mode — single pair
-npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
 ```
 
 Monitor in `--trade` mode automatically:
@@ -73,7 +73,7 @@ Monitor in `--trade` mode automatically:
 ### Open Position
 
 ```bash
-npx tsx src/trading/forex/trade.ts --action open \
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 ```
@@ -85,29 +85,29 @@ Optional: `--lots` (default 0.01), `--tp-pips`.
 
 ```bash
 # Full close
-npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
 # Partial close (50% at +1R)
-npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
 ```
 
 ### Modify SL/TP
 
 ```bash
-npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
   --sl-pips 30 --tp-pips 100
 ```
 
 ### Close All Positions (emergency)
 
 ```bash
-npx tsx src/trading/forex/trade.ts --action close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
 ```
 
 ### Account Status
 
 ```bash
-npx tsx src/trading/forex/trade.ts --action status
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
 ```
 
 All commands return JSON.
@@ -118,10 +118,10 @@ All commands return JSON.
 
 ```bash
 # Full digest (48 hours)
-npx tsx src/market/digest.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts
 
 # Digest for 24 hours
-npx tsx src/market/digest.ts --hours=24 --max-news=10
+cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10
 ```
 
 Parses: ForexFactory Calendar XML + CoinDesk/Cointelegraph RSS.

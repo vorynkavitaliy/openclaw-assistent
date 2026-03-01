@@ -35,50 +35,50 @@ src/trading/forex/
 
 ```bash
 # Heartbeat — account, positions, drawdown, FTMO alerts
-npx tsx src/trading/forex/monitor.ts --heartbeat
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 
 # Positions only
-npx tsx src/trading/forex/monitor.ts --positions
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --positions
 
 # Account only
-npx tsx src/trading/forex/monitor.ts --account
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --account
 
 # Risk check (FTMO drawdown)
-npx tsx src/trading/forex/monitor.ts --risk-check
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
 
 # Analysis + trading (dry-run)
-npx tsx src/trading/forex/monitor.ts --trade --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
 # Analysis + trading (live mode)
-npx tsx src/trading/forex/monitor.ts --trade
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
 
 # Single pair
-npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 ```
 
 ### Trading (trade.ts)
 
 ```bash
 # Open position
-npx tsx src/trading/forex/trade.ts --action open \
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 
 # Close position
-npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
 # Partial close
-npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
 
 # Modify SL/TP
-npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
   --sl-pips 30 --tp-pips 100
 
 # Close all
-npx tsx src/trading/forex/trade.ts --action close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
 
 # Account status
-npx tsx src/trading/forex/trade.ts --action status
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
 ```
 
 All commands return JSON.

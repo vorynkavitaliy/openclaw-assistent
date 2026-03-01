@@ -21,13 +21,13 @@ HyroTrade prop account rules: `skills/crypto-trading/HYROTRADE_RULES.md`
 
 ```bash
 # Check assigned tasks
-bash skills/taskboard/scripts/taskboard.sh list --assignee crypto-trader --status in_progress
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee crypto-trader --status in_progress
 
 # Trade report = comment to task
-bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "BTCUSDT LONG @ $98,500, SL $96,000, TP $102,000, R:R 1:2"
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "BTCUSDT LONG @ $98,500, SL $96,000, TP $102,000, R:R 1:2"
 
 # Update task status
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
 ```
 
 ```
@@ -63,7 +63,7 @@ curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
 curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'
 
 # Market digest
-exec → npx tsx src/market/digest.ts --hours=24
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24
 ```
 
 If "red news" (FOMC, CPI, large unlocks) within 30 min → STOP, don't trade
@@ -73,7 +73,7 @@ If "red news" (FOMC, CPI, large unlocks) within 30 min → STOP, don't trade
 Automatic monitoring runs with a single command:
 
 ```
-exec → npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
 ← Full analysis: 4h trend (EMA200, structure) + 15m entry (BOS, FVG, OB)
 ← JSON report: bias, signals, positions, balance
 ```
@@ -81,7 +81,7 @@ exec → npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
 For all pairs (BTC, ETH, SOL, etc.):
 
 ```
-exec → npx tsx src/trading/crypto/monitor.ts --dry-run
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --dry-run
 ← Analysis of all pairs from config, no order execution
 ```
 
@@ -96,7 +96,7 @@ Market metrics are built into monitoring (funding rate, OI, trend).
 Additional data available via Market Digest:
 
 ```
-exec → npx tsx src/market/digest.ts --hours=24
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24
 ← JSON: macro events + crypto news for 24 hours
 
 # Fear & Greed Index
@@ -138,7 +138,7 @@ BEFORE opening a trade, MANDATORY:
 
 ```
 # Automatic execution (monitor calculates and opens automatically)
-exec → npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
 ← If signal found → order created automatically
 ← JSON report: orderId, status, entry, SL, TP, qty
 ```
@@ -147,19 +147,19 @@ exec → npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
 
 ```
 # Full monitoring (positions + metrics + management)
-exec → npx tsx src/trading/crypto/monitor.ts --dry-run
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --dry-run
 ← JSON: positions, balance, alerts, market analysis
 
 # Kill Switch — check status
-exec → npx tsx src/trading/crypto/killswitch.ts
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts
 ← Status: kill-switch, stop-day, mode, balance, positions
 
 # Hourly report (Telegram + JSON)
-exec → npx tsx src/trading/crypto/report.ts
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
 ← Report: balance, positions, daily stats, market data
 
 # Report in JSON format
-exec → npx tsx src/trading/crypto/report.ts --format=json
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts --format=json
 ```
 
 ### Step 7: Close/Modify Position
@@ -174,13 +174,13 @@ Emergency actions via Kill Switch:
 
 ```
 # Enable Kill Switch (stop trading)
-exec → npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
 
 # Close ALL positions immediately
-exec → npx tsx src/trading/crypto/killswitch.ts --close-all
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Disable Kill Switch (resume trading)
-exec → npx tsx src/trading/crypto/killswitch.ts --off
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --off
 ```
 
 ---
@@ -285,7 +285,7 @@ Before each trade, check macro background yourself:
 ```bash
 curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
 curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'
-exec → npx tsx src/market/digest.ts --hours=24
+exec → cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24
 ```
 
 Don't trade 30 min before/after:

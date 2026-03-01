@@ -54,21 +54,21 @@ Primary trading method — via cTrader Open API. All orders are executed program
 
 ```bash
 # Open position
-npx tsx src/trading/forex/trade.ts --action open \
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 
 # Close position
-npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
 # Account status
-npx tsx src/trading/forex/trade.ts --action status
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
 
 # Monitoring (heartbeat)
-npx tsx src/trading/forex/monitor.ts --heartbeat
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
 
 # Analysis + trading (dry-run)
-npx tsx src/trading/forex/monitor.ts --trade --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
 ```
 
 See also: `skills/ctrader-typescript/SKILL.md`

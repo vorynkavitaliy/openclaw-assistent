@@ -46,16 +46,16 @@ Orchestrator → Telegram
 
 ```bash
 # Full monitoring of all pairs (dry-run — no execution)
-npx tsx src/trading/crypto/monitor.ts --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --dry-run
 
 # Monitor single pair (dry-run)
-npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT --dry-run
 
 # Live mode — analysis + automatic execution
-npx tsx src/trading/crypto/monitor.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts
 
 # Live mode — single pair
-npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
 ```
 
 Monitor automatically:
@@ -70,26 +70,26 @@ Monitor automatically:
 
 ```bash
 # Status (kill-switch, stop-day, mode, balance, positions)
-npx tsx src/trading/crypto/killswitch.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts
 
 # Enable kill-switch (stop trading)
-npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
 
 # Close ALL positions + enable kill-switch
-npx tsx src/trading/crypto/killswitch.ts --close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Disable kill-switch (resume trading)
-npx tsx src/trading/crypto/killswitch.ts --off
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --off
 ```
 
 ### Report (Telegram + JSON)
 
 ```bash
 # Hourly report (sent to Telegram via Gateway)
-npx tsx src/trading/crypto/report.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
 
 # Report in JSON format (stdout)
-npx tsx src/trading/crypto/report.ts --format=json
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts --format=json
 ```
 
 Contains: balance, positions, daily stats, market data for BTC/ETH/SOL.
@@ -137,7 +137,7 @@ curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0]'
 ### Market Digest (macro + news)
 
 ```bash
-npx tsx src/market/digest.ts --hours=24 --max-news=10
+cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10
 ```
 
 ---

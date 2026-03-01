@@ -34,11 +34,11 @@ Macro/micro economic analysis of financial markets to support trading decisions.
 
 ```bash
 # Check assigned tasks
-bash skills/taskboard/scripts/taskboard.sh list --assignee market-analyst --status in_progress
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee market-analyst --status in_progress
 
 # Report = comment to task
-bash skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Report: ..."
-bash skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Report: ..."
+bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status done
 ```
 
 ```

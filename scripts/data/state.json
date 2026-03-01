@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "lastUpdate": "2026-02-27T12:30:24.678Z",
-  "today": "2026-02-27",
+  "lastUpdate": null,
+  "today": null,
   "daily": {
-    "date": "2026-02-27",
+    "date": null,
     "trades": 0,
     "wins": 0,
     "losses": 0,
@@ -17,12 +17,7 @@
   },
   "positions": [],
   "pendingSignals": [],
-  "lastMonitor": "2026-02-27T12:30:24.678Z",
-  "lastReport": "2026-02-27T08:29:39.277Z",
-  "balance": {
-    "total": 50038.79949703,
-    "available": 50038.79949703,
-    "unrealizedPnl": 0,
-    "lastUpdate": "2026-02-27T12:30:02.579Z"
-  }
+  "lastMonitor": null,
+  "lastReport": null,
+  "balance": null
 }

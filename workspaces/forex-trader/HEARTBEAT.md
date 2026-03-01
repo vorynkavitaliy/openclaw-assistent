@@ -1,104 +1,107 @@
-# HEARTBEAT.md — Forex Trader On-Demand Mode
+# HEARTBEAT.md — Forex Trader
 
 ## Activation
 
-Heartbeat is **DISABLED by default**. You only run when:
-1. **Orchestrator enables heartbeat** → you cycle every 30m autonomously
-2. **Orchestrator sends you a direct message** → you execute once and stop
+Heartbeat is **DISABLED by default** (no config in openclaw.json = $0 cost).
+When orchestrator runs `trading_control.sh start`, heartbeat config is injected: **every 1h**.
+When user says СТОП, config is removed → back to $0.
 
-When heartbeat is active:
+## Guard Rails
 
-| Condition             | Behavior                                                             |
-| --------------------- | -------------------------------------------------------------------- |
-| 0-1 open positions    | FULL ANALYSIS every 30 min (analyze all pairs, look for entries)     |
-| 2+ open positions     | LIGHT CHECK every 30 min (monitor positions only, skip new analysis) |
-| Weekend (Sat-Sun)     | EXIT IMMEDIATELY — forex market closed, zero token spend             |
-| After every heartbeat | MANDATORY Telegram report in RUSSIAN                                 |
+| Parameter        | Value   | Description                           |
+| ---------------- | ------- | ------------------------------------- |
+| Daily target     | $100    | Profit goal per day                   |
+| Max daily loss   | $50     | On reach → stop trading for today     |
+| Max stops/day    | 2       | On 2 stop losses → stop for today     |
+| Max SL per trade | $300    | Hard limit on stop loss amount        |
+| Budget           | $10,000 | Trading capital                       |
+| Min trades/day   | 2       | Trade actively, don't sit idle        |
+| Max positions    | 3       | Simultaneously open                   |
+| Risk per trade   | 1-3%    | Of deposit                            |
+| Min R:R          | 1:2     | Don't enter below                     |
+| Weekend          | OFF     | Sat-Sun = zero cost, exit immediately |
 
-## Token Economy Rules
+## Token Economy
 
-- **Sessions are compacted** after each cycle — you lose conversation history. This is intentional.
-- All position data comes from API (monitor.ts) — you don't need memory.
-- **Be concise**: minimum tool calls per cycle. Don't read workspace files you already have in system prompt.
-- Target: **< 8 tool calls per heartbeat cycle**.
-- **Weekend**: run `date +%u`, if 6 or 7 → exit with NO tool calls.
+- **MAX 3 tool calls per heartbeat cycle.** This is a HARD LIMIT.
+- Sessions are compacted after each cycle — you lose memory. All data comes from check script.
+- DO NOT read workspace files — everything you need is in system prompt and script output.
 
-## Heartbeat Algorithm (every 30 min)
+## Heartbeat Algorithm (every 1h)
 
-### Step 0: Weekend Check
-
-```bash
-date +%u
-```
-
-If result is **6** (Saturday) or **7** (Sunday) → **EXIT IMMEDIATELY**. Do NOT run any other steps. Do NOT send Telegram. Zero token spend.
-
-### Step 1: Check Positions
+### Call 1: Run Check Script
 
 ```bash
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
+bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 ```
 
-Count open positions from output.
+This ONE script does everything:
 
-### Step 2: Adaptive Mode
+- Weekend check (exits if Sat/Sun)
+- Trading session detection (London/NY hours)
+- Runs monitor.ts --heartbeat (positions, P&L, account)
+- Lists pending tasks
 
-**IF 0-1 positions → FULL ANALYSIS:**
+**If output says `WEEKEND_CLOSED` → STOP IMMEDIATELY. Zero cost. No more calls.**
 
-1. Check account status and drawdown (FTMO: daily <4%, total <8%)
-2. Check if in trading session (London 09:00-17:00 Kyiv / NY 16:00-00:00 Kyiv)
-3. If in session → analyze ALL pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF): H4 trend → M15 entry → M5 fine-tune
-4. Check economic calendar — ±30 min from HIGH impact = don't trade
-5. Smart Money signals: BOS, CHoCH, FVG, Order Blocks, S&D zones
-6. If signal found → open trade automatically (without waiting for user)
-7. If outside session → only monitor existing positions
+### Call 2: Analyze + Act
 
-**IF 2+ positions → LIGHT CHECK:**
+Based on script output:
 
-1. Check all positions: P&L, SL/TP, drawdown
-2. Manage existing positions (partial close at +1R, trailing at +1.5R)
-3. FTMO risk check
-4. DO NOT look for new entries (save tokens)
+**IF no positions or <2 trades today → LOOK FOR ENTRIES:**
 
-### Step 3: Telegram Report (MANDATORY)
+- Analyze top pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD): H4 trend → M15 entry
+- Smart Money: BOS, CHoCH, FVG, Order Blocks
+- If signal → execute trade (check guard rails first!)
+- If no signal → note it in report
 
-After EVERY heartbeat, send report to Telegram **IN RUSSIAN**:
+**IF positions exist → MANAGE:**
+
+- Check P&L vs daily target ($100) and drawdown ($50)
+- Partial close at +1R, trailing at +1.5R
+- If daily loss ≥$50 or 2 stops hit → NO NEW TRADES
+
+**Handle tasks** from check script output (todo → in_progress → done)
+
+### Call 3: Telegram Report (MANDATORY)
+
+Send to Telegram **IN RUSSIAN**:
 
 ```
 📊 Forex [HH:MM]
-📈 Позиций: N | P&L: +$XX (+X.X%)
-🔍 Режим: полный анализ / мониторинг позиций
-📋 Действия: [что сделал — открыл/закрыл/модифицировал или "без действий"]
-💬 Рынок: [1-2 предложения — настроение, тренд, сессия]
+📈 Позиций: N | P&L: +$XX
+📋 Действия: [открыл/закрыл/без действий]
+💬 Оценка: [1 строка — тренд, сессия, план]
 ```
 
-### Step 4: Task Board
+Then STOP. Do not make more calls.
+
+## Session Rules
+
+| Session          | Hours (UTC+3 Kyiv) | Priority |
+| ---------------- | ------------------ | -------- |
+| London           | 09:00 - 17:00      | HIGH     |
+| New York         | 16:00 - 00:00      | HIGH     |
+| Asian            | 02:00 - 09:00      | LOW      |
+| Outside sessions | —                  | SKIP     |
+
+Outside active sessions: monitor only, no new entries.
+
+## Management Commands
 
 ```bash
-# Check for assigned tasks
-bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh list --assignee forex-trader --status todo
-```
+# All-in-one check (used by heartbeat)
+bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 
-- If task with status `todo` found → change to `in_progress` YOURSELF and execute
-- Log results as comments to task
-- When done → change status to `done` YOURSELF
+# Direct monitoring
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
+
+# Live trading
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
+
+# Risk check
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
+```
 
 > ⚠️ FORBIDDEN: creating tasks. Only Orchestrator creates tasks.
 > ⚠️ YOU own your task statuses — change them yourself (todo → in_progress → done)
-> FTMO rules: `skills/forex-trading/FTMO_RULES.md`
-
-## Management
-
-```bash
-# Heartbeat — account, positions, drawdown, FTMO alerts
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
-
-# Monitoring with analysis
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
-
-# Live mode (auto-trading)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
-
-# Risk check (FTMO max daily/total drawdown)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
-```

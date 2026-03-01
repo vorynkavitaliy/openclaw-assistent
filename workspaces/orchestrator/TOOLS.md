@@ -2,15 +2,15 @@
 
 ## Routing Table
 
-| Request type          | Agent          | Activation method                              |
-| --------------------- | -------------- | ---------------------------------------------- |
-| Start trading/monitor | forex/crypto   | Enable heartbeat + sessions_send               |
-| Stop trading          | forex/crypto   | Disable heartbeat + cleanup                    |
-| One-off trade         | forex/crypto   | sessions_send (no heartbeat needed)            |
-| Market analysis       | market-analyst | sessions_send                                  |
-| Development           | tech-lead      | sessions_send                                  |
-| Testing               | qa-tester      | sessions_send                                  |
-| General questions     | (self)         | Answer directly                                |
+| Request type          | Agent          | Activation method                   |
+| --------------------- | -------------- | ----------------------------------- |
+| Start trading/monitor | forex/crypto   | Enable heartbeat + sessions_send    |
+| Stop trading          | forex/crypto   | Disable heartbeat + cleanup         |
+| One-off trade         | forex/crypto   | sessions_send (no heartbeat needed) |
+| Market analysis       | market-analyst | sessions_send                       |
+| Development           | tech-lead      | sessions_send                       |
+| Testing               | qa-tester      | sessions_send                       |
+| General questions     | (self)         | Answer directly                     |
 
 > **ALL agents are OFF by default. Heartbeat = $0 when idle.**
 
@@ -62,13 +62,14 @@ openclaw restart
 
 ## Trading Heartbeat Control (ON-DEMAND)
 
-Heartbeats are **DISABLED by default**. Enable only when user requests monitoring/trading.
+Heartbeat configs are **NOT in openclaw.json by default** = $0 idle cost.
+`trading_control.sh start` INJECTS configs (1h interval). `stop` REMOVES them.
 
 ```bash
-# User says "мониторь крипто/форекс" or "начни торговать" → ENABLE
+# User says "мониторь", "торгуй", "начни" → INJECT + ENABLE
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
 
-# User says "стоп", "останови", "/stop" → DISABLE
+# User says "стоп", "останови", "СТОП" → REMOVE + DISABLE
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
 
 # Check status
@@ -79,11 +80,14 @@ bash /root/Projects/openclaw-assistent/scripts/trading_control.sh cleanup
 ```
 
 ### Workflow:
-1. User asks to start trading → you run `trading_control.sh start` + `sessions_send` to notify trader
-2. Trader heartbeats every 30m, sends Telegram reports
-3. User says stop → you run `trading_control.sh stop` → heartbeat off, $0 cost
+
+1. User asks to start trading → you run `trading_control.sh start` (injects heartbeat configs + enables)
+2. Traders heartbeat every 1h, MAX 3 API calls per cycle, send Telegram reports
+3. User says stop → you run `trading_control.sh stop` → configs removed, $0 cost
+4. Forex auto-stops on weekends (built into forex_check.sh)
 
 ### For one-off commands (no heartbeat needed):
+
 ```bash
 # Direct command to agent without enabling heartbeat
 sessions_send target=crypto-trader message="Check BTC position and report to Telegram"
@@ -99,12 +103,12 @@ sessions_send target=forex-trader message="Close EUR/USD position"
 
 ## Agent Activation Summary
 
-| Agent          | Has Heartbeat | How to activate                                                  |
-| -------------- | ------------- | ---------------------------------------------------------------- |
-| forex-trader   | Yes (10m)     | Create task → picks up on heartbeat. Or sessions_send for urgent |
-| crypto-trader  | Yes (10m)     | Create task → picks up on heartbeat. Or sessions_send for urgent |
-| tech-lead      | No            | Create task + sessions_send (REQUIRED)                           |
-| backend-dev    | No            | Via tech-lead only                                               |
-| frontend-dev   | No            | Via tech-lead only                                               |
-| qa-tester      | No            | Create task + sessions_send (REQUIRED)                           |
-| market-analyst | No            | Create task + sessions_send (REQUIRED)                           |
+| Agent          | Has Heartbeat | How to activate                                             |
+| -------------- | ------------- | ----------------------------------------------------------- |
+| forex-trader   | Yes (1h)      | `trading_control.sh start` injects config. Or sessions_send |
+| crypto-trader  | Yes (1h)      | `trading_control.sh start` injects config. Or sessions_send |
+| tech-lead      | No            | Create task + sessions_send (REQUIRED)                      |
+| backend-dev    | No            | Via tech-lead only                                          |
+| frontend-dev   | No            | Via tech-lead only                                          |
+| qa-tester      | No            | Create task + sessions_send (REQUIRED)                      |
+| market-analyst | No            | Create task + sessions_send (REQUIRED, 1x/day max)          |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# Trading Control — Kill switch for all trading bots
-# Stops/starts heartbeats and cleans sessions
+# Trading Control — Start/stop trading heartbeats
+# Dynamically adds/removes heartbeat configs from openclaw.json
 # ═══════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -9,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 STATE_FILE="${PROJECT_DIR}/scripts/data/trading_state.json"
+OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 TELEGRAM_TOKEN="7786754527:AAGifHqv2s4VD8AYKg8LNJyAjMcoN_BT89E"
 TELEGRAM_CHAT="5929886678"
 
@@ -16,7 +17,7 @@ TELEGRAM_CHAT="5929886678"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 send_telegram() {
   local msg="$1"
@@ -27,44 +28,161 @@ send_telegram() {
 }
 
 usage() {
-  echo "Trading Control — Kill switch for trading bots"
+  echo "Trading Control — Manage trading bot heartbeats"
   echo ""
   echo "Usage: $0 <command>"
   echo ""
   echo "Commands:"
-  echo "  stop              Stop ALL trading bots (disable heartbeats)"
-  echo "  start             Start ALL trading bots (enable heartbeats)"
+  echo "  start             Inject heartbeat configs + enable (starts trading)"
+  echo "  stop              Remove heartbeat configs + disable (stops trading)"
   echo "  status            Show current trading status"
-  echo "  cleanup           Clean all agent sessions (free memory)"
+  echo "  cleanup           Clean all agent sessions"
   echo "  cleanup-traders   Clean only trading agent sessions"
   echo ""
-  echo "Examples:"
-  echo "  $0 stop            # Emergency stop — no more token spending"
-  echo "  $0 start           # Resume trading"
-  echo "  $0 cleanup         # Free sessions for all agents"
+  echo "How it works:"
+  echo "  start → injects heartbeat configs into openclaw.json → enables heartbeat"
+  echo "  stop  → disables heartbeat → removes configs → cleans sessions"
   echo ""
-  echo "Telegram commands (from chat):"
-  echo "  /stop    — Stop all bots"
-  echo "  /start   — Start all bots"
-  echo "  /status  — Show status"
+  echo "Heartbeat configs are NOT in openclaw.json by default = \$0 idle cost."
+}
+
+# ─── Add heartbeat configs to openclaw.json ──────────────────
+
+inject_heartbeats() {
+  python3 - "$OPENCLAW_CONFIG" "$PROJECT_DIR" << 'PYEOF'
+import json, sys
+
+config_path = sys.argv[1]
+project_dir = sys.argv[2]
+
+forex_prompt = f"""HEARTBEAT: Run check script, analyze, act.
+1. exec: bash {project_dir}/scripts/forex_check.sh
+2. If WEEKEND_CLOSED → stop immediately. Zero cost.
+3. Analyze output. Make trading decisions per HEARTBEAT.md rules.
+4. If trade signal → execute trade. If no signal → skip.
+5. Send brief Telegram IN RUSSIAN: 📊 Forex [HH:MM] | Позиций: N | P&L: $X | [действия/оценка]
+6. Handle any pending tasks from output.
+CRITICAL: MAX 3 tool calls total. Batch operations. Be decisive."""
+
+crypto_prompt = f"""HEARTBEAT: Run check script, analyze, act.
+1. exec: bash {project_dir}/scripts/crypto_check.sh
+2. If kill-switch ON → stop. Send telegram "kill-switch active".
+3. Analyze output. Make trading decisions per HEARTBEAT.md rules.
+4. If trade signal → execute trade. If no signal → skip.
+5. Send brief Telegram IN RUSSIAN: 🪙 Crypto [HH:MM] | Позиций: N | P&L: $X | [действия/оценка]
+6. Handle any pending tasks from output.
+CRITICAL: MAX 3 tool calls total. Batch operations. Be decisive."""
+
+with open(config_path, 'r') as f:
+    config = json.load(f)
+
+for agent in config.get('agents', {}).get('list', []):
+    if agent['id'] == 'forex-trader':
+        agent['heartbeat'] = {
+            'every': '1h',
+            'prompt': forex_prompt
+        }
+        print(f"  ✅ forex-trader: heartbeat 1h added")
+    elif agent['id'] == 'crypto-trader':
+        agent['heartbeat'] = {
+            'every': '1h',
+            'prompt': crypto_prompt
+        }
+        print(f"  ✅ crypto-trader: heartbeat 1h added")
+
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+
+print("  📝 Config saved.")
+PYEOF
+}
+
+# ─── Remove heartbeat configs from openclaw.json ─────────────
+
+remove_heartbeats() {
+  python3 - "$OPENCLAW_CONFIG" << 'PYEOF'
+import json, sys
+
+config_path = sys.argv[1]
+
+with open(config_path, 'r') as f:
+    config = json.load(f)
+
+removed = []
+for agent in config.get('agents', {}).get('list', []):
+    if 'heartbeat' in agent:
+        removed.append(agent['id'])
+        del agent['heartbeat']
+
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+
+if removed:
+    print(f"  ✅ Removed heartbeat from: {', '.join(removed)}")
+else:
+    print("  ℹ️  No heartbeat configs found (already clean)")
+print("  📝 Config saved.")
+PYEOF
+}
+
+# ─── Commands ─────────────────────────────────────────────────
+
+do_start() {
+  echo -e "${GREEN}🚀 Starting trading bots...${NC}"
+
+  # 1. Inject heartbeat configs into openclaw.json
+  echo "📝 Adding heartbeat configs..."
+  inject_heartbeats
+
+  # 2. Enable heartbeats via CLI
+  if openclaw system heartbeat enable --timeout 10000 2>/dev/null; then
+    echo -e "${GREEN}✅ Heartbeats enabled${NC}"
+  else
+    echo -e "${YELLOW}⚠️  Heartbeat enable failed (gateway may need restart)${NC}"
+  fi
+
+  # 3. Update state file
+  mkdir -p "$(dirname "$STATE_FILE")"
+  cat > "$STATE_FILE" << EOF
+{
+  "trading_enabled": true,
+  "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "started_by": "manual",
+  "heartbeat_interval": "1h"
+}
+EOF
+
+  # 4. Telegram notification
+  send_telegram "🚀 <b>ТОРГОВЛЯ ЗАПУЩЕНА</b>
+⏰ $(date '+%H:%M %d.%m')
+📊 Crypto: heartbeat 1h (24/7)
+📈 Forex: heartbeat 1h (пн-пт)
+💰 Цель: \$100/день, макс просадка \$50
+🛑 Для остановки: СТОП"
+
+  echo -e "${GREEN}✅ Trading started. First heartbeat in ~1h.${NC}"
 }
 
 do_stop() {
   echo -e "${RED}🛑 Stopping all trading bots...${NC}"
 
-  # Disable heartbeats via OpenClaw
+  # 1. Disable heartbeats via CLI
   if openclaw system heartbeat disable --timeout 10000 2>/dev/null; then
     echo -e "${GREEN}✅ Heartbeats disabled${NC}"
   else
-    echo -e "${YELLOW}⚠️  Heartbeat disable command failed (gateway may be down)${NC}"
+    echo -e "${YELLOW}⚠️  Heartbeat disable failed (gateway may be down)${NC}"
   fi
 
-  # Clean sessions to stop any in-progress work
+  # 2. Remove heartbeat configs from openclaw.json
+  echo "📝 Removing heartbeat configs..."
+  remove_heartbeats
+
+  # 3. Clean trading sessions
   echo "🧹 Cleaning trading sessions..."
   openclaw sessions cleanup --agent crypto-trader --enforce 2>/dev/null || true
   openclaw sessions cleanup --agent forex-trader --enforce 2>/dev/null || true
 
-  # Update state file
+  # 4. Update state file
   mkdir -p "$(dirname "$STATE_FILE")"
   cat > "$STATE_FILE" << EOF
 {
@@ -74,49 +192,21 @@ do_stop() {
 }
 EOF
 
-  # Notify via Telegram
+  # 5. Telegram notification
   send_telegram "🛑 <b>ТОРГОВЛЯ ОСТАНОВЛЕНА</b>
 ⏰ $(date '+%H:%M %d.%m')
-💡 Heartbeat отключён, сессии очищены
-🔄 Для возобновления: /start"
+💡 Heartbeat выключен, конфиги удалены
+💰 Расход в простое: \$0
+🔄 Для возобновления: напишите в чат"
 
-  echo -e "${GREEN}✅ All trading stopped. No more token spending.${NC}"
-}
-
-do_start() {
-  echo -e "${GREEN}🚀 Starting trading bots...${NC}"
-
-  # Enable heartbeats
-  if openclaw system heartbeat enable --timeout 10000 2>/dev/null; then
-    echo -e "${GREEN}✅ Heartbeats enabled${NC}"
-  else
-    echo -e "${YELLOW}⚠️  Heartbeat enable command failed (gateway may be down)${NC}"
-  fi
-
-  # Update state file
-  mkdir -p "$(dirname "$STATE_FILE")"
-  cat > "$STATE_FILE" << EOF
-{
-  "trading_enabled": true,
-  "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "started_by": "manual"
-}
-EOF
-
-  # Notify via Telegram
-  send_telegram "🚀 <b>ТОРГОВЛЯ ВОЗОБНОВЛЕНА</b>
-⏰ $(date '+%H:%M %d.%m')
-📊 Crypto-trader: heartbeat 30m
-📈 Forex-trader: heartbeat 30m (кроме выходных)
-💡 Для остановки: /stop"
-
-  echo -e "${GREEN}✅ Trading bots started. Next heartbeat in ~30 min.${NC}"
+  echo -e "${GREEN}✅ All trading stopped. \$0 idle cost.${NC}"
 }
 
 do_status() {
   echo "📊 Trading Control Status"
   echo "========================="
 
+  # Check state file
   if [[ -f "$STATE_FILE" ]]; then
     local enabled
     enabled=$(python3 -c "import json; print(json.load(open('$STATE_FILE'))['trading_enabled'])" 2>/dev/null || echo "unknown")
@@ -128,15 +218,32 @@ do_status() {
       echo -e "${YELLOW}🟡 Trading: UNKNOWN${NC}"
     fi
   else
-    echo -e "${YELLOW}🟡 Trading: NO STATE FILE (probably active)${NC}"
+    echo -e "${YELLOW}🟡 Trading: NO STATE FILE${NC}"
   fi
+
+  # Check heartbeat configs in openclaw.json
+  echo ""
+  echo "Heartbeat configs in openclaw.json:"
+  python3 -c "
+import json
+with open('$OPENCLAW_CONFIG') as f:
+    config = json.load(f)
+found = False
+for agent in config.get('agents',{}).get('list',[]):
+    hb = agent.get('heartbeat')
+    if hb:
+        found = True
+        print(f'  {agent[\"id\"]}: every {hb[\"every\"]}')
+if not found:
+    print('  (none — \$0 idle cost)')
+" 2>/dev/null || echo "  (error reading config)"
 
   echo ""
   echo "Active sessions:"
-  openclaw sessions --all-agents --active 60 2>/dev/null || echo "  (gateway not available)"
+  openclaw sessions 2>/dev/null || echo "  (gateway not available)"
 
   echo ""
-  echo "Heartbeat status:"
+  echo "Heartbeat last:"
   openclaw system heartbeat last 2>/dev/null || echo "  (gateway not available)"
 }
 
@@ -155,8 +262,8 @@ do_cleanup_traders() {
 
 # ─── Main ─────────────────────────────────────────────────────
 case "${1:-}" in
-  stop)            do_stop ;;
   start)           do_start ;;
+  stop)            do_stop ;;
   status)          do_status ;;
   cleanup)         do_cleanup ;;
   cleanup-traders) do_cleanup_traders ;;

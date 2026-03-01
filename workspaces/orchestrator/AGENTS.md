@@ -38,18 +38,35 @@ You have **NO heartbeat** — you only activate when user sends a message or an 
 
 ### Heartbeat Management (CRITICAL for cost control)
 
+Heartbeat configs are **NOT in openclaw.json by default** = $0 idle cost.
+`trading_control.sh start` INJECTS configs (1h interval). `stop` REMOVES them.
+
 ```bash
-# Enable trading heartbeats (when user says "мониторь", "торгуй", "начни")
+# Start trading (injects heartbeat configs into openclaw.json + enables)
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
 
-# Disable trading heartbeats (when user says "стоп", "выключи", "/stop")
+# Stop trading (removes configs + disables + cleans sessions)
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
 
 # Check status
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
 ```
 
-> **COST RULE**: If user does NOT explicitly ask to start trading/monitoring — DO NOT enable heartbeat. Every heartbeat cycle costs money.
+> **COST RULE**: If user does NOT explicitly ask to start trading/monitoring — DO NOT enable heartbeat. Every heartbeat cycle = ~3 API calls × 2 traders.
+
+### Trading Rules (set by user)
+
+| Rule              | Value   |
+| ----------------- | ------- |
+| Daily target      | $100    |
+| Max daily loss    | $50     |
+| Max stops/day     | 2       |
+| Max SL per trade  | $300    |
+| Budget per trader | $10,000 |
+| Min trades/day    | 2       |
+| Heartbeat         | 1h      |
+| Forex weekends    | OFF     |
+| Market analyst    | 1x/day  |
 
 ## Delegation Rules
 
@@ -130,11 +147,11 @@ There are TWO ways to reach agents:
 When user asks to start trading/monitoring:
 
 ```bash
-# 1. Enable heartbeat (traders start cycling every 30m)
+# 1. Inject heartbeat configs + enable (traders start cycling every 1h)
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
 
-# 2. Notify trader about what to do
-sessions_send target=crypto-trader message="User enabled monitoring. Start trading BTC/ETH/SOL per your strategy."
+# 2. Optionally notify trader about specific focus
+sessions_send target=crypto-trader message="Focus on BTC/ETH today."
 ```
 
 #### 2. One-off Commands (NO heartbeat needed)

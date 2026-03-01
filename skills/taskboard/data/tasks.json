@@ -24,6 +24,16 @@
           "author": "crypto-trader",
           "timestamp": "2026-02-28T22:09:53Z",
           "text": "Взял в работу (in_progress). Heartbeat 22:09 UTC: позиций нет, DD=0%, сигналов Smart Money по BTC/ETH/SOL нет → сделок не открывал."
+        },
+        {
+          "author": "orchestrator",
+          "timestamp": "2026-03-01T01:02:50Z",
+          "text": "Пинг от orchestrator (01:02 UTC): задача in_progress без апдейтов ~2ч52м. Нужен 2-часовой отчёт по формату (P&L, сделки/стопы, позиции/ордера, статус лимитов -0/2 стопа, план). Если сделок нет — коротко причины/что мониторишь."
+        },
+        {
+          "author": "orchestrator",
+          "timestamp": "2026-03-01T04:03:12Z",
+          "text": "⚠️ 04:02 UTC чек: нет апдейтов ~3ч. Нужен 2-часовой отчёт по формату из описания (P&L, сделки/стопы, позиции/ордера, лимиты, план). Если режим паузы — зафиксируй причины и когда следующий чек."
         }
       ],
       "history": [
@@ -41,68 +51,7 @@
         }
       ],
       "created_at": "2026-02-28T21:59:44Z",
-      "updated_at": "2026-02-28T22:09:53Z"
-    },
-    {
-      "id": "TASK-009",
-      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:08 UTC",
-      "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
-      "type": "task",
-      "status": "done",
-      "assignee": "forex-trader",
-      "reporter": "forex-trader",
-      "priority": "low",
-      "labels": [
-        "forex",
-        "heartbeat",
-        "monitoring"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:08:50Z",
-          "agent": "forex-trader",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-02-28T22:08:58Z",
-          "agent": "forex-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-02-28T22:08:50Z",
-      "updated_at": "2026-02-28T22:08:58Z"
-    },
-    {
-      "id": "TASK-010",
-      "title": "Heartbeat 2026-02-28 22:09 UTC — мониторинг",
-      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001257% | ETH +0.001241% | SOL -0.007700%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "orchestrator",
-      "reporter": "crypto-trader",
-      "priority": "low",
-      "labels": [
-        "crypto",
-        "heartbeat",
-        "report"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:09:47Z",
-          "agent": "crypto-trader",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-02-28T22:09:47Z",
-      "updated_at": "2026-02-28T22:09:47Z"
+      "updated_at": "2026-03-01T04:03:12Z"
     },
     {
       "id": "TASK-011",
@@ -172,140 +121,11 @@
       "updated_at": "2026-02-28T22:18:29Z"
     },
     {
-      "id": "TASK-012",
-      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:15 UTC",
-      "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
-      "type": "task",
-      "status": "done",
-      "assignee": "forex-trader",
-      "reporter": "forex-trader",
-      "priority": "low",
-      "labels": [
-        "forex",
-        "heartbeat",
-        "monitoring"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:15:47Z",
-          "agent": "forex-trader",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-02-28T22:15:56Z",
-          "agent": "forex-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-02-28T22:15:47Z",
-      "updated_at": "2026-02-28T22:15:56Z"
-    },
-    {
-      "id": "TASK-013",
-      "title": "Heartbeat 2026-02-28 22:16 UTC — мониторинг",
-      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001471% | ETH +0.001091% | SOL -0.007380%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
-      "type": "task",
-      "status": "done",
-      "assignee": "orchestrator",
-      "reporter": "crypto-trader",
-      "priority": "low",
-      "labels": [
-        "crypto",
-        "heartbeat",
-        "report"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:16:41Z",
-          "agent": "crypto-trader",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-02-28T22:17:59Z",
-          "agent": "forex-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-02-28T22:16:41Z",
-      "updated_at": "2026-02-28T22:17:59Z"
-    },
-    {
-      "id": "TASK-014",
-      "title": "HEARTBEAT Forex (выходные) — 2026-02-28 22:17 UTC",
-      "description": "Task Board todo: 0. Позиции: 0. Risk-check: OK, alerts: 0, drawdownPct: 0%. Сигналы (dry-run): 0. Рынок: суббота, FX закрыт/ликвидность низкая — сделок не открывал.",
-      "type": "task",
-      "status": "done",
-      "assignee": "forex-trader",
-      "reporter": "forex-trader",
-      "priority": "low",
-      "labels": [
-        "forex",
-        "heartbeat",
-        "monitoring"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:17:59Z",
-          "agent": "forex-trader",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-02-28T22:18:05Z",
-          "agent": "forex-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-02-28T22:17:59Z",
-      "updated_at": "2026-02-28T22:18:05Z"
-    },
-    {
-      "id": "TASK-015",
-      "title": "Heartbeat 2026-02-28 22:18 UTC — мониторинг",
-      "description": "Позиции: 0. Баланс: $10001.90. Unrealized: $0. Daily P&L: $0, maxDD: 0%. HyroTrade лимиты (daily<4%, total<8%): OK. Funding: BTC +0.001526% | ETH +0.001212% | SOL -0.007272%. Smart Money (BTC/ETH/SOL): сигналов нет (signals=0), execution=0.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "orchestrator",
-      "reporter": "crypto-trader",
-      "priority": "low",
-      "labels": [
-        "crypto",
-        "heartbeat",
-        "report"
-      ],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-02-28T22:18:42Z",
-          "agent": "crypto-trader",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-02-28T22:18:42Z",
-      "updated_at": "2026-02-28T22:18:42Z"
-    },
-    {
       "id": "TASK-016",
       "title": "⚠️ Geo escalation: Iran retaliation incl. Dubai hit (BBC) — risk-off + gap risk on open",
       "description": "Update 2026-02-28 22:18 UTC. Источники: BBC RSS — 'Luxury Dubai hotel hit as Iran launches retaliatory strikes across region' (18:15 GMT) + 'What we know so far...' (22:12 GMT). Al Jazeera RSS подтверждает продолжение ударов/ответных атак (публикации ~20:29–21:52 UTC). Макро-импликации: усиление risk-off, вероятны гэпы на открытии FX; чувствительность нефти/золота; safe-haven спрос (USD/JPY/CHF) vs риск-валюты.",
       "type": "task",
-      "status": "todo",
+      "status": "done",
       "assignee": "forex-trader",
       "reporter": "market-analyst",
       "priority": "critical",
@@ -316,23 +136,78 @@
       ],
       "parent": "",
       "subtasks": [],
-      "comments": [],
+      "comments": [
+        {
+          "author": "forex-trader",
+          "timestamp": "2026-02-28T22:27:43Z",
+          "text": "Принял. Сейчас выходные (FX закрыт), позиций нет. На открытии рынка возможен гэп/скачок волатильности (risk-off). Рекомендация: не держать позы в выходные (выполнено), в воскресенье/понедельник — уменьшить риск/ждать стабилизации спредов, избегать входов первые 30-60 мин после открытия. Буду мониторить."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:29:22Z",
+          "text": "Update 2026-02-28 22:29 UTC: новых макро-событий в календаре (4ч) нет. Новые заголовки Al Jazeera (22:15–22:20 UTC) продолжают тему эскалации (профиль/подтверждение заявлений). Существенно нового, меняющего риск-профиль vs предыдущий алерт, пока нет; weekend risk остаётся высоким."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:38:57Z",
+          "text": "Update 2026-02-28 22:38 UTC: календарь ближайшие 4ч пуст. Заголовки BBC/AlJazeera без новых подтверждений/изменений относительно ранее отмеченного Dubai hit; risk-off/gap risk на открытии остаётся базовым сценарием."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:49:23Z",
+          "text": "Update 2026-02-28 22:49 UTC: BBC добавил заголовок 'Starmer speaks to Trump after UK joins defensive operation in Middle East' (22:37 GMT). Это расширяет коалиционную вовлеченность (UK), что может усилить risk-off/волатильность на открытии. Календарь ближайшие 4ч по-прежнему пуст; DXY без апдейта (выходные)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:59:00Z",
+          "text": "Update 2026-02-28 22:58 UTC: Al Jazeera добавил 'What dangers do the US and Israeli attacks on Iran pose?' (22:37 UTC) — аналитический материал, подтверждает продолжение темы/рисков. Календарь 4ч пуст. Базовый сценарий: risk-off + gap risk на открытии сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:08:52Z",
+          "text": "Update 2026-02-28 23:08 UTC: BBC добавил 'Watch: How US-Israel strikes on Iran unfolded' (22:56 GMT) — это формат объяснения/видео, но сигнализирует о продолжении высокой медиа-внимательности. Новых макро-событий (4ч) нет; risk-off/gap risk на открытии сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:19:17Z",
+          "text": "Update 2026-02-28 23:19 UTC: поток заголовков без новых факт-событий; BBC/AlJazeera продолжают освещение эскалации. Календарь 4ч пуст. Риск гэпов/volatility на открытии сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:29:20Z",
+          "text": "New dev 2026-02-28 23:28 UTC: Al Jazeera — injuries in Qatar after missile debris (23:20 UTC). Это повышает степень эскалации/факт ущерба в Gulf states."
+        }
+      ],
       "history": [
         {
           "timestamp": "2026-02-28T22:19:09Z",
           "agent": "market-analyst",
           "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:27:43Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "timestamp": "2026-02-28T22:27:50Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
         }
       ],
       "created_at": "2026-02-28T22:19:09Z",
-      "updated_at": "2026-02-28T22:19:09Z"
+      "updated_at": "2026-02-28T23:29:20Z"
     },
     {
       "id": "TASK-017",
       "title": "⚠️ Crypto risk: geopolitics (Iran ↔ Gulf, Dubai hit) + Extreme Fear (F&G=11)",
       "description": "Update 2026-02-28 22:18 UTC. Метрики: Fear&Greed=11 (Extreme Fear, alternative.me), BTC Dominance ~56.25% (CoinGecko). Новости: BBC/AlJazeera — региональная эскалация и сообщения об ударах/ответных атаках, включая Dubai hit. Импликации: повышенная волатильность, возможные резкие движения BTC/ETH и альтов на тонкой ликвидности; следить за нефтью/доходностями/долларом.",
       "type": "task",
-      "status": "todo",
+      "status": "done",
       "assignee": "crypto-trader",
       "reporter": "market-analyst",
       "priority": "critical",
@@ -344,16 +219,525 @@
       ],
       "parent": "",
       "subtasks": [],
-      "comments": [],
+      "comments": [
+        {
+          "author": "crypto-trader",
+          "timestamp": "2026-02-28T22:28:57Z",
+          "text": "Взял в работу (in_progress). Текущие данные 22:28 UTC: позиций нет, DD=0%, funding умеренный (BTC +0.001356%, ETH +0.001080%, SOL -0.007531%). По monitor сигналы Smart Money не подтверждены → сделок не открывал. Учитывая риск-новость (геополитика) — в приоритете консервативный режим, входы только по чётким сетапам с R:R>=1:2 и риском<=2%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:29:22Z",
+          "text": "Update 2026-02-28 22:29 UTC: Fear&Greed остаётся 11 (Extreme Fear). BTC Dominance ~56.30% (небольшое повышение). Новые заголовки Al Jazeera 22:15–22:20 UTC поддерживают геополитический risk-off фон; новых crypto-специфичных триггеров в ленте CoinDesk за интервал не появилось."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:38:57Z",
+          "text": "Update 2026-02-28 22:38 UTC: Fear&Greed остаётся 11 (Extreme Fear). BTC Dominance ~56.31% (незначительный рост). Новых crypto-специфичных триггеров в CoinDesk top нет; фон определяется геополитикой."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:49:23Z",
+          "text": "Update 2026-02-28 22:49 UTC: BTC Dominance выросла до ~56.38% (CoinGecko), Fear&Greed остаётся 11 (Extreme Fear). На фоне новых заголовков о расширении вовлеченности (UK defensive operation) риск волатильности в crypto сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T22:59:00Z",
+          "text": "Update 2026-02-28 22:58 UTC: BTC Dominance ~56.41% (рост), Fear&Greed всё ещё 11 (Extreme Fear). Новостной поток по геополитике продолжился (Al Jazeera 22:37 UTC), что поддерживает высокий риск волатильности в crypto."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:08:52Z",
+          "text": "Update 2026-02-28 23:08 UTC: Fear&Greed=11 (Extreme Fear) без изменений. BTC Dominance ~56.36% (небольшое снижение vs 22:58). Новостной фон без новых crypto-специфичных триггеров; драйвер — геополитика."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:19:17Z",
+          "text": "Update 2026-02-28 23:19 UTC: Fear&Greed=11 (Extreme Fear). BTC Dominance ~56.34% (чуть ниже). Риск волатильности сохраняется, драйвер — геополитика."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:29:20Z",
+          "text": "New dev 2026-02-28 23:28 UTC: Al Jazeera — injuries in Qatar after missile debris (23:20 UTC). Гео-драйвер усиливается → volatility risk в crypto."
+        },
+        {
+          "author": "orchestrator",
+          "timestamp": "2026-03-01T04:03:15Z",
+          "text": "⚠️ 04:02 UTC: задача висит in_progress >2ч. Если алерт уже отыгран/актуальность снизилась — переведи в done с кратким выводом. Иначе — дай короткий текущий статус (позиции/риски/что мониторишь)."
+        }
+      ],
       "history": [
         {
           "timestamp": "2026-02-28T22:19:09Z",
           "agent": "market-analyst",
           "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T22:28:22Z",
+          "agent": "crypto-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
         }
       ],
       "created_at": "2026-02-28T22:19:09Z",
-      "updated_at": "2026-02-28T22:19:09Z"
+      "updated_at": "2026-03-01T04:03:15Z"
+    },
+    {
+      "id": "TASK-032",
+      "title": "⚠️ Escalation: Qatar injuries from missile debris (Al Jazeera) — повышенный risk-off перед открытием",
+      "description": "Update 2026-02-28 23:28 UTC. Al Jazeera RSS: 'Missile debris injures eight in Qatar after Iran launches barrage' (pubDate 23:20 UTC). Это подтверждает расширение ущерба/гражданских инцидентов в странах Залива. Импликации: усиление risk-off, потенциальные гэпы на открытии FX; следить за нефтью/золотом и спросом на safe-haven (USD/JPY/CHF). Календарь ближайшие 4ч пуст.",
+      "type": "task",
+      "status": "done",
+      "assignee": "forex-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "forex-trader",
+          "timestamp": "2026-02-28T23:37:58Z",
+          "text": "Принял. Сейчас выходные, позиций нет. Учитываю повышенный risk-off/гэп риск на открытии (особенно JPY/CHF, нефть→CAD, золото). План: не входить первые 30-60 мин после открытия, ждать стабилизации спредов и подтверждения структуры на M15/M5; при необходимости снижу риск на сделку."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:39:51Z",
+          "text": "Update 2026-02-28 23:39 UTC: новых подтвержденных гео-событий сверх Qatar injuries (23:20 UTC) в ленте Al Jazeera top пока нет. Календарь 4ч пуст. Риск risk-off на открытии сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:49:28Z",
+          "text": "Update 2026-02-28 23:49 UTC: календарь 4ч пуст. Заголовок Al Jazeera про Qatar injuries (23:20) остаётся последним фактом. DXY proxy без обновления (выходные)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:59:35Z",
+          "text": "Update 2026-02-28 23:59 UTC: календарь 4ч пуст. Новых факт-событий сверх Qatar injuries (23:20 UTC) в top-ленте нет. Fear&Greed обновится в ближайшие минуты (time_until_update ~32s на момент проверки)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:09:30Z",
+          "text": "Update 2026-03-01 00:09 UTC: календарь 4ч пуст. Гео-фон без новых факт-ивентов сверх Qatar injuries (23:20 UTC)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:19:32Z",
+          "text": "Update 2026-03-01 00:19 UTC: новые заголовки Al Jazeera (00:05 UTC) про заявление иранского посла в ООН + реакции политиков (23:56) — дипломатическая эскалация/риторика. BBC добавил материал про расхождение США/Европы по ударам (00:03). Новых сообщений о новых ударах/жертвах сверх Qatar injuries (23:20) в топе нет."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:29:38Z",
+          "text": "Update 2026-03-01 00:29 UTC: новых факт-ивентов (удары/жертвы) сверх Qatar injuries (23:20 UTC) в топ-ленте нет. BBC добавил аналитический материал Bowen 'A dangerous moment...' (00:15 UTC) — подтверждает высокий гео-риск перед открытием."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:39:54Z",
+          "text": "Update 2026-03-01 00:39 UTC: без изменений. Календарь 4ч пуст; новых факт-ивентов по гео (сверх Qatar injuries) в топ-ленте нет."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:49:49Z",
+          "text": "New dev 2026-03-01 00:49 UTC: BBC — 'Iran says US and Israel strikes hit school killing 108' (23:24 GMT). Это существенное усиление эскалации/гуманитарного риска."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-02-28T23:29:19Z",
+          "agent": "market-analyst",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T23:37:58Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "timestamp": "2026-02-28T23:38:08Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-02-28T23:29:19Z",
+      "updated_at": "2026-03-01T00:49:49Z"
+    },
+    {
+      "id": "TASK-033",
+      "title": "⚠️ Crypto: escalation (Qatar injuries) + Extreme Fear (F&G=11) — риск всплеска волатильности",
+      "description": "Update 2026-02-28 23:28 UTC. Al Jazeera: injuries in Qatar after missile debris (23:20 UTC) — факт усиления эскалации. Метрики: Fear&Greed=11 (Extreme Fear), BTC Dominance ~56.30%. Импликации: высокая вероятность резких движений на тонкой ликвидности; мониторить нефть/доллар/доходности как драйверы risk-off.",
+      "type": "task",
+      "status": "done",
+      "assignee": "crypto-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics",
+        "crypto"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "crypto-trader",
+          "timestamp": "2026-02-28T23:39:25Z",
+          "text": "Взял в работу (in_progress). На 23:39 UTC: позиций нет, DD=0%, funding умеренно + по BTC/ETH, отриц. по SOL. По monitor сигналы Smart Money не подтверждены → сделок не открывал. Рекомендация: режим повышенной осторожности из-за новостей/Extreme Fear; входы только по подтверждению на 15m/5m, риск<=2%, R:R>=1:2."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:39:51Z",
+          "text": "Update 2026-02-28 23:39 UTC: Fear&Greed=11 (Extreme Fear), BTC Dominance ~56.30% (стабилизация). Драйвер волатильности — геополитика; новых crypto-специфичных триггеров не видно."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:49:28Z",
+          "text": "Update 2026-02-28 23:49 UTC: Fear&Greed=11 (Extreme Fear) без изменений; BTC Dominance ~56.27% (снижение vs 23:39). Фон risk-off сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-02-28T23:59:35Z",
+          "text": "Update 2026-02-28 23:59 UTC: Fear&Greed=11 (Extreme Fear) пока без изменения, обновление ожидается в ближайшие минуты; BTC Dominance ~56.30%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:09:30Z",
+          "text": "Update 2026-03-01 00:09 UTC: Fear&Greed обновился до 14 (Extreme Fear) с 11 ранее (alternative.me). BTC Dominance ~56.29%. Гео-фон без новых факт-ивентов сверх Qatar injuries (23:20 UTC)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:19:32Z",
+          "text": "Update 2026-03-01 00:19 UTC: гео-новости смещаются в дипломатическую плоскость (ООН/реакции политиков). Fear&Greed 14 (Extreme Fear) сохраняется; BTC Dominance ~56.27%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:29:38Z",
+          "text": "Update 2026-03-01 00:29 UTC: Fear&Greed 14 (Extreme Fear) без изменений; BTC Dominance ~56.29%. Новостные апдейты в основном аналитика/риторика, но risk-off фон сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:39:54Z",
+          "text": "Update 2026-03-01 00:39 UTC: Fear&Greed 14 (Extreme Fear) без изменения; BTC Dominance ~56.26% (слегка ниже)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T00:49:49Z",
+          "text": "New dev 2026-03-01 00:49 UTC: BBC — headline про 108 погибших (school strike). Гео-драйвер усиливается; волатильность risk-off в crypto сохраняется/растёт."
+        },
+        {
+          "author": "orchestrator",
+          "timestamp": "2026-03-01T04:03:17Z",
+          "text": "⚠️ 04:02 UTC: in_progress >2ч. Просьба: либо закрыть (done) с итогом/рекомендацией, либо обновить статус (позиции/мониторинг/триггеры на вход/kill-switch)."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-02-28T23:29:19Z",
+          "agent": "market-analyst",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-02-28T23:38:51Z",
+          "agent": "crypto-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ],
+      "created_at": "2026-02-28T23:29:19Z",
+      "updated_at": "2026-03-01T04:03:17Z"
+    },
+    {
+      "id": "TASK-050",
+      "title": "⚠️ Escalation: reported 108 killed in school strike in Iran (BBC) — повышенный gap/vol risk",
+      "description": "Update 2026-03-01 00:49 UTC. BBC RSS: 'Iran says US and Israel strikes hit school killing 108' (pubDate 2026-02-28 23:24:35 GMT). Резкое усиление гуманитарного/эскалационного риска → вероятное усиление risk-off, гэпы/рост волатильности на открытии FX; чувствительность нефти/золота и safe-haven валют (JPY/CHF, USD).",
+      "type": "task",
+      "status": "done",
+      "assignee": "forex-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "forex-trader",
+          "timestamp": "2026-03-01T00:58:16Z",
+          "text": "Принял. Сейчас воскресенье (FX закрыт), позиций нет. Gap/vol risk высокий: на открытии (вс вечер/пн Азия) ожидаю расширение спредов и возможные резкие движения. План: не входить первые 30-60 мин после открытия, ждать стабилизации спредов и подтверждения M15/M5; риск снижать, приоритет — сохранение DD в рамках FTMO."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:00:29Z",
+          "text": "Update 2026-03-01 01:00 UTC: headline BBC про school strike (108) остаётся в топе; дополнительных подтверждений/деталей в текущих RSS-выжимках нет. Календарь 4ч пуст."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:09:48Z",
+          "text": "Update 2026-03-01 01:09 UTC: без новых деталей по BBC headline (108). Календарь 4ч пуст; метрики без резких изменений."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:49:44Z",
+          "text": "Update 2026-03-01 01:49 UTC: BBC RSS добавил 'Ayatollah Khamenei's iron grip on power in Iran comes to an end' (01:47 GMT) — усиление нарратива о смене руководства/режима. При отсутствии рын. котировок (выходные) это повышает риск гэпов/волатильности на открытии."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:59:51Z",
+          "text": "Update 2026-03-01 01:59 UTC: BBC добавил аналитику Lyse Doucet 'This is an extraordinary moment Iran has been preparing for' (01:45 GMT) — подтверждает ожидания продолжительной эскалации. Факт-ивенты без новых подтверждений в RSS. Календарь 4ч пуст."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T02:09:37Z",
+          "text": "Update 2026-03-01 02:09 UTC: Al Jazeera добавил 'US strikes on Iran lead to renewed demands for war powers legislation' (01:48 UTC) — признак внутренней политической реакции в США. BBC обновил сводку 'what we know so far' (02:00). Новых факт-ивентов сверх ранее отмеченных (Qatar injuries / BBC 108 claim) в топ-лентах нет."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:50:12Z",
+          "text": "Update 2026-03-01 03:49 UTC: BBC добавил 'Trump's bet on Iranian regime change could be his biggest gamble yet' (02:22 GMT) — аналитика, но усиливает ожидания продолжительной/непредсказуемой эскалации → gap/vol risk на открытии FX сохраняется."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:00:13Z",
+          "text": "Update 2026-03-01 03:59 UTC: BBC обновил 'What we know so far...' (03:57 UTC) — обновление сводки/контекста. Календарь 4ч пуст; новых экономических релизов нет."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-03-01T00:49:49Z",
+          "agent": "market-analyst",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-03-01T00:58:15Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "timestamp": "2026-03-01T00:58:27Z",
+          "agent": "forex-trader",
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
+        }
+      ],
+      "created_at": "2026-03-01T00:49:49Z",
+      "updated_at": "2026-03-01T04:00:13Z"
+    },
+    {
+      "id": "TASK-051",
+      "title": "⚠️ Crypto: escalation headline (108 killed school strike, BBC) + Extreme Fear (F&G=14)",
+      "description": "Update 2026-03-01 00:49 UTC. BBC: 'Iran says US and Israel strikes hit school killing 108' (23:24 GMT). Метрики: Fear&Greed=14 (Extreme Fear), BTC Dominance ~56.25%. Импликации: риск резких движений/волатильности (BTC/ETH/альты) на фоне расширения эскалации.",
+      "type": "task",
+      "status": "done",
+      "assignee": "crypto-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "macro",
+        "geopolitics",
+        "crypto"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "crypto-trader",
+          "timestamp": "2026-03-01T00:59:55Z",
+          "text": "Взял в работу (in_progress). На 00:59 UTC: позиций нет, DD=0%. Funding: BTC +0.007236% (рост), ETH +0.01% (высоковато), SOL +0.004083%. Сигналы Smart Money по monitor не подтверждены → сделок не открывал. Из-за эскалации/Extreme Fear — торгую только по строгим подтверждениям 15m/5m, риск<=2%, R:R>=1:2; если волатильность резко вырастет — готов включить kill-switch."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:00:29Z",
+          "text": "Update 2026-03-01 01:00 UTC: Fear&Greed 14 (Extreme Fear) без изменений; BTC Dominance ~56.25%. Гео-триггер (BBC 108) остаётся актуальным, риск волатильности высокий."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:09:48Z",
+          "text": "Update 2026-03-01 01:09 UTC: Fear&Greed 14 (Extreme Fear) без изменений; BTC Dominance ~56.23%. Новых crypto-специфичных триггеров в топ-ленте нет; гео-фон доминирует."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:19:48Z",
+          "text": "Update 2026-03-01 01:19 UTC: BTC Dominance снизилась до ~56.21% (CoinGecko). Fear&Greed 14 (Extreme Fear) без изменений. Новых факт-ивентов по гео сверх Qatar injuries/108 headline не добавилось в топ-ленте."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:29:41Z",
+          "text": "Update 2026-03-01 01:29 UTC: BTC Dominance снизилась до ~56.14% (CoinGecko) — заметное снижение за ~30–40 мин. Fear&Greed 14 (Extreme Fear) без изменений. Новых факт-ивентов в новостях нет; движение может отражать относительную силу альтов/изменение risk-позиционирования."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:39:38Z",
+          "text": "Update 2026-03-01 01:39 UTC: BTC Dominance продолжила снижение до ~56.13% (CoinGecko). Fear&Greed 14 (Extreme Fear) без изменений. Новых факт-ивентов в новостях нет; возможен относительный переток в альты/изменение структуры risk."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T01:49:44Z",
+          "text": "Update 2026-03-01 01:49 UTC: BBC добавил материал о завершении 'iron grip' Khamenei (01:47 GMT) — повышает риск волатильности. Метрики: F&G=14 (Extreme Fear), BTC dominance ~56.14%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T02:09:37Z",
+          "text": "Update 2026-03-01 02:09 UTC: гео-новости добавляют US domestic angle (war powers). Метрики: F&G=14, BTC dominance ~56.23%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T02:19:54Z",
+          "text": "Update 2026-03-01 02:19 UTC: BTC Dominance снизилась до ~56.20% (CoinGecko). Al Jazeera добавил аналитический заголовок 'Netanyahu’s war? ...' (02:14 UTC) — не новый факт-ивент, но поддерживает ожидания продолжительной напряженности. Fear&Greed 14 (Extreme Fear)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T02:30:00Z",
+          "text": "Update 2026-03-01 02:29 UTC: BTC Dominance снизилась до ~56.10% (CoinGecko) — продолжение снижения. Fear&Greed 14 (Extreme Fear) без изменений. BBC обновил 'Watch...' (02:23) — медиа/контент, не новый факт-ивент."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T02:40:15Z",
+          "text": "Update 2026-03-01 02:39 UTC: BTC Dominance ~56.12% (слегка выше чем 56.10, но остаётся ниже уровней ~56.3 ранее). Fear&Greed 14. Новостей с новыми факт-ивентами нет."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:00:21Z",
+          "text": "Update 2026-03-01 02:59 UTC: BTC Dominance ~56.11% (CoinGecko). Fear&Greed 14 (Extreme Fear) без изменений. Новых факт-ивентов в топ-лентах нет; Al Jazeera RSS временами даёт ошибку/блок по прямому запросу, но через web_fetch заголовки без нового 'shock'-события."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:09:59Z",
+          "text": "Update 2026-03-01 03:09 UTC: BTC Dominance снизилась до ~56.08% (CoinGecko). Fear&Greed 14 (Extreme Fear) без изменения. Новостной поток без новых факт-ивентов; преобладает аналитика/политика."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:19:45Z",
+          "text": "Update 2026-03-01 03:19 UTC: BTC Dominance ~56.09% (CoinGecko). Fear&Greed 14. Новых факт-ивентов по гео нет; Al Jazeera lastBuildDate 02:58 UTC, top item остаётся аналитика."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:30:28Z",
+          "text": "Update 2026-03-01 03:30 UTC: BTC Dominance ~56.08% (CoinGecko) — продолжает дрейф вниз. Fear&Greed 14 (Extreme Fear) без изменений. Календарь 4ч пуст; новых факт-ивентов в новостях нет."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:40:28Z",
+          "text": "New dev 2026-03-01 03:40 UTC: CoinDesk (03:36 UTC) — BTC > $68k на заголовке про подтверждение гибели лидера. Возможен импульс волатильности/гэпы по крипте."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-03-01T00:49:49Z",
+          "agent": "market-analyst",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-03-01T00:59:14Z",
+          "agent": "crypto-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ],
+      "created_at": "2026-03-01T00:49:49Z",
+      "updated_at": "2026-03-01T03:40:28Z"
+    },
+    {
+      "id": "TASK-086",
+      "title": "⚠️ Crypto spike: BTC > $68k на headline 'Iran confirms leader killed' (CoinDesk)",
+      "description": "Update 2026-03-01 03:40 UTC. CoinDesk RSS: 'Bitcoin tops $68,000 after Iran confirms leader killed in U.S., Israel airstrikes' (pubDate 03:36 UTC). Это может означать резкий risk-repricing/volatility в BTC и шире. Фон: Fear&Greed=14 (Extreme Fear); BTC dominance ~56.07%.",
+      "type": "task",
+      "status": "done",
+      "assignee": "crypto-trader",
+      "reporter": "market-analyst",
+      "priority": "critical",
+      "labels": [
+        "alert",
+        "crypto",
+        "geopolitics"
+      ],
+      "parent": "",
+      "subtasks": [],
+      "comments": [
+        {
+          "author": "crypto-trader",
+          "timestamp": "2026-03-01T03:49:44Z",
+          "text": "Взял в работу (in_progress). Проверка 03:49 UTC: открытых позиций нет, DD=0%. По market: BTC 7623.6 (24h +2.81%), funding +0.007913% (повышен), ETH/SOL funding = +0.01% (высокий). По monitor Smart Money сигналов нет → сделок не открывал. На headline-волатильности вхожу только после подтверждения 15m/5m и нормализации funding/структуры."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T03:50:13Z",
+          "text": "Update 2026-03-01 03:49 UTC: CoinDesk headline про BTC > $68k остаётся топовым (03:36 UTC). Метрики: F&G=14, BTC dominance ~56.08%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:00:13Z",
+          "text": "Update 2026-03-01 03:59 UTC: BTC Dominance ~56.13% (небольшой откат вверх), F&G=14. CoinDesk headline BTC>$68k остаётся ключевым."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:09:41Z",
+          "text": "Update 2026-03-01 04:09 UTC: BTC dominance ~56.11% (CoinGecko), F&G=14. Новых crypto/geo 'shock' заголовков в CoinDesk top кроме BTC>$68k нет; Al Jazeera feed без обновления (lastBuildDate 02:58)."
+        },
+        {
+          "author": "orchestrator",
+          "timestamp": "2026-03-01T04:17:38Z",
+          "text": "04:17 UTC: если новых данных по импульсу BTC>8k нет — дай короткий апдейт (вола/структура/триггеры) и оцени можно ли закрыть алерт в done."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:19:02Z",
+          "text": "Update 2026-03-01 04:18 UTC: BTC Dominance ~56.09% (CoinGecko), F&G=14. Новых crypto заголовков после CoinDesk (BTC>$68k, 03:36) в топе нет; Al Jazeera без обновления (lastBuildDate 02:58)."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:29:05Z",
+          "text": "Update 2026-03-01 04:28 UTC: CoinDesk добавил 'Iran war becomes $50 million betting frenzy on Polymarket' (04:19 UTC) — сигнал повышенной спекулятивной активности/внимания, что может поддерживать волатильность. Метрики: F&G=14; BTC dominance ~56.11%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:39:02Z",
+          "text": "Update 2026-03-01 04:38 UTC: CoinDesk заголовок обновлён: 'U.S.-Iran war attracts $600 million bets on Polymarket' (04:19 UTC) — magnitude существенно выше, чем ранее $50m. Это усиливает сигнал перегрева/спекулятивного интереса → потенциально выше волатильность. Метрики: F&G=14; BTC dominance ~56.11%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:49:05Z",
+          "text": "Update 2026-03-01 04:48 UTC: без новых headline изменений. CoinDesk top: Polymarket $600m + BTC>$68k. Метрики: F&G=14; BTC dominance ~56.11%."
+        },
+        {
+          "author": "market-analyst",
+          "timestamp": "2026-03-01T04:59:04Z",
+          "text": "Update 2026-03-01 04:58 UTC: без новых headline изменений. Метрики: F&G=14; BTC dominance ~56.09%. Экономкалендарь 4ч пуст."
+        }
+      ],
+      "history": [
+        {
+          "timestamp": "2026-03-01T03:40:28Z",
+          "agent": "market-analyst",
+          "action": "created"
+        },
+        {
+          "timestamp": "2026-03-01T03:48:57Z",
+          "agent": "crypto-trader",
+          "action": "status_changed",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ],
+      "created_at": "2026-03-01T03:40:28Z",
+      "updated_at": "2026-03-01T04:59:04Z"
     }
   ]
 }

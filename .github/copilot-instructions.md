@@ -26,8 +26,8 @@ src/
 
 ```
 User (Telegram) → orchestrator (event-driven, no heartbeat)
-                    ├── forex-trader (heartbeat 10m, autonomous trading)
-                    ├── crypto-trader (heartbeat 10m, autonomous trading)
+                    ├── forex-trader (heartbeat 30m, autonomous trading)
+                    ├── crypto-trader (heartbeat 30m, autonomous trading)
                     ├── tech-lead (on-demand via sessions_send)
                     │     ├── backend-dev (on-demand)
                     │     └── frontend-dev (on-demand)
@@ -36,7 +36,9 @@ User (Telegram) → orchestrator (event-driven, no heartbeat)
 ```
 
 - **orchestrator** — event-driven (NO heartbeat), маршрутизация задач, Telegram. Создаёт задачи, но НЕ меняет их статусы.
-- **forex-trader / crypto-trader** — автономная торговля (heartbeat 10m), адаптивный режим (0-1 позиций = полный анализ, 2+ = лёгкий мониторинг), обязательный Telegram отчёт после каждого цикла
+- **forex-trader / crypto-trader** — автономная торговля (heartbeat 30m), адаптивный режим (0-1 позиций = полный анализ, 2+ = лёгкий мониторинг), обязательный Telegram отчёт после каждого цикла. Сессии компактируются автоматически.
+- **forex-trader weekend** — на выходных EXIT IMMEDIATELY, нулевой расход токенов
+- **kill switch** — `scripts/trading_control.sh stop` отключает все heartbeat, `start` — включает
 - **tech-lead / backend-dev / frontend-dev / qa-tester / market-analyst** — on-demand (без heartbeat), активируются только через sessions_send
 
 ## Ключевые npm скрипты

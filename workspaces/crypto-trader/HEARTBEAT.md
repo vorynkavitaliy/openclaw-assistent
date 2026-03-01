@@ -4,11 +4,18 @@
 
 | Condition             | Behavior                                                             |
 | --------------------- | -------------------------------------------------------------------- |
-| 0-1 open positions    | FULL ANALYSIS every 10 min (analyze all pairs, look for entries)     |
-| 2+ open positions     | LIGHT CHECK every 10 min (monitor positions only, skip new analysis) |
+| 0-1 open positions    | FULL ANALYSIS every 30 min (analyze all pairs, look for entries)     |
+| 2+ open positions     | LIGHT CHECK every 30 min (monitor positions only, skip new analysis) |
 | After every heartbeat | MANDATORY Telegram report in RUSSIAN                                 |
 
-## Heartbeat Algorithm (every 10 min)
+## Token Economy Rules
+
+- **Sessions are compacted** after each cycle — you lose conversation history. This is intentional.
+- All position data comes from API (monitor.ts) — you don't need memory.
+- **Be concise**: minimum tool calls per cycle. Don't read workspace files you already have in system prompt.
+- Target: **< 8 tool calls per heartbeat cycle**.
+
+## Heartbeat Algorithm (every 30 min)
 
 ### Step 1: Check Positions
 

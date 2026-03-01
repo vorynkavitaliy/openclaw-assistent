@@ -58,6 +58,24 @@ openclaw agents
 openclaw restart
 ```
 
+## Trading Kill Switch
+
+```bash
+# STOP all trading bots (disable heartbeats, clean sessions)
+bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
+
+# RESUME trading bots
+bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
+
+# Check trading status
+bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
+
+# Clean all agent sessions (free accumulated context)
+bash /root/Projects/openclaw-assistent/scripts/trading_control.sh cleanup
+```
+
+> Use when user says /stop, "останови ботов", "выключи торговлю", etc.
+
 ## Telegram Gateway
 
 - Bot: @hyrotraders_bot

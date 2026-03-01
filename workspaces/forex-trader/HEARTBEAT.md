@@ -4,16 +4,28 @@
 
 | Condition             | Behavior                                                             |
 | --------------------- | -------------------------------------------------------------------- |
-| 0-1 open positions    | FULL ANALYSIS every 10 min (analyze all pairs, look for entries)     |
-| 2+ open positions     | LIGHT CHECK every 10 min (monitor positions only, skip new analysis) |
-| Weekend (Sat-Sun)     | DO NOTHING — forex market closed, save tokens                        |
+| 0-1 open positions    | FULL ANALYSIS every 30 min (analyze all pairs, look for entries)     |
+| 2+ open positions     | LIGHT CHECK every 30 min (monitor positions only, skip new analysis) |
+| Weekend (Sat-Sun)     | EXIT IMMEDIATELY — forex market closed, zero token spend             |
 | After every heartbeat | MANDATORY Telegram report in RUSSIAN                                 |
 
-## Heartbeat Algorithm (every 10 min)
+## Token Economy Rules
+
+- **Sessions are compacted** after each cycle — you lose conversation history. This is intentional.
+- All position data comes from API (monitor.ts) — you don't need memory.
+- **Be concise**: minimum tool calls per cycle. Don't read workspace files you already have in system prompt.
+- Target: **< 8 tool calls per heartbeat cycle**.
+- **Weekend**: run `date +%u`, if 6 or 7 → exit with NO tool calls.
+
+## Heartbeat Algorithm (every 30 min)
 
 ### Step 0: Weekend Check
 
-If Saturday or Sunday → do nothing, save tokens, exit immediately.
+```bash
+date +%u
+```
+
+If result is **6** (Saturday) or **7** (Sunday) → **EXIT IMMEDIATELY**. Do NOT run any other steps. Do NOT send Telegram. Zero token spend.
 
 ### Step 1: Check Positions
 

@@ -1,214 +1,214 @@
 # FTMO Prop Trading Rules — 2-Step Challenge
 
-> Правила FTMO для автоматизированного трейдинга. Агент **ОБЯЗАН** соблюдать все лимиты.
-> Нарушение любого правила = потеря аккаунта.
+> FTMO rules for automated trading. The agent **MUST** comply with all limits.
+> Violating any rule = account termination.
 
 ---
 
 ## Step 1: FTMO Challenge
 
-| Параметр                 | Значение                                               |
+| Parameter                | Value                                                  |
 | ------------------------ | ------------------------------------------------------ |
-| **Profit Target**        | **10%** от начального баланса                          |
-| **Maximum Daily Loss**   | **5%** от баланса на начало дня (или equity, что выше) |
-| **Maximum Total Loss**   | **10%** от начального баланса                          |
-| **Trading Period**       | **30 календарных дней**                                |
-| **Minimum Trading Days** | **4 дня** (сделки в 4 разных дня)                      |
-| **Leverage**             | до **1:100** (Forex)                                   |
+| **Profit Target**        | **10%** of initial balance                             |
+| **Maximum Daily Loss**   | **5%** of balance at start of day (or equity, whichever is higher) |
+| **Maximum Total Loss**   | **10%** of initial balance                             |
+| **Trading Period**       | **30 calendar days**                                   |
+| **Minimum Trading Days** | **4 days** (trades on 4 different days)                |
+| **Leverage**             | up to **1:100** (Forex)                                |
 
-### Пример (аккаунт $100,000):
+### Example (account $100,000):
 
 - Profit Target: $10,000
 - Max Daily Loss: $5,000
-- Max Total Loss: $10,000 (equity не ниже $90,000)
+- Max Total Loss: $10,000 (equity never below $90,000)
 
 ---
 
 ## Step 2: Verification
 
-| Параметр                 | Значение                                               |
+| Parameter                | Value                                                  |
 | ------------------------ | ------------------------------------------------------ |
-| **Profit Target**        | **5%** от начального баланса                           |
-| **Maximum Daily Loss**   | **5%** от баланса на начало дня (или equity, что выше) |
-| **Maximum Total Loss**   | **10%** от начального баланса                          |
-| **Trading Period**       | **60 календарных дней**                                |
-| **Minimum Trading Days** | **4 дня** (сделки в 4 разных дня)                      |
-| **Leverage**             | до **1:100** (Forex)                                   |
+| **Profit Target**        | **5%** of initial balance                              |
+| **Maximum Daily Loss**   | **5%** of balance at start of day (or equity, whichever is higher) |
+| **Maximum Total Loss**   | **10%** of initial balance                             |
+| **Trading Period**       | **60 calendar days**                                   |
+| **Minimum Trading Days** | **4 days** (trades on 4 different days)                |
+| **Leverage**             | up to **1:100** (Forex)                                |
 
-### Пример (аккаунт $100,000):
+### Example (account $100,000):
 
 - Profit Target: $5,000
 - Max Daily Loss: $5,000
-- Max Total Loss: $10,000 (equity не ниже $90,000)
+- Max Total Loss: $10,000 (equity never below $90,000)
 
 ---
 
-## FTMO Funded Account (после прохождения обоих шагов)
+## FTMO Funded Account (after passing both steps)
 
-| Параметр               | Значение                                  |
+| Parameter              | Value                                     |
 | ---------------------- | ----------------------------------------- |
-| **Profit Target**      | Нет (торгуешь без ограничения по времени) |
+| **Profit Target**      | None (trade without time limit)           |
 | **Maximum Daily Loss** | **5%**                                    |
 | **Maximum Total Loss** | **10%**                                   |
-| **Profit Split**       | **80/20** (80% трейдеру, 20% FTMO)        |
-| **Scaling Plan**       | до **90/10** при стабильных результатах   |
-| **Выплаты**            | каждые 14 дней (по запросу)               |
+| **Profit Split**       | **80/20** (80% trader, 20% FTMO)          |
+| **Scaling Plan**       | up to **90/10** with consistent results   |
+| **Payouts**            | every 14 days (on request)                |
 
 ---
 
-## Расчёт Maximum Daily Loss (КРИТИЧНО)
+## Maximum Daily Loss Calculation (CRITICAL)
 
-> ⚠️ **Daily Loss считается от БОЛЬШЕГО из двух значений**: баланс на начало дня ИЛИ equity на начало дня.
+> ⚠️ **Daily Loss is calculated from the HIGHER of two values**: balance at start of day OR equity at start of day.
 
-Формула:
+Formula:
 
 ```
 Daily Loss Limit = max(balance_start_of_day, equity_start_of_day) × 5%
 ```
 
-**Включает**: реализованный P&L + нереализованный P&L (floating) + комиссии + свопы.
+**Includes**: realized P&L + unrealized P&L (floating) + commissions + swaps.
 
-Пример:
+Example:
 
 - Balance start of day: $102,000
-- Equity start of day: $103,500 (есть открытые позиции в плюсе)
+- Equity start of day: $103,500 (open positions in profit)
 - Daily Loss Limit = $103,500 × 5% = **$5,175**
-- Минимально допустимая equity за день: $103,500 - $5,175 = **$98,325**
+- Minimum allowed equity for the day: $103,500 - $5,175 = **$98,325**
 
 ---
 
-## Расчёт Maximum Total Loss (КРИТИЧНО)
+## Maximum Total Loss Calculation (CRITICAL)
 
-> ⚠️ **Total Loss считается от НАЧАЛЬНОГО баланса аккаунта** (initial balance).
+> ⚠️ **Total Loss is calculated from the INITIAL account balance**.
 
-Формула:
+Formula:
 
 ```
 Max Total Loss = initial_balance × 10%
 Minimum Equity = initial_balance - (initial_balance × 10%) = initial_balance × 90%
 ```
 
-Пример (аккаунт $100,000):
+Example (account $100,000):
 
 - Max Total Loss: $10,000
-- Equity НИКОГДА не должна опуститься ниже **$90,000**
+- Equity must NEVER drop below **$90,000**
 
 ---
 
-## Допустимые инструменты
+## Allowed Instruments
 
-### Forex (основные пары — торгуемые агентом):
+### Forex (main pairs — traded by the agent):
 
 - EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, NZD/USD
-- EUR/GBP, EUR/JPY, GBP/JPY и другие кроссы
+- EUR/GBP, EUR/JPY, GBP/JPY and other crosses
 
-### Другие инструменты (доступны на FTMO):
+### Other instruments (available on FTMO):
 
-- Индексы: US30, US100, US500, GER40, UK100
-- Металлы: XAU/USD (золото), XAG/USD (серебро)
-- Криптовалюты: BTC/USD, ETH/USD (ограниченный леверидж)
-- Энергия: USOIL, UKOIL
-
----
-
-## Запрещённые стратегии и ограничения
-
-### 1. Торговля на новостях
-
-- **Ограничение**: запрещено открывать/закрывать/модифицировать позиции в окне **±2 минуты** вокруг новостей с высоким импактом (High Impact News)
-- Это касается инструментов, напрямую связанных с валютой новости
-- Пример: NFP (Non-Farm Payrolls) → нельзя торговать USD пары ±2 мин
-- **Для агента**: не торговать за **30 минут** до и после важных новостей (дополнительный буфер безопасности)
-
-### 2. Удержание позиций через выходные (Weekend Holding)
-
-- **Разрешено** на FTMO (нет запрета)
-- Однако гэпы на открытии могут создать риски для daily/total drawdown
-- **Рекомендация для агента**: закрывать все позиции перед выходными (пятница 21:00 UTC) если нет сильного основания для удержания
-
-### 3. Запрещённые стратегии
-
-- **Martingale** (увеличение лота после убытка) — строго запрещено
-- **Grid trading** без стоп-лоссов — запрещено
-- **HFT / Latency arbitrage** — запрещено
-- **Copy trading** с другого FTMO аккаунта — запрещено
-- **Hedging между FTMO аккаунтами** — запрещено (hedging на одном аккаунте разрешено)
-- **Tick scalping** (сделки длительностью менее нескольких секунд) — не рекомендуется
-- **Использование exploit'ов** платформы — запрещено
-
-### 4. Gambling / Избыточный риск
-
-- Открытие непропорционально больших позиций — нарушение
-- Вся торговля должна быть обоснована (стратегия, анализ)
+- Indices: US30, US100, US500, GER40, UK100
+- Metals: XAU/USD (gold), XAG/USD (silver)
+- Cryptocurrencies: BTC/USD, ETH/USD (limited leverage)
+- Energy: USOIL, UKOIL
 
 ---
 
-## Правило неактивности (Inactivity)
+## Prohibited Strategies and Restrictions
 
-- **Challenge/Verification**: если нет сделки в течение **30 календарных дней** — аккаунт может быть закрыт
-- **Funded Account**: минимум **1 сделка в 30 дней**
-- **Для агента**: обеспечить минимум 1 торговый день в неделю
+### 1. News Trading
+
+- **Restriction**: opening/closing/modifying positions within **±2 minutes** around High Impact News is prohibited
+- This applies to instruments directly related to the news currency
+- Example: NFP (Non-Farm Payrolls) → cannot trade USD pairs ±2 min
+- **For the agent**: do not trade **30 minutes** before and after major news (additional safety buffer)
+
+### 2. Weekend Position Holding
+
+- **Allowed** on FTMO (no restriction)
+- However, opening gaps can create risks for daily/total drawdown
+- **Agent recommendation**: close all positions before weekends (Friday 21:00 UTC) unless there is a strong reason to hold
+
+### 3. Prohibited Strategies
+
+- **Martingale** (increasing lot size after a loss) — strictly prohibited
+- **Grid trading** without stop losses — prohibited
+- **HFT / Latency arbitrage** — prohibited
+- **Copy trading** from another FTMO account — prohibited
+- **Hedging between FTMO accounts** — prohibited (hedging within one account is allowed)
+- **Tick scalping** (trades lasting less than a few seconds) — not recommended
+- **Platform exploits** — prohibited
+
+### 4. Gambling / Excessive Risk
+
+- Opening disproportionately large positions — violation
+- All trading must be justified (strategy, analysis)
+
+---
+
+## Inactivity Rule
+
+- **Challenge/Verification**: if no trade within **30 calendar days** — account may be closed
+- **Funded Account**: minimum **1 trade in 30 days**
+- **For the agent**: ensure at least 1 trading day per week
 
 ---
 
 ## Scaling Plan
 
-При стабильных результатах на Funded Account:
+With consistent results on Funded Account:
 
-1. Торговля ≥ 4 месяцев с прибылью
-2. Прибыль ≥ 10% за период (суммарно)
-3. Увеличение баланса на **25%** от начального
-4. Profit split увеличивается: **80/20 → 90/10**
-
----
-
-## Торговые часы
-
-- Forex: **Воскресенье 22:05 UTC — Пятница 21:00 UTC** (круглосуточно)
-- Индексы/Металлы: зависит от инструмента
-- Для агента: торговать в **Лондон + Нью-Йорк** сессии (лучшая ликвидность)
+1. Trading ≥ 4 months with profit
+2. Profit ≥ 10% over the period (cumulative)
+3. Balance increase of **25%** from initial
+4. Profit split increases: **80/20 → 90/10**
 
 ---
 
-## Безопасные лимиты для агента (СТРОЖЕ чем FTMO)
+## Trading Hours
 
-> Агент использует более консервативные лимиты чтобы оставить буфер безопасности.
+- Forex: **Sunday 22:05 UTC — Friday 21:00 UTC** (round the clock)
+- Indices/Metals: depends on instrument
+- For the agent: trade during **London + New York** sessions (best liquidity)
 
-| Параметр             | FTMO лимит | Лимит агента  | Буфер        |
+---
+
+## Agent Safety Limits (STRICTER than FTMO)
+
+> The agent uses more conservative limits to maintain a safety buffer.
+
+| Parameter            | FTMO Limit | Agent Limit   | Buffer       |
 | -------------------- | ---------- | ------------- | ------------ |
 | Max Daily Loss       | 5.0%       | **4.0%**      | 1.0%         |
 | Max Total Loss       | 10.0%      | **8.0%**      | 2.0%         |
-| Риск на сделку       | до 5%      | **1.0–2.0%**  | Значительный |
-| Max открытых позиций | Без лимита | **3**         | —            |
-| Новости: буфер       | ±2 мин     | **±30 мин**   | 28 мин       |
-| Weekend holding      | Разрешено  | **Закрывать** | —            |
+| Risk per trade       | up to 5%   | **1.0–2.0%**  | Significant  |
+| Max open positions   | Unlimited  | **3**         | —            |
+| News buffer          | ±2 min     | **±30 min**   | 28 min       |
+| Weekend holding      | Allowed    | **Close all** | —            |
 
-Эти лимиты заданы в `src/trading/forex/config.ts`:
+These limits are set in `src/trading/forex/config.ts`:
 
 - `maxDailyDrawdownPct: 4.0` (FTMO: 5.0)
 - `maxTotalDrawdownPct: 8.0` (FTMO: 10.0)
-- `maxRiskPerTradePct: 1.0` (FTMO: без ограничения, но здравый смысл)
+- `maxRiskPerTradePct: 1.0` (FTMO: no limit, but common sense)
 - `maxOpenPositions: 3`
 
 ---
 
-## Чек-лист перед каждой сделкой (FTMO compliance)
+## Pre-Trade Checklist (FTMO compliance)
 
 ```
-□ Проверить daily drawdown (текущий % от лимита)
-□ Проверить total drawdown (текущий % от лимита)
-□ Есть ли High Impact новости в ближайшие 30 мин?
-□ Размер позиции ≤ 2% риска от баланса
-□ Stop Loss установлен
+□ Check daily drawdown (current % of limit)
+□ Check total drawdown (current % of limit)
+□ Any High Impact news in the next 30 min?
+□ Position size ≤ 2% risk of balance
+□ Stop Loss set
 □ Risk:Reward ≥ 1:2
-□ Не более 3 открытых позиций
-□ Не пятница вечер (weekend risk)
-□ Стратегия не нарушает правила FTMO
+□ No more than 3 open positions
+□ Not Friday evening (weekend risk)
+□ Strategy does not violate FTMO rules
 ```
 
 ---
 
-## Ссылки
+## Links
 
 - FTMO Trading Rules: https://ftmo.com/en/trading-rules/
 - FTMO FAQ: https://ftmo.com/en/faq/

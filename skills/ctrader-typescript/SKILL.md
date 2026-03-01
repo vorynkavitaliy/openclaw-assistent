@@ -1,3 +1,4 @@
+```skill
 ---
 name: ctrader-typescript
 description: cTrader Open API integration for forex trading via TypeScript
@@ -8,99 +9,99 @@ requires:
 
 # Skill: cTrader Open API Integration (TypeScript)
 
-## Описание
+## Description
 
-Интеграция с cTrader через Open API (Spotware) для программного управления торговлей на Forex. Используется агентом forex-trader как основной метод исполнения ордеров. Полностью на TypeScript через SDK `ctrader-ts`.
+Integration with cTrader via Open API (Spotware) for programmatic forex trade management. Used by the forex-trader agent as the primary order execution method. Fully in TypeScript via `ctrader-ts` SDK.
 
-## Зависимости
+## Dependencies
 
 - Node.js 20+
-- `ctrader-ts` SDK (установлен в package.json)
-- Аутентификация: `npx ctrader-ts auth` (один раз, OAuth2)
+- `ctrader-ts` SDK (installed in package.json)
+- Authentication: `npx ctrader-ts auth` (one-time, OAuth2)
 
-## Модули
+## Modules
 
 ```
 src/trading/forex/
-├── client.ts   — cTrader API клиент: подключение, данные, торговля
-├── monitor.ts  — мониторинг: heartbeat, позиции, risk-check, trade
-├── trade.ts    — CLI для ордеров: open, close, modify, status
-└── config.ts   — конфигурация из ~/.openclaw/openclaw.json
+├── client.ts   — cTrader API client: connection, data, trading
+├── monitor.ts  — monitoring: heartbeat, positions, risk-check, trade
+├── trade.ts    — CLI for orders: open, close, modify, status
+└── config.ts   — configuration from ~/.openclaw/openclaw.json
 ```
 
 ## CLI Reference
 
-### Мониторинг (monitor.ts)
+### Monitoring (monitor.ts)
 
 ```bash
-# Heartbeat — аккаунт, позиции, дродаун, FTMO-алерты
+# Heartbeat — account, positions, drawdown, FTMO alerts
 npx tsx src/trading/forex/monitor.ts --heartbeat
 
-# Только позиции
+# Positions only
 npx tsx src/trading/forex/monitor.ts --positions
 
-# Только аккаунт
+# Account only
 npx tsx src/trading/forex/monitor.ts --account
 
-# Проверка рисков (FTMO drawdown)
+# Risk check (FTMO drawdown)
 npx tsx src/trading/forex/monitor.ts --risk-check
 
-# Анализ + торговля (dry-run)
+# Analysis + trading (dry-run)
 npx tsx src/trading/forex/monitor.ts --trade --dry-run
 
-# Анализ + торговля (боевой режим)
+# Analysis + trading (live mode)
 npx tsx src/trading/forex/monitor.ts --trade
 
-# Одна пара
+# Single pair
 npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
 ```
 
-### Торговля (trade.ts)
+### Trading (trade.ts)
 
 ```bash
-# Открыть позицию
+# Open position
 npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 
-# Закрыть позицию
+# Close position
 npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
-# Частичное закрытие
+# Partial close
 npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
 
-# Модификация SL/TP
+# Modify SL/TP
 npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
   --sl-pips 30 --tp-pips 100
 
-# Закрыть всё
+# Close all
 npx tsx src/trading/forex/trade.ts --action close-all
 
-# Статус аккаунта
+# Account status
 npx tsx src/trading/forex/trade.ts --action status
 ```
 
-Все команды возвращают JSON.
+All commands return JSON.
 
-## API клиент (client.ts)
+## API Client (client.ts)
 
-Библиотека для использования другими модулями:
+Library for use by other modules:
 
-| Функция                                | Описание                         |
+| Function                               | Description                      |
 | -------------------------------------- | -------------------------------- |
-| `connect()`                            | Подключение к cTrader API        |
-| `disconnect()`                         | Отключение                       |
-| `getAccountInfo()`                     | Баланс, equity, маржа            |
-| `getPositions()`                       | Открытые позиции                 |
-| `openPosition(params)`                 | Открыть ордер (Market/Limit)     |
-| `closePosition(positionId, volume?)`   | Закрыть (полностью или частично) |
-| `modifyPosition(positionId, sl?, tp?)` | Изменить SL/TP                   |
-| `closeAllPositions()`                  | Закрыть все позиции              |
-| `getTrendbars(symbol, period, count)`  | OHLC данные                      |
+| `connect()`                            | Connect to cTrader API           |
+| `disconnect()`                         | Disconnect                       |
+| `getAccountInfo()`                     | Balance, equity, margin          |
+| `getPositions()`                       | Open positions                   |
+| `openPosition(params)`                 | Open order (Market/Limit)        |
+| `closePosition(positionId, volume?)`   | Close (full or partial)          |
+| `modifyPosition(positionId, sl?, tp?)` | Modify SL/TP                     |
+| `closeAllPositions()`                  | Close all positions              |
+| `getTrendbars(symbol, period, count)`  | OHLC data                        |
 
-## Конфигурация
+## Configuration
 
-Credentials в `~/.openclaw/openclaw.json`:
+Credentials in `~/.openclaw/openclaw.json`:
 
 ```json5
 {
@@ -114,8 +115,8 @@ Credentials в `~/.openclaw/openclaw.json`:
 }
 ```
 
-## Безопасность
+## Security
 
-- OAuth2 токены через `npx ctrader-ts auth`
-- Credentials в `~/.openclaw/openclaw.json` — НЕ коммитить
-- Логировать только safe-format: `531…488`
+- OAuth2 tokens via `npx ctrader-ts auth`
+- Credentials in `~/.openclaw/openclaw.json` — DO NOT commit
+- Log only in safe format: `531…488`

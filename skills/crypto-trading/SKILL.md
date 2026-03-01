@@ -1,3 +1,4 @@
+```skill
 ---
 name: crypto-trading
 description: 'Cryptocurrency market analysis and trading tools. Fetch prices, on-chain data, manage positions via exchange APIs.'
@@ -7,34 +8,34 @@ user-invocable: true
 
 # Crypto Trading Skill
 
-Инструменты для анализа и торговли криптовалютами.
+Tools for cryptocurrency analysis and trading.
 
-## Получение рыночных данных
+## Fetching Market Data
 
-### Текущие цены (CoinGecko, бесплатно)
+### Current Prices (CoinGecko, free)
 
 ```bash
-# Основные монеты
+# Major coins
 curl -s "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true" | jq '.'
 
-# Топ-10 по капитализации
+# Top 10 by market cap
 curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1" | jq '.[] | {symbol, current_price, price_change_percentage_24h, market_cap}'
 ```
 
 ### Bybit API v5
 
 ```bash
-# Текущая цена
+# Current price
 curl -s "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT" | jq '.result.list[0] | {symbol, lastPrice, price24hPcnt, volume24h, turnover24h}'
 
-# Книга ордеров
+# Order book
 curl -s "https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=5" | jq '.result'
 
-# Klines (свечи) — 1h, последние 24
+# Klines (candles) — 1h, last 24
 curl -s "https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=24" | jq '.result.list[] | {open: .[1], high: .[2], low: .[3], close: .[4], volume: .[5]}'
 ```
 
-> Для торговых операций используй TypeScript модули (bybit-client.ts) — не curl.
+> For trading operations use TypeScript modules (bybit-client.ts) — not curl.
 > Docs: https://bybit-exchange.github.io/docs/v5/intro
 
 ### Fear & Greed Index
@@ -49,7 +50,7 @@ curl -s "https://api.alternative.me/fng/?limit=1" | jq '.data[0] | {value, value
 curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percentage.btc'
 ```
 
-## On-Chain анализ (через browser)
+## On-Chain Analysis (via browser)
 
 - **Glassnode**: https://studio.glassnode.com/
 - **Dune Analytics**: https://dune.com/
@@ -57,56 +58,56 @@ curl -s "https://api.coingecko.com/api/v3/global" | jq '.data.market_cap_percent
 - **Etherscan**: https://etherscan.io/
 - **Whale Alert**: https://whale-alert.io/
 
-## Торговля через TypeScript модули (Bybit)
+## Trading via TypeScript Modules (Bybit)
 
-Все торговые операции выполняются через TypeScript CLI:
+All trading operations are executed via TypeScript CLI:
 
 ```bash
-# Мониторинг (анализ + торговля, dry-run)
+# Monitoring (analysis + trading, dry-run)
 npx tsx src/trading/crypto/monitor.ts --dry-run
 
-# Боевой режим
+# Live mode
 npx tsx src/trading/crypto/monitor.ts
 
-# Kill Switch (экстренная остановка)
+# Kill Switch (emergency stop)
 npx tsx src/trading/crypto/killswitch.ts --close-all
 
-# Отчёт
+# Report
 npx tsx src/trading/crypto/report.ts
 ```
 
 ### Credentials
 
-- **Файл**: `~/.openclaw/openclaw.json` → секция `crypto`
-- **SDK**: `bybit-api` (Node.js) с `demoTrading: true` для Demo Trading
-- **Тип**: Unified Trading Account (UTA), USDT-M Linear Perpetual
+- **File**: `~/.openclaw/openclaw.json` → `crypto` section
+- **SDK**: `bybit-api` (Node.js) with `demoTrading: true` for Demo Trading
+- **Type**: Unified Trading Account (UTA), USDT-M Linear Perpetual
 
-> ⚠️ Demo Trading ключи работают ТОЛЬКО через Node SDK с `demoTrading: true`, не через REST API.
+> ⚠️ Demo Trading keys work ONLY via Node SDK with `demoTrading: true`, not via REST API.
 
-## Мониторинг портфеля
+## Portfolio Monitoring
 
-### Формат позиции
+### Position Format
 
 ```
 🪙 BTC/USDT
-   Количество: 0.5 BTC
-   Средняя цена: $95,000
-   Текущая цена: $98,500
+   Quantity: 0.5 BTC
+   Avg Price: $95,000
+   Current Price: $98,500
    P&L: +$1,750 (+3.7%)
    SL: $93,000 (-2.1%)
    TP: $105,000 (+10.5%)
 ```
 
-## Алерты
+## Alerts
 
-Создавай алерты через cron:
+Create alerts via cron:
 
 ```bash
-# Проверять каждые 5 минут
-# Если BTC > 100000, отправить алерт через sessions_send orchestrator
+# Check every 5 minutes
+# If BTC > 100000, send alert via sessions_send orchestrator
 ```
 
-## Журнал сделок
+## Trade Journal
 
 ```bash
 bash {baseDir}/../taskboard/scripts/taskboard.sh create \

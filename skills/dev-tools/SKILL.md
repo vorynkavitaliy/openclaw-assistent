@@ -1,3 +1,4 @@
+```skill
 ---
 name: dev-tools
 description: 'Development tools for code generation, git operations, project scaffolding, testing, and deployment automation.'
@@ -7,18 +8,18 @@ user-invocable: true
 
 # Development Tools Skill
 
-Инструменты для разработки, используемые агентами-разработчиками.
+Tools used by developer agents.
 
-## Git операции
+## Git Operations
 
-### Создание feature branch
+### Creating a feature branch
 
 ```bash
 cd /path/to/project
 git checkout -b feature/TASK-XXX-description
 ```
 
-### Коммит с conventional commits
+### Commit with conventional commits
 
 ```bash
 git add .
@@ -27,15 +28,15 @@ git commit -m "feat(module): brief description
 TASK-XXX: detailed description of changes"
 ```
 
-### Создание Pull Request
+### Creating a Pull Request
 
 ```bash
 git push origin feature/TASK-XXX-description
-# Через GitHub CLI (если установлен):
+# Via GitHub CLI (if installed):
 gh pr create --title "feat: description" --body "Closes TASK-XXX"
 ```
 
-## Scaffolding проектов
+## Project Scaffolding
 
 ### Backend (Node.js + TypeScript)
 
@@ -59,7 +60,7 @@ npx create-next-app@latest /path/to/project --typescript --tailwind --app --src-
 npm create vite@latest /path/to/project -- --template react-ts
 ```
 
-## Запуск тестов
+## Running Tests
 
 ### Jest / Vitest
 
@@ -78,7 +79,7 @@ npx playwright show-report
 
 ## Docker
 
-### Сборка
+### Build
 
 ```bash
 docker build -t app-name .
@@ -86,9 +87,9 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-### Шаблон Dockerfile (Node.js)
+### Dockerfile Template (Node.js)
 
-Создай файл Dockerfile:
+Create a Dockerfile:
 
 ```dockerfile
 FROM node:22-alpine
@@ -100,7 +101,7 @@ EXPOSE 3000
 CMD ["node", "dist/index.js"]
 ```
 
-## Линтинг и форматирование
+## Linting and Formatting
 
 ### ESLint + Prettier
 
@@ -109,31 +110,31 @@ npx eslint src/ --fix
 npx prettier --write "src/**/*.{ts,tsx}"
 ```
 
-### Biome (альтернатива)
+### Biome (alternative)
 
 ```bash
 npx @biomejs/biome check --write src/
 ```
 
-## Мониторинг и дебаг
+## Monitoring and Debugging
 
 ```bash
-# Логи приложения
+# Application logs
 tail -f /path/to/app.log
 
-# Проверка портов
+# Check ports
 lsof -i :3000
 
-# Проверка процессов
+# Check processes
 ps aux | grep node
 
-# Использование ресурсов
+# Resource usage
 top -l 1 | head -20
 ```
 
-## Обновление Task Board после работы
+## Updating Task Board After Work
 
 ```bash
 bash ~/.openclaw/skills/taskboard/scripts/taskboard.sh update TASK-XXX --status review
-bash ~/.openclaw/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Реализовано: [описание]. Тесты пройдены. PR создан."
+bash ~/.openclaw/skills/taskboard/scripts/taskboard.sh comment TASK-XXX "Implemented: [description]. Tests passed. PR created."
 ```

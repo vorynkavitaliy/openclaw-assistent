@@ -1,3 +1,4 @@
+```skill
 ---
 name: taskboard
 description: 'Task management board (Jira-like) for AI agent team coordination. Create, assign, track, and manage tasks across all agents.'
@@ -5,38 +6,38 @@ metadata: { 'openclaw': { 'always': true, 'emoji': '📋' } }
 user-invocable: true
 ---
 
-# Task Board — Управление задачами
+# Task Board — Task Management
 
-Ты имеешь доступ к системе управления задачами (Task Board). Это общая борда для всей команды агентов, аналог Jira.
+You have access to the task management system (Task Board). It is a shared board for the entire agent team, similar to Jira.
 
-## Расположение данных
+## Data Location
 
-- Файл задач: `{baseDir}/data/tasks.json`
-- Уведомления: `{baseDir}/data/notifications.json`
-- Telegram конфиг: `{baseDir}/data/telegram.conf` (gitignored)
-- Скрипт управления: `{baseDir}/scripts/taskboard.sh`
+- Tasks file: `{baseDir}/data/tasks.json`
+- Notifications: `{baseDir}/data/notifications.json`
+- Telegram config: `{baseDir}/data/telegram.conf` (gitignored)
+- Management script: `{baseDir}/scripts/taskboard.sh`
 
-## Идентификация агента
+## Agent Identification
 
-Скрипт **автоматически определяет** агента по CWD workspace-директории.
-Ничего передавать не нужно — `reporter` и `agent` заполнятся правильно.
+The script **automatically detects** the agent from the CWD workspace directory.
+No need to pass anything — `reporter` and `agent` will be populated correctly.
 
-Порядок определения: `--agent` флаг → `OPENCLAW_AGENT_ID` env → CWD `/workspaces/<id>` → ancestor CWD.
+Detection order: `--agent` flag → `OPENCLAW_AGENT_ID` env → CWD `/workspaces/<id>` → ancestor CWD.
 
-Если автодетект не срабатывает (показывает "unknown"), передай явно:
+If auto-detection fails (shows "unknown"), pass explicitly:
 
 ```bash
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_AGENT_ID команда [аргументы]
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_AGENT_ID command [arguments]
 ```
 
-## Команды
+## Commands
 
-### Создание задачи
+### Creating a Task
 
 ```bash
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID create \
-  --title "Название задачи" \
-  --description "Подробное описание" \
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_ID create \
+  --title "Task title" \
+  --description "Detailed description" \
   --type "task" \
   --assignee "agent-id" \
   --priority "high" \
@@ -44,89 +45,89 @@ bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID create \
   --parent "TASK-001"
 ```
 
-Типы: `task`, `bug`, `feature`, `epic`
-Приоритеты: `critical`, `high`, `medium`, `low`
+Types: `task`, `bug`, `feature`, `epic`
+Priorities: `critical`, `high`, `medium`, `low`
 
-### Список задач
+### Listing Tasks
 
 ```bash
-# Все задачи
+# All tasks
 bash {baseDir}/scripts/taskboard.sh list
 
-# Фильтрация по исполнителю
+# Filter by assignee
 bash {baseDir}/scripts/taskboard.sh list --assignee backend-dev
 
-# Фильтрация по статусу
+# Filter by status
 bash {baseDir}/scripts/taskboard.sh list --status todo
 
-# Комбинированная фильтрация
+# Combined filtering
 bash {baseDir}/scripts/taskboard.sh list --assignee backend-dev --status in_progress --priority high
 ```
 
-### Получение задачи
+### Getting a Task
 
 ```bash
 bash {baseDir}/scripts/taskboard.sh get TASK-001
 ```
 
-### Обновление задачи
+### Updating a Task
 
 ```bash
-# Изменить статус
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --status in_progress
+# Change status
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_ID update TASK-001 --status in_progress
 
-# Изменить приоритет
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --priority critical
+# Change priority
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_ID update TASK-001 --priority critical
 
-# Переназначить
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID update TASK-001 --assignee frontend-dev
+# Reassign
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_ID update TASK-001 --assignee frontend-dev
 ```
 
-Статусы: `backlog` → `todo` → `in_progress` → `review` → `testing` → `done`
+Statuses: `backlog` → `todo` → `in_progress` → `review` → `testing` → `done`
 
-### Добавление комментария
+### Adding a Comment
 
 ```bash
-bash {baseDir}/scripts/taskboard.sh --agent ТВОЙ_ID comment TASK-001 "Текст комментария"
+bash {baseDir}/scripts/taskboard.sh --agent YOUR_ID comment TASK-001 "Comment text"
 ```
 
-### Уведомления (для orchestrator)
+### Notifications (for orchestrator)
 
-При каждом изменении статуса скрипт автоматически создаёт уведомление.
+The script automatically creates a notification on every status change.
 
 ```bash
-# Показать непрочитанные уведомления
+# Show unseen notifications
 bash {baseDir}/scripts/taskboard.sh notifications --unseen
 
-# Все уведомления (последние 20)
+# All notifications (last 20)
 bash {baseDir}/scripts/taskboard.sh notifications
 
-# Отметить все как прочитанные
+# Mark all as read
 bash {baseDir}/scripts/taskboard.sh notifications --ack
 ```
 
-### Статистика и удаление
+### Statistics and Deletion
 
 ```bash
 bash {baseDir}/scripts/taskboard.sh stats
 bash {baseDir}/scripts/taskboard.sh delete TASK-001
 ```
 
-## Telegram-уведомления
+## Telegram Notifications
 
-Все действия с задачами автоматически отправляются в Telegram пользователю.
+All task actions are automatically sent to the user via Telegram.
 
-**Что уведомляется:**
+**What gets notified:**
 
-- Создание задачи
-- Изменение статуса
-- Изменение приоритета
-- Переназначение исполнителя
-- Комментарии
-- Удаление задачи
+- Task creation
+- Status changes
+- Priority changes
+- Assignee changes
+- Comments
+- Task deletion
 
-**Визуальная система (emoji по агентам):**
-| Агент | Emoji |
+**Visual system (emoji by agent):**
+| Agent | Emoji |
 |-------|-------|
 | orchestrator | 🎯 |
 | crypto-trader | ₿ |
@@ -137,22 +138,22 @@ bash {baseDir}/scripts/taskboard.sh delete TASK-001
 | frontend-dev | 🎨 |
 | qa-tester | 🧪 |
 
-**Конфигурация:** `{baseDir}/data/telegram.conf` (gitignored, не коммитить):
+**Configuration:** `{baseDir}/data/telegram.conf` (gitignored, do not commit):
 
 ```bash
 TG_BOT_TOKEN="bot-token-here"
 TG_CHAT_ID="chat-id-here"
 ```
 
-Если `telegram.conf` отсутствует или пуст — уведомления тихо пропускаются.
+If `telegram.conf` is missing or empty — notifications are silently skipped.
 
-## Правила использования
+## Usage Rules
 
-1. **Создание задач**: Только Orchestrator и Tech Lead создают задачи (другие агенты могут создавать bug-репорты)
-2. **Статусы**: Всегда обновляй статус при начале и завершении работы
-3. **Комментарии**: Добавляй комментарии о прогрессе и результатах
-4. **Назначение**: Каждая задача должна иметь assignee
-5. **Связи**: Используй --parent для связи подзадач с родительской задачей
+1. **Task creation**: Only Orchestrator and Tech Lead create tasks (other agents may create bug reports)
+2. **Statuses**: Always update status when starting and finishing work
+3. **Comments**: Add comments about progress and results
+4. **Assignment**: Every task must have an assignee
+5. **Relations**: Use --parent to link subtasks to a parent task
 
 ## Workflow
 
@@ -160,9 +161,9 @@ TG_CHAT_ID="chat-id-here"
 backlog → todo → in_progress → review → testing → done
 ```
 
-- `backlog`: Задача создана, ждёт приоритизации
-- `todo`: Задача готова к работе
-- `in_progress`: Агент взял задачу в работу
-- `review`: Код/результат готов к ревью (Tech Lead)
-- `testing`: Передано на тестирование (QA Tester)
-- `done`: Задача завершена и протестирована
+- `backlog`: Task created, awaiting prioritization
+- `todo`: Task is ready to be worked on
+- `in_progress`: Agent has picked up the task
+- `review`: Code/result is ready for review (Tech Lead)
+- `testing`: Passed to testing (QA Tester)
+- `done`: Task completed and tested

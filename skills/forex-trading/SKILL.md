@@ -1,3 +1,4 @@
+```skill
 ---
 name: forex-trading
 description: 'Forex market analysis and trading tools. Fetch quotes, analyze charts, manage positions via broker APIs.'
@@ -7,89 +8,89 @@ user-invocable: true
 
 # Forex Trading Skill
 
-Инструменты для анализа и торговли на рынке Forex.
+Tools for forex market analysis and trading.
 
-## Получение котировок
+## Fetching Quotes
 
-### Текущий курс валютной пары
+### Current Exchange Rate
 
 ```bash
-# Через ExchangeRate API (бесплатно)
+# Via ExchangeRate API (free)
 curl -s "https://api.exchangerate-api.com/v4/latest/USD" | jq '.rates.EUR, .rates.GBP, .rates.JPY'
 
-# Через Open Exchange Rates (бесплатно с лимитом)
+# Via Open Exchange Rates (free with limit)
 curl -s "https://open.er-api.com/v6/latest/USD" | jq '.rates'
 ```
 
-### Исторические данные
+### Historical Data
 
 ```bash
-# Yahoo Finance unofficial (через browser)
-# Открой TradingView для графического анализа
+# Yahoo Finance unofficial (via browser)
+# Open TradingView for chart analysis
 ```
 
-## Анализ рынка
+## Market Analysis
 
-### Технический анализ
+### Technical Analysis
 
-Используй `browser` для открытия TradingView:
+Use `browser` to open TradingView:
 
 - URL: `https://www.tradingview.com/chart/?symbol=FX:EURUSD`
-- Анализируй графики, индикаторы, уровни
+- Analyze charts, indicators, levels
 
-### Экономический календарь
+### Economic Calendar
 
 ```bash
-# Проверь ближайшие события
-# Через browser: https://www.forexfactory.com/calendar
-# Через browser: https://www.investing.com/economic-calendar/
+# Check upcoming events
+# Via browser: https://www.forexfactory.com/calendar
+# Via browser: https://www.investing.com/economic-calendar/
 ```
 
-## Работа с брокером
+## Broker Integration
 
-### cTrader Open API (через TypeScript)
+### cTrader Open API (via TypeScript)
 
-Основной метод торговли — через cTrader Open API. Все ордера исполняются программно:
+Primary trading method — via cTrader Open API. All orders are executed programmatically:
 
 ```bash
-# Открытие позиции
+# Open position
 npx tsx src/trading/forex/trade.ts --action open \
   --pair EURUSD --side BUY --lots 0.1 \
   --sl-pips 50 --tp-pips 100
 
-# Закрытие позиции
+# Close position
 npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
 
-# Статус аккаунта
+# Account status
 npx tsx src/trading/forex/trade.ts --action status
 
-# Мониторинг (heartbeat)
+# Monitoring (heartbeat)
 npx tsx src/trading/forex/monitor.ts --heartbeat
 
-# Анализ + торговля (dry-run)
+# Analysis + trading (dry-run)
 npx tsx src/trading/forex/monitor.ts --trade --dry-run
 ```
 
-Подробнее: см. `skills/ctrader-typescript/SKILL.md`
+See also: `skills/ctrader-typescript/SKILL.md`
 
-## Риск-менеджмент
+## Risk Management
 
-### Расчёт размера позиции
+### Position Size Calculation
 
 ```
-Лот = (Депозит × Риск%) / (SL в пунктах × Стоимость пункта)
+Lot = (Deposit × Risk%) / (SL in pips × Pip Value)
 
-Пример:
-- Депозит: $10,000
-- Риск: 2% = $200
+Example:
+- Deposit: $10,000
+- Risk: 2% = $200
 - SL: 50 pips
-- EURUSD: стоимость 1 pip = $10/lot
-- Лот = 200 / (50 × 10) = 0.4 лота
+- EURUSD: pip value = $10/lot
+- Lot = 200 / (50 × 10) = 0.4 lots
 ```
 
-## Журнал сделок
+## Trade Journal
 
-Каждую сделку фиксируй на Task Board:
+Log every trade on the Task Board:
 
 ```bash
 bash {baseDir}/../taskboard/scripts/taskboard.sh create \

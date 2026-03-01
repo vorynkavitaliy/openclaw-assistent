@@ -1,167 +1,167 @@
 # HyroTrade Prop Trading Rules — 2-Step Challenge (Crypto)
 
-> Правила HyroTrade для автоматизированной крипто-торговли. Агент **ОБЯЗАН** соблюдать все лимиты.
-> Нарушение любого правила = потеря аккаунта.
+> HyroTrade rules for automated crypto trading. The agent **MUST** comply with all limits.
+> Violating any rule = account termination.
 
 ---
 
 ## Phase 1: Challenge
 
-| Параметр                 | Значение                                    |
+| Parameter                | Value                                       |
 | ------------------------ | ------------------------------------------- |
-| **Profit Target**        | **8%** от начального баланса                |
-| **Daily Drawdown Limit** | **5%** от баланса на начало дня             |
-| **Maximum Loss Limit**   | **10%** от начального баланса               |
-| **Trading Period**       | **Без ограничений** (unlimited)             |
-| **Minimum Trading Days** | **5 дней** (сделки в 5 разных дней)         |
-| **Stop Loss**            | **Обязателен**, макс. риск на сделку **3%** |
+| **Profit Target**        | **8%** of initial balance                   |
+| **Daily Drawdown Limit** | **5%** of balance at the start of the day   |
+| **Maximum Loss Limit**   | **10%** of initial balance                  |
+| **Trading Period**       | **Unlimited**                               |
+| **Minimum Trading Days** | **5 days** (trades on 5 different days)     |
+| **Stop Loss**            | **Mandatory**, max risk per trade **3%**    |
 
 ---
 
 ## Phase 2: Verification
 
-| Параметр                 | Значение                                          |
+| Parameter                | Value                                             |
 | ------------------------ | ------------------------------------------------- |
-| **Profit Target**        | **5%** от начального баланса                      |
-| **Daily Drawdown Limit** | **5%** от баланса на начало дня                   |
-| **Maximum Loss Limit**   | **10%** от начального баланса                     |
-| **Trading Period**       | **Без ограничений** (unlimited)                   |
-| **Minimum Trading Days** | **5 дней** (сделки в 5 разных дней)               |
-| **Stop Loss**            | **Обязателен**, макс. риск на сделку **3%**       |
-| **Inactivity Period**    | **30 дней** (аккаунт отключается при бездействии) |
+| **Profit Target**        | **5%** of initial balance                         |
+| **Daily Drawdown Limit** | **5%** of balance at the start of the day         |
+| **Maximum Loss Limit**   | **10%** of initial balance                        |
+| **Trading Period**       | **Unlimited**                                     |
+| **Minimum Trading Days** | **5 days** (trades on 5 different days)           |
+| **Stop Loss**            | **Mandatory**, max risk per trade **3%**          |
+| **Inactivity Period**    | **30 days** (account disabled if inactive)        |
 
 ---
 
-## Funded Account (после прохождения обоих фаз)
+## Funded Account (after passing both phases)
 
-| Параметр              | Значение                                   |
-| --------------------- | ------------------------------------------ |
-| **Profit Target**     | Нет (торгуешь без ограничения по времени)  |
-| **Daily Drawdown**    | **5%** от баланса на начало дня            |
-| **Maximum Loss**      | **10%** от начального баланса              |
-| **Profit Split**      | Зависит от плана (обычно 80/20 → до 90/10) |
-| **Inactivity Period** | **30 дней**                                |
-
----
-
-## Low-Cap Altcoins — Ограничения
-
-| Правило                       | Значение                                 |
-| ----------------------------- | ---------------------------------------- |
-| **Минимальная капитализация** | **$100M** (ниже — запрещено)             |
-| **Максимальная аллокация**    | **5%** от баланса на одну low-cap монету |
-
-> Определение low-cap: монета с market cap < $500M.
-> Для монет с капитализацией $100M–$500M — ограничение 5% баланса.
-> Для BTC, ETH, SOL и других крупных монет — стандартный лимит.
+| Parameter             | Value                                          |
+| --------------------- | ---------------------------------------------- |
+| **Profit Target**     | None (trade without time limit)                |
+| **Daily Drawdown**    | **5%** of balance at the start of the day      |
+| **Maximum Loss**      | **10%** of initial balance                     |
+| **Profit Split**      | Depends on plan (typically 80/20 → up to 90/10) |
+| **Inactivity Period** | **30 days**                                    |
 
 ---
 
-## Расчёт Daily Drawdown
+## Low-Cap Altcoins — Restrictions
+
+| Rule                        | Value                                    |
+| --------------------------- | ---------------------------------------- |
+| **Minimum Market Cap**      | **$100M** (below = prohibited)           |
+| **Maximum Allocation**      | **5%** of balance per low-cap coin       |
+
+> Low-cap definition: coin with market cap < $500M.
+> For coins with market cap $100M–$500M — limit is 5% of balance.
+> For BTC, ETH, SOL and other large-cap coins — standard limit applies.
+
+---
+
+## Daily Drawdown Calculation
 
 ```
-Каждый день в 00:00 UTC фиксируется базовый баланс.
-Daily Drawdown = max(Начальный_Баланс_Дня, Equity_Максимум_Дня) - Текущий_Equity
+Each day at 00:00 UTC the base balance is recorded.
+Daily Drawdown = max(Start_Of_Day_Balance, Max_Equity_Of_Day) - Current_Equity
 
-Если Daily_Drawdown > 5% от Start_Of_Day_Balance → НАРУШЕНИЕ!
+If Daily_Drawdown > 5% of Start_Of_Day_Balance → VIOLATION!
 ```
 
-### Пример (аккаунт $25,000):
+### Example (account $25,000):
 
-- Начало дня (00:00 UTC): баланс $25,000
+- Start of day (00:00 UTC): balance $25,000
 - Max Daily Loss: $1,250 (5%)
-- Equity никогда не должен опуститься ниже $23,750
+- Equity must never drop below $23,750
 
-## Расчёт Maximum Loss (Total Drawdown)
+## Maximum Loss Calculation (Total Drawdown)
 
 ```
-Maximum Loss = Начальный_Баланс_Аккаунта - Текущий_Equity
+Maximum Loss = Initial_Account_Balance - Current_Equity
 
-Если Equity < 90% от Начального_Баланса → НАРУШЕНИЕ!
+If Equity < 90% of Initial_Balance → VIOLATION!
 ```
 
-### Пример (аккаунт $25,000):
+### Example (account $25,000):
 
-- Начальный баланс: $25,000
+- Initial balance: $25,000
 - Max Loss: $2,500 (10%)
-- Equity НИКОГДА не ниже $22,500
+- Equity must NEVER go below $22,500
 
 ---
 
-## Запрещённые действия
+## Prohibited Actions
 
-1. **Торговля без Stop Loss** — SL обязателен на каждую сделку
-2. **Мартингейл** — запрещено увеличивать позицию после убытка
-3. **Grid Trading** — запрещено ставить сетку ордеров
-4. **HFT / Scalping < 1 min** — запрещены сделки короче 1 минуты
-5. **Арбитраж между аккаунтами** — запрещено
-6. **Хеджирование** — одновременные LONG и SHORT по той же паре запрещены
-7. **Торговля на делистинге/листинге** — запрещено торговать аномальные пампы/дампы
-8. **Копитрейдинг** — запрещено копировать чужие сигналы через API
-9. **Манипуляция drawdown** — запрещено искусственно избегать drawdown (тик-торговля)
+1. **Trading without Stop Loss** — SL is mandatory on every trade
+2. **Martingale** — increasing position size after a loss is prohibited
+3. **Grid Trading** — placing a grid of orders is prohibited
+4. **HFT / Scalping < 1 min** — trades shorter than 1 minute are prohibited
+5. **Arbitrage between accounts** — prohibited
+6. **Hedging** — simultaneous LONG and SHORT on the same pair is prohibited
+7. **Trading on delisting/listing** — trading anomalous pumps/dumps is prohibited
+8. **Copy trading** — copying other signals via API is prohibited
+9. **Drawdown manipulation** — artificially avoiding drawdown (tick trading) is prohibited
 
 ---
 
-## Требования к Stop Loss
+## Stop Loss Requirements
 
-| Правило                     | Значение                               |
+| Rule                        | Value                                  |
 | --------------------------- | -------------------------------------- |
-| **SL обязателен**           | На КАЖДУЮ позицию                      |
-| **Макс. риск на сделку**    | **3%** от баланса (HyroTrade правило)  |
-| **Агент использует**        | **2%** от баланса (буфер безопасности) |
-| **SL должен быть реальным** | Не 50% от баланса — разумная дистанция |
+| **SL is mandatory**         | On EVERY position                      |
+| **Max risk per trade**      | **3%** of balance (HyroTrade rule)     |
+| **Agent uses**              | **2%** of balance (safety buffer)      |
+| **SL must be realistic**    | Not 50% of balance — reasonable distance |
 
 ---
 
-## Буфер безопасности агента
+## Agent Safety Buffer
 
-Агент использует БОЛЕЕ СТРОГИЕ лимиты для запаса прочности:
+The agent uses STRICTER limits to maintain a safety margin:
 
-| Параметр       | HyroTrade лимит | Агент использует   | Буфер |
-| -------------- | --------------- | ------------------ | ----- |
-| Daily Drawdown | 5%              | **4%**             | 1%    |
-| Maximum Loss   | 10%             | **8%**             | 2%    |
-| Риск на сделку | 3%              | **2%**             | 1%    |
-| Max позиций    | Не ограничено   | **3**              | —     |
-| Max плечо      | Не ограничено   | **5x** (обычно 3x) | —     |
+| Parameter      | HyroTrade Limit | Agent Uses          | Buffer |
+| -------------- | --------------- | ------------------- | ------ |
+| Daily Drawdown | 5%              | **4%**              | 1%     |
+| Maximum Loss   | 10%             | **8%**              | 2%     |
+| Risk per trade | 3%              | **2%**              | 1%     |
+| Max positions  | Unlimited       | **3**               | —      |
+| Max leverage   | Unlimited       | **5x** (usually 3x) | —      |
 
-### Алерты агента:
+### Agent Alerts:
 
-- При Daily Drawdown > **3%** → АЛЕРТ, осторожная торговля
-- При Daily Drawdown > **4%** → СТОП торговли на сегодня
-- При Total Drawdown > **6%** → АЛЕРТ, сократить позиции
-- При Total Drawdown > **8%** → СТОП торговли, уведомить пользователя
-
----
-
-## Торговые часы крипто
-
-- **24/7** — крипто работает круглосуточно
-- **Осторожно**: воскресенье (низкая ликвидность)
-- **Не торговать**: за 30 мин до/после FOMC, CPI и крупных крипто-событий (разлоки, листинги)
+- Daily Drawdown > **3%** → ALERT, cautious trading
+- Daily Drawdown > **4%** → STOP trading for the day
+- Total Drawdown > **6%** → ALERT, reduce positions
+- Total Drawdown > **8%** → STOP trading, notify user
 
 ---
 
-## Pre-Trade Checklist (перед каждой сделкой)
+## Crypto Trading Hours
+
+- **24/7** — crypto markets operate around the clock
+- **Caution**: Sunday (low liquidity)
+- **Do not trade**: 30 min before/after FOMC, CPI and major crypto events (unlocks, listings)
+
+---
+
+## Pre-Trade Checklist (before every trade)
 
 ```
-□ Stop Loss установлен?
-□ Риск ≤ 2% от баланса?
+□ Stop Loss set?
+□ Risk ≤ 2% of balance?
 □ R:R ≥ 1:2?
-□ Дневной drawdown < 4%?
-□ Общий drawdown < 8%?
-□ Рыночная капитализация монеты > $100M?
-□ Если low-cap — аллокация ≤ 5%?
-□ Не мартингейл и не grid?
-□ Нет важных новостей в ближайшие 30 мин?
-□ Макс 3 позиции одновременно?
-□ Плечо ≤ 5x?
-□ Минимум 5 торговых дней для прохождения фазы?
+□ Daily drawdown < 4%?
+□ Total drawdown < 8%?
+□ Coin market cap > $100M?
+□ If low-cap — allocation ≤ 5%?
+□ Not martingale or grid?
+□ No major news in the next 30 min?
+□ Max 3 positions simultaneously?
+□ Leverage ≤ 5x?
+□ Minimum 5 trading days to pass the phase?
 ```
 
 ---
 
-## Ссылки
+## Links
 
 - HyroTrade Challenge: https://hyrotrade.com/challenges
 - HyroTrade FAQ: https://hyrotrade.com/faq

@@ -2,15 +2,17 @@
 
 ## Routing Table
 
-| Request type      | Agent          | Activation method                  |
-| ----------------- | -------------- | ---------------------------------- |
-| Forex trading     | forex-trader   | Task Board (picks up on heartbeat) |
-| Crypto trading    | crypto-trader  | Task Board (picks up on heartbeat) |
-| Market analysis   | market-analyst | Task Board + sessions_send         |
-| Development       | tech-lead      | Task Board + sessions_send         |
-| Testing           | qa-tester      | Task Board + sessions_send         |
-| General questions | (self)         | Answer directly                    |
-| URGENT anything   | any agent      | Task Board + sessions_send         |
+| Request type          | Agent          | Activation method                              |
+| --------------------- | -------------- | ---------------------------------------------- |
+| Start trading/monitor | forex/crypto   | Enable heartbeat + sessions_send               |
+| Stop trading          | forex/crypto   | Disable heartbeat + cleanup                    |
+| One-off trade         | forex/crypto   | sessions_send (no heartbeat needed)            |
+| Market analysis       | market-analyst | sessions_send                                  |
+| Development           | tech-lead      | sessions_send                                  |
+| Testing               | qa-tester      | sessions_send                                  |
+| General questions     | (self)         | Answer directly                                |
+
+> **ALL agents are OFF by default. Heartbeat = $0 when idle.**
 
 ## Task Board Commands
 
@@ -58,23 +60,35 @@ openclaw agents
 openclaw restart
 ```
 
-## Trading Kill Switch
+## Trading Heartbeat Control (ON-DEMAND)
+
+Heartbeats are **DISABLED by default**. Enable only when user requests monitoring/trading.
 
 ```bash
-# STOP all trading bots (disable heartbeats, clean sessions)
-bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
-
-# RESUME trading bots
+# User says "мониторь крипто/форекс" or "начни торговать" → ENABLE
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
 
-# Check trading status
+# User says "стоп", "останови", "/stop" → DISABLE
+bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
+
+# Check status
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
 
-# Clean all agent sessions (free accumulated context)
+# Clean sessions (free context)
 bash /root/Projects/openclaw-assistent/scripts/trading_control.sh cleanup
 ```
 
-> Use when user says /stop, "останови ботов", "выключи торговлю", etc.
+### Workflow:
+1. User asks to start trading → you run `trading_control.sh start` + `sessions_send` to notify trader
+2. Trader heartbeats every 30m, sends Telegram reports
+3. User says stop → you run `trading_control.sh stop` → heartbeat off, $0 cost
+
+### For one-off commands (no heartbeat needed):
+```bash
+# Direct command to agent without enabling heartbeat
+sessions_send target=crypto-trader message="Check BTC position and report to Telegram"
+sessions_send target=forex-trader message="Close EUR/USD position"
+```
 
 ## Telegram Gateway
 

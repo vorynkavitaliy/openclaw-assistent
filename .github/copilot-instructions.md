@@ -36,9 +36,9 @@ User (Telegram) → orchestrator (event-driven, no heartbeat)
 ```
 
 - **orchestrator** — event-driven (NO heartbeat), маршрутизация задач, Telegram. Создаёт задачи, но НЕ меняет их статусы.
-- **forex-trader / crypto-trader** — автономная торговля (heartbeat 30m), адаптивный режим (0-1 позиций = полный анализ, 2+ = лёгкий мониторинг), обязательный Telegram отчёт после каждого цикла. Сессии компактируются автоматически.
-- **forex-trader weekend** — на выходных EXIT IMMEDIATELY, нулевой расход токенов
-- **kill switch** — `scripts/trading_control.sh stop` отключает все heartbeat, `start` — включает
+- **forex-trader / crypto-trader** — heartbeat **ВЫКЛЮЧЕН по умолчанию**. Включается только по команде пользователя. Интервал 30m когда активен.
+- **Все агенты** — on-demand, $0 в простое. Работают только по задаче.
+- **kill switch** — `scripts/trading_control.sh stop/start` управляет heartbeat
 - **tech-lead / backend-dev / frontend-dev / qa-tester / market-analyst** — on-demand (без heartbeat), активируются только через sessions_send
 
 ## Ключевые npm скрипты

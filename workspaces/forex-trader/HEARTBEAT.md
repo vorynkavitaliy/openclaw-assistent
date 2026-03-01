@@ -1,6 +1,12 @@
-# HEARTBEAT.md — Forex Trader Autonomous Mode
+# HEARTBEAT.md — Forex Trader On-Demand Mode
 
-## Schedule
+## Activation
+
+Heartbeat is **DISABLED by default**. You only run when:
+1. **Orchestrator enables heartbeat** → you cycle every 30m autonomously
+2. **Orchestrator sends you a direct message** → you execute once and stop
+
+When heartbeat is active:
 
 | Condition             | Behavior                                                             |
 | --------------------- | -------------------------------------------------------------------- |

@@ -84,9 +84,10 @@ except: pass
   local msg="TRADING CYCLE. ТЫ ОБЯЗАН ИСПОЛЬЗОВАТЬ ИНСТРУМЕНТЫ. Выполни по порядку:
 
 STEP 1 — выполни через exec: bash /root/Projects/openclaw-assistent/scripts/${check_script}
-STEP 2 — проанализируй вывод. Если есть setup, открой сделку через exec: cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action open --pair <PAIR> --side <BUY|SELL> --qty <QTY> --sl <SL> --tp <TP> --type Limit --price <PRICE>
+STEP 2 — проанализируй вывод. Если есть setup, открой сделку через exec: cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action open --pair <PAIR> --side <BUY|SELL> --qty <QTY> --sl <SL> --tp <TP> --type Limit --price <PRICE> --leverage 3
 STEP 3 — залогируй через exec: bash /root/Projects/openclaw-assistent/scripts/trading_log.sh write ${agent} heartbeat \"<итог>\"
 
+⚠️ РАЗМЕР ПОЗИЦИИ: минимум \$500 без плеча, \$1500 с leverage 3x. Цель \$20-50 профит за сделку (дневная цель \$100 с 2-5 сделок). Маленькие позиции (\$4-5 профит) ЗАПРЕЩЕНЫ!
 ⛔ НИКОГДА не отвечай HEARTBEAT_OK или NO_REPLY. Ты ОБЯЗАН сделать минимум 1 вызов exec."
 
   local result

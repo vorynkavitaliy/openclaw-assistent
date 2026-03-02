@@ -74,6 +74,44 @@ Study the raw market data. **YOU are the analyst.** Form your own trading thesis
 
 **❗ PREFER LIMIT ORDERS over market orders.** Market only when price is already at your entry level.
 
+## ⚠️ POSITION SIZING (CRITICAL — READ BEFORE EVERY TRADE)
+
+**Daily target: $100 with 2-5 trades = each trade must aim for $20-50 profit.**
+
+**Formula:**
+
+```
+risk_amount = budget × risk_percent = $10,000 × 2% = $200 per trade
+position_value = risk_amount / (SL_distance_%) = $200 / 2% = $10,000
+qty = position_value / entry_price
+leverage = position_value / (budget / max_positions) ≈ 3x
+```
+
+**Example: XRPUSDT @ $1.52**
+
+```
+Target profit per trade: $30
+R:R = 1:2, so max loss = $15
+SL distance = 2% → position_value = $15 / 0.02 = $750
+But with leverage 3x: position_value = $750 × 3 = $2,250
+qty = $2,250 / $1.52 = 1,480 XRP (NOT 130!)
+TP at +4% = $90 profit ✅
+SL at -2% = $45 loss ✅
+```
+
+**Minimum position value: $500 (no leverage). With leverage 3x: $1,500 minimum.**
+**If position_value < $500 → INCREASE QTY. Tiny positions ($4 profit) are USELESS.**
+
+**Quick reference by price range:**
+
+| Coin price | Min qty (no lev) | Min qty (3x lev) | Target profit |
+| ---------- | ---------------- | ---------------- | ------------- |
+| $0.10-1    | 5,000 units      | 15,000 units     | $20-50        |
+| $1-10      | 500 units        | 1,500 units      | $20-50        |
+| $10-100    | 50 units         | 150 units        | $20-50        |
+| $100-1000  | 5 units          | 15 units         | $20-50        |
+| $1000+     | 0.5 units        | 1.5 units        | $20-50        |
+
 **Limit order example:**
 
 ```bash

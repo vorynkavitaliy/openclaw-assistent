@@ -77,6 +77,11 @@ else
   echo "  (no events file)"
 fi
 
+# ─── YOUR RECENT ACTIVITY LOG ─────────────────────────────────
+echo ""
+echo "=== YOUR RECENT LOG (last 3 entries) ==="
+bash "${PROJECT_DIR}/scripts/trading_log.sh" show forex-trader --last 3 2>/dev/null || echo "  (no log yet)"
+
 echo ""
 echo "=== END CHECK ==="
 echo ""

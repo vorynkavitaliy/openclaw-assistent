@@ -87,7 +87,22 @@ Modify SL/TP if needed. **Skip this call if no trade was made.**
 If you have budget/risk room for a second position, execute another trade.
 **Skip this call if one trade is enough or no setup found.**
 
-### Call 5: Telegram Report (IN RUSSIAN)
+### Call 5: Log + Telegram Report (IN RUSSIAN)
+
+**MANDATORY: Log your actions BEFORE sending Telegram.**
+
+```bash
+# Log what you did (REQUIRED — orchestrator monitors this)
+bash /root/Projects/openclaw-assistent/scripts/trading_log.sh write crypto-trader heartbeat "Analyzed market, [opened/closed/held] [details]"
+
+# If you opened a trade, log it separately:
+bash /root/Projects/openclaw-assistent/scripts/trading_log.sh write crypto-trader trade_open "BUY BTCUSDT 0.001 @ 65400 SL=64500 TP=67500"
+
+# If you closed a trade:
+bash /root/Projects/openclaw-assistent/scripts/trading_log.sh write crypto-trader trade_close "BTCUSDT closed @ 66800 P&L=+$14.20"
+```
+
+Then send Telegram:
 
 ```
 🪙 Crypto [HH:MM]
@@ -97,6 +112,8 @@ If you have budget/risk room for a second position, execute another trade.
 ```
 
 **Then STOP. Do not make more calls.**
+
+> ⚠️ NO LOG = VIOLATION. Orchestrator tracks agent activity via trading_log.sh.
 
 ## MANDATORY MARKET PRESENCE
 

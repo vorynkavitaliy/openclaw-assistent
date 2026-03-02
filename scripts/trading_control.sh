@@ -33,9 +33,11 @@ usage() {
   echo "Usage: $0 <command> [agent]"
   echo ""
   echo "Commands:"
-  echo "  start [agent]     Create 2h cron for agent(s) → starts trading"
+  echo "  start [agent]     Create 2h cron + RUN IMMEDIATELY"
   echo "  stop [agent]      Remove cron for agent(s) → stops trading (\$0)"
   echo "  status            Show current trading status and active crons"
+  echo "  log [agent]       View trading activity log"
+  echo "  summary           Today's trading summary"
   echo "  cleanup           Clean all agent sessions"
   echo "  cleanup-traders   Clean only trading agent sessions"
   echo ""
@@ -173,6 +175,23 @@ if os.path.exists(path):
 " 2>/dev/null || true
 }
 
+run_first_heartbeat() {
+  local agent="$1"
+  local cron_id
+  cron_id=$(get_saved_cron_id "$agent" 2>/dev/null || true)
+
+  if [[ -n "$cron_id" ]]; then
+    echo -e "${GREEN}⚡ ${agent}: running FIRST heartbeat immediately...${NC}"
+    # Log the start
+    bash "${SCRIPT_DIR}/trading_log.sh" write "$agent" started "Trading activated, first heartbeat running now"
+    # Run cron job NOW (async, don't block)
+    openclaw cron run "$cron_id" --timeout 300000 2>/dev/null &
+    echo -e "${GREEN}✅ ${agent}: first heartbeat launched (background)${NC}"
+  else
+    echo -e "${YELLOW}⚠️  ${agent}: no cron ID, skipping immediate run${NC}"
+  fi
+}
+
 do_start() {
   local target="${1:-all}"
   echo -e "${GREEN}🚀 Starting trading bots...${NC}"
@@ -206,11 +225,26 @@ print(f\"Цель: \${p['daily_target']}/день, макс просадка \${
   send_telegram "🚀 <b>ТОРГОВЛЯ ЗАПУЩЕНА</b>
 ⏰ $(date '+%H:%M %d.%m')
 🔄 Heartbeat: каждые 2 часа (cron)
+⚡ Первый запуск: НЕМЕДЛЕННО
 💰 ${params}
 📌 Агенты: ${target}
 🛑 Для остановки: СТОП"
 
-  echo -e "${GREEN}✅ Trading started. First heartbeat in ~2h.${NC}"
+  # ── IMMEDIATE FIRST RUN ──
+  # Don't wait 2h — run first heartbeat NOW
+  echo ""
+  echo -e "${GREEN}⚡ Running first heartbeat IMMEDIATELY...${NC}"
+  if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
+    run_first_heartbeat "crypto-trader"
+  fi
+  if [[ "$target" == "all" || "$target" == "forex-trader" ]]; then
+    run_first_heartbeat "forex-trader"
+  fi
+
+  echo ""
+  echo -e "${GREEN}✅ Trading started. First run: NOW. Next heartbeat: in 2h.${NC}"
+  echo -e "📋 View activity: bash ${SCRIPT_DIR}/trading_log.sh show"
+  echo -e "📊 Day summary:   bash ${SCRIPT_DIR}/trading_log.sh summary"
 }
 
 do_stop() {
@@ -219,10 +253,12 @@ do_stop() {
 
   if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
     remove_cron "crypto-trader"
+    bash "${SCRIPT_DIR}/trading_log.sh" write "crypto-trader" stopped "Trading deactivated by user" 2>/dev/null || true
     openclaw sessions cleanup --agent crypto-trader --enforce 2>/dev/null || true
   fi
   if [[ "$target" == "all" || "$target" == "forex-trader" ]]; then
     remove_cron "forex-trader"
+    bash "${SCRIPT_DIR}/trading_log.sh" write "forex-trader" stopped "Trading deactivated by user" 2>/dev/null || true
     openclaw sessions cleanup --agent forex-trader --enforce 2>/dev/null || true
   fi
 
@@ -267,6 +303,10 @@ do_status() {
   openclaw cron list 2>&1 || echo "  (gateway not available)"
 
   echo ""
+  echo "Recent activity:"
+  bash "${SCRIPT_DIR}/trading_log.sh" show --last 5 2>/dev/null || echo "  (no log)"
+
+  echo ""
   echo "Active sessions:"
   openclaw sessions 2>/dev/null || echo "  (gateway not available)"
 }
@@ -288,6 +328,8 @@ case "${1:-}" in
   start)           do_start "${2:-all}" ;;
   stop)            do_stop "${2:-all}" ;;
   status)          do_status ;;
+  log)             shift; bash "${SCRIPT_DIR}/trading_log.sh" show "$@" ;;
+  summary)         bash "${SCRIPT_DIR}/trading_log.sh" summary ;;
   cleanup)         do_cleanup ;;
   cleanup-traders) do_cleanup_traders ;;
   -h|--help|"")    usage ;;

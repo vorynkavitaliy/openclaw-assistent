@@ -2,25 +2,39 @@
 
 ## Data Collection (pre-heartbeat)
 
-The check script collects ALL data before you wake up:
+The check script collects ALL **raw market data** before you wake up:
 
 ```bash
 bash /root/Projects/openclaw-assistent/scripts/crypto_check.sh
 ```
 
-Output includes: trading params, kill switch, balance, positions, full market analysis
-(H4+M15 OHLC, EMA/RSI/ATR, funding, OI, BUY/SELL signals), Fear & Greed, BTC dominance, tasks.
+Output includes: trading params, kill switch, balance, positions, **raw indicators**
+(H4+M15 EMA/RSI/ATR/bias, funding, OI, volume for all pairs), Fear & Greed, BTC dominance, tasks.
 
-**DO NOT call monitor.ts --dry-run yourself** — it's already in the check script output.
+**No pre-generated signals.** YOU analyze the data and decide what to trade.
 
-## Execution (when you decide to trade)
+## Execution (after YOUR analysis)
 
 ```bash
-# Execute specific pair
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
+# Open trade — YOU specify pair, side, qty, SL, TP based on your analysis
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
+  --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 95000 --tp 105000 --leverage 3
 
-# Execute all pairs with signals
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts
+# Limit order
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
+  --action open --pair ETHUSDT --side SELL --qty 0.01 --type Limit --price 4000 --sl 4200 --tp 3600
+
+# Close position
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action close --pair BTCUSDT
+
+# Close all (emergency)
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action close-all
+
+# Modify SL/TP
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action modify --pair BTCUSDT --sl 96000 --tp 106000
+
+# Account status
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action status
 
 # Kill switch
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="reason"

@@ -18,17 +18,17 @@ Parameters from `scripts/data/trading_params.json`. **Always use values from TRA
 
 Defaults (if params missing):
 
-| Parameter | Default |
-| --------- | ------- |
-| daily_target | $100 |
-| max_daily_loss | $50 |
-| max_stops_day | 2 |
-| max_sl_per_trade | $300 |
-| budget | $10,000 |
-| max_positions | 3 |
-| risk_percent | 1-3% |
-| max_leverage | 5x |
-| min_rr | 1:2 |
+| Parameter        | Default |
+| ---------------- | ------- |
+| daily_target     | $100    |
+| max_daily_loss   | $50     |
+| max_stops_day    | 2       |
+| max_sl_per_trade | $300    |
+| budget           | $10,000 |
+| max_positions    | 3       |
+| risk_percent     | 1-3%    |
+| max_leverage     | 5x      |
+| min_rr           | 1:2     |
 
 ## Heartbeat Algorithm (EXACTLY 3 calls)
 
@@ -38,25 +38,36 @@ Defaults (if params missing):
 bash /root/Projects/openclaw-assistent/scripts/crypto_check.sh
 ```
 
-This ONE script gives you EVERYTHING: kill-switch, balance, positions, full market analysis
-(H4+M15 for all pairs, EMA/RSI/ATR, funding, OI, BUY/SELL signals with entry/SL/TP/R:R),
+This ONE script gives you EVERYTHING: kill-switch, balance, positions,
+**raw market data** (H4+M15 EMA/RSI/ATR/bias, funding, OI, volume for all pairs),
 Fear & Greed, BTC dominance, pending tasks, recent events.
 
 **If KILLSWITCH_ON → STOP. Send telegram "kill-switch active". No more calls.**
 
-### Call 2: Execute (if signals exist)
+### Call 2: Analyze & Execute
 
-Review signals from check script output. Read TRADING PARAMS (use those values, not defaults).
+Study the raw market data. **YOU are the analyst.** Form your own trading thesis:
+
+1. **Filter pairs** — look for strong bias (trend alignment H4→M15), extreme RSI, favorable funding
+2. **Find setups** — Smart Money concepts: BOS, CHoCH, FVG, OB, S/R levels
+3. **Check risk** — respect TRADING PARAMS (budget, max_positions, risk_percent, min_rr)
+4. **Execute or hold** — only trade setups YOU believe in, with proper SL/TP
 
 **Decision matrix:**
 
-| State | Action |
-| ----- | ------ |
-| Kill-switch ON | STOP immediately |
-| Daily loss limit hit | NO new trades |
-| Strong signal in output | Execute: `npx tsx src/trading/crypto/monitor.ts --pair=SYMBOL` |
-| Weak/no signal but 0 positions + 0 orders | Place conservative limit order at best S/R |
-| Positions exist, no signal | Skip (monitor manages SL/TP automatically) |
+| State                                     | Action                                                  |
+| ----------------------------------------- | ------------------------------------------------------- |
+| Kill-switch ON                            | STOP immediately                                        |
+| Daily loss limit hit                      | NO new trades                                           |
+| Strong setup found (your analysis)        | Execute via `trade.ts --action open`                    |
+| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R              |
+| Positions exist, no new setup             | Monitor existing (SL/TP already set)                    |
+
+**Execute:**
+```bash
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
+  --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 95000 --tp 105000 --leverage 3
+```
 
 Pairs: BTC, ETH, SOL, ARB, OP, LINK, AVAX. Strategy: Smart Money (BOS, CHoCH, FVG, OB).
 
@@ -83,8 +94,18 @@ Pairs: BTC, ETH, SOL, ARB, OP, LINK, AVAX. Strategy: Smart Money (BOS, CHoCH, FV
 # All-in-one check (Call 1)
 bash /root/Projects/openclaw-assistent/scripts/crypto_check.sh
 
-# Execute pair (Call 2)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/monitor.ts --pair=BTCUSDT
+# Open trade (Call 2) — YOU decide pair, side, qty, SL, TP based on your analysis
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
+  --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 95000 --tp 105000
+
+# Close position
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action close --pair BTCUSDT
+
+# Modify SL/TP
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action modify --pair BTCUSDT --sl 96000 --tp 106000
+
+# Account status
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action status
 
 # Kill switch
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="reason"

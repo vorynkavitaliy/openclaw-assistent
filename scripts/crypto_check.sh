@@ -32,13 +32,13 @@ echo ""
 echo "=== KILL SWITCH ==="
 cd "$PROJECT_DIR" && npx tsx src/trading/crypto/killswitch.ts 2>&1 || echo "ERROR: killswitch.ts failed"
 
-# ─── 3. Full Market Analysis (positions + signals + indicators)
-# monitor --dry-run collects: balance, positions, H4+M15 OHLC,
-# EMA/RSI/ATR, funding, OI, generates BUY/SELL signals with
-# entry/SL/TP/R:R — but does NOT execute trades.
+# ─── 3. Market Snapshot (RAW DATA — no signals, no execution)
+# snapshot.ts collects: balance, positions, H4+M15 indicators
+# (EMA/RSI/ATR/bias), funding rate, OI, volume for ALL pairs.
+# YOU analyze this data and decide what to trade.
 echo ""
-echo "=== FULL MARKET ANALYSIS (dry-run) ==="
-cd "$PROJECT_DIR" && npx tsx src/trading/crypto/monitor.ts --dry-run 2>&1 || echo "ERROR: monitor.ts failed"
+echo "=== MARKET SNAPSHOT (raw data for your analysis) ==="
+cd "$PROJECT_DIR" && npx tsx src/trading/crypto/snapshot.ts 2>&1 || echo "ERROR: snapshot.ts failed"
 
 # ─── 4. Macro Sentiment (quick API calls) ────────────────────
 echo ""
@@ -86,4 +86,4 @@ echo ""
 echo "=== END CHECK ==="
 echo ""
 echo "INSTRUCTIONS: All data above is pre-collected. DO NOT run additional data-gathering commands."
-echo "Your job: review signals, EXECUTE trades if warranted, send Telegram report. MAX 2 more tool calls."
+echo "Your job: ANALYZE the raw market data above, decide what to trade (or HOLD), EXECUTE if warranted, send Telegram report. MAX 2 more tool calls."

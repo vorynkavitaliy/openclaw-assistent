@@ -48,16 +48,13 @@ else
   echo "SESSION: Off-hours (monitor only, no new entries)"
 fi
 
-# ─── 4. Full Market Analysis (positions + signals + account) ─
-# monitor --heartbeat collects: account, positions, drawdown, FTMO alerts
+# ─── 4. Market Snapshot (RAW DATA — no signals, no execution)
+# snapshot.ts collects: account, positions, drawdown, FTMO alerts,
+# H4+M15 indicators (EMA/RSI/ATR/bias) for ALL pairs.
+# YOU analyze this data and decide what to trade.
 echo ""
-echo "=== ACCOUNT & POSITIONS ==="
-cd "$PROJECT_DIR" && npx tsx src/trading/forex/monitor.ts --heartbeat 2>&1 || echo "ERROR: monitor.ts --heartbeat failed"
-
-# monitor --trade --dry-run: full analysis + signal generation (no execution)
-echo ""
-echo "=== FULL MARKET ANALYSIS (dry-run) ==="
-cd "$PROJECT_DIR" && npx tsx src/trading/forex/monitor.ts --trade --dry-run 2>&1 || echo "ERROR: monitor.ts --trade failed"
+echo "=== MARKET SNAPSHOT (raw data for your analysis) ==="
+cd "$PROJECT_DIR" && npx tsx src/trading/forex/snapshot.ts 2>&1 || echo "ERROR: snapshot.ts failed"
 
 # ─── 5. Macro Sentiment ──────────────────────────────────────
 echo ""
@@ -84,4 +81,4 @@ echo ""
 echo "=== END CHECK ==="
 echo ""
 echo "INSTRUCTIONS: All data above is pre-collected. DO NOT run additional data-gathering commands."
-echo "Your job: review signals, EXECUTE trades if warranted, send Telegram report. MAX 2 more tool calls."
+echo "Your job: ANALYZE the raw market data above, decide what to trade (or HOLD), EXECUTE if warranted, send Telegram report. MAX 2 more tool calls."

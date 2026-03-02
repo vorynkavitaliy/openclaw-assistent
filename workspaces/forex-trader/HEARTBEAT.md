@@ -18,16 +18,16 @@ Parameters from `scripts/data/trading_params.json`. **Always use values from TRA
 
 Defaults (if params missing):
 
-| Parameter | Default |
-| --------- | ------- |
-| daily_target | $100 |
-| max_daily_loss | $50 |
-| max_stops_day | 2 |
-| max_sl_per_trade | $300 |
-| budget | $10,000 |
-| max_positions | 3 |
-| risk_percent | 1-3% |
-| min_rr | 1:2 |
+| Parameter        | Default |
+| ---------------- | ------- |
+| daily_target     | $100    |
+| max_daily_loss   | $50     |
+| max_stops_day    | 2       |
+| max_sl_per_trade | $300    |
+| budget           | $10,000 |
+| max_positions    | 3       |
+| risk_percent     | 1-3%    |
+| min_rr           | 1:2     |
 
 > Weekend = OFF is hardcoded in check script.
 
@@ -40,26 +40,38 @@ bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 ```
 
 This ONE script gives you EVERYTHING: weekend/session check, account, positions, drawdown,
-FTMO alerts, full market analysis (H4+M15 signals), market digest (news+calendar), tasks.
+FTMO alerts, **raw market data** (H4+M15 EMA/RSI/ATR/bias for all pairs), market digest (news+calendar), tasks.
 
 **If `WEEKEND_CLOSED` → STOP. Zero cost. No more calls.**
 **If `Off-hours` → monitor only, no new entries.**
 
-### Call 2: Execute (if signals exist)
+### Call 2: Analyze & Execute
 
-Review signals from check script output. Read TRADING PARAMS (use those values, not defaults).
+Study the raw market data. **YOU are the analyst.** Form your own trading thesis:
+
+1. **Filter pairs** — look for strong bias (trend alignment H4→M15), extreme RSI, key S/R levels
+2. **Find setups** — Smart Money concepts: BOS, CHoCH, FVG, OB, S&D zones
+3. **Check risk** — respect TRADING PARAMS (budget, max_positions, risk_percent, min_rr)
+4. **Factor in news** — market digest may signal caution or opportunity
+5. **Execute or hold** — only trade setups YOU believe in, with proper SL/TP
 
 **Decision matrix:**
 
-| State | Action |
-| ----- | ------ |
-| Weekend | STOP immediately |
-| Off-session hours | Monitor only, no new entries |
-| Daily loss limit hit | NO new trades |
-| Strong signal in output | Execute: `npx tsx src/trading/forex/monitor.ts --trade --pair=SYMBOL` |
-| Weak/no signal but 0 positions + 0 orders | Place conservative limit order at best S/R |
-| Positions exist, no signal | Skip (monitor manages SL/TP automatically) |
-| Friday after 17:00 Kyiv | Close all positions before 19:00 |
+| State                                     | Action                                            |
+| ----------------------------------------- | ------------------------------------------------- |
+| Weekend                                   | STOP immediately                                  |
+| Off-session hours                         | Monitor only, no new entries                       |
+| Daily loss limit hit                      | NO new trades                                     |
+| Strong setup found (your analysis)        | Execute via `trade.ts --action open`               |
+| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R         |
+| Positions exist, no new setup             | Monitor existing (SL/TP already set)               |
+| Friday after 17:00 Kyiv                   | Close all positions before 19:00                   |
+
+**Execute:**
+```bash
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts \
+  --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
+```
 
 Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FVG, OB, S&D).
 
@@ -82,12 +94,12 @@ Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FV
 
 ## Session Rules
 
-| Session | Hours (UTC+3 Kyiv) | Priority |
-| ------- | ------------------ | -------- |
-| London | 09:00 - 17:00 | HIGH |
-| New York | 16:00 - 00:00 | HIGH |
-| Asian | 02:00 - 09:00 | LOW |
-| Outside | — | SKIP |
+| Session  | Hours (UTC+3 Kyiv) | Priority |
+| -------- | ------------------ | -------- |
+| London   | 09:00 - 17:00      | HIGH     |
+| New York | 16:00 - 00:00      | HIGH     |
+| Asian    | 02:00 - 09:00      | LOW      |
+| Outside  | —                  | SKIP     |
 
 ## Quick Reference
 
@@ -95,12 +107,18 @@ Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FV
 # All-in-one check (Call 1)
 bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 
-# Execute pair (Call 2)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
+# Open trade (Call 2) — YOU decide pair, side, lots, SL, TP based on your analysis
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts \
+  --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
 
-# Manual order
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
-  --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
+# Close position
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id POS_ID
+
+# Close all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
+
+# Modify SL/TP
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id POS_ID --sl-pips 40 --tp-pips 80
 ```
 
 > ⚠️ FORBIDDEN: creating tasks. Only Orchestrator creates tasks.

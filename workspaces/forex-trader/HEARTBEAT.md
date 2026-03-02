@@ -3,12 +3,12 @@
 ## Activation
 
 Heartbeat **DISABLED by default** (no config = $0 cost).
-`trading_control.sh start` injects heartbeat: **every 1h**.
+`trading_control.sh start` injects heartbeat: **every 2h**.
 `trading_control.sh stop` removes it → $0.
 
 ## TOKEN ECONOMY (HARD LIMIT)
 
-**MAX 3 tool calls per heartbeat. After 3 → STOP. No exceptions.**
+**MAX 5 tool calls per heartbeat. After 5 → STOP. No exceptions.**
 
 The check script collects ALL data. You DO NOT need to gather anything yourself.
 
@@ -31,7 +31,7 @@ Defaults (if params missing):
 
 > Weekend = OFF is hardcoded in check script.
 
-## Heartbeat Algorithm (EXACTLY 3 calls)
+## Heartbeat Algorithm (MAX 5 calls)
 
 ### Call 1: Run Check Script
 
@@ -78,7 +78,22 @@ cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts \
 
 Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FVG, OB, S&D).
 
-### Call 3: Telegram Report (IN RUSSIAN)
+### Call 3: Verify / Modify (optional)
+
+If you opened a trade in Call 2, verify it was filled correctly:
+
+```bash
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
+```
+
+Modify SL/TP if needed. **Skip this call if no trade was made.**
+
+### Call 4: Additional Trade (optional)
+
+If you have budget/risk room for a second position, execute another trade.
+**Skip this call if one trade is enough or no setup found.**
+
+### Call 5: Telegram Report (IN RUSSIAN)
 
 ```
 📊 Forex [HH:MM]

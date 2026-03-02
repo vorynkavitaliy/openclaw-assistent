@@ -2,6 +2,7 @@
 
 ## Profile
 
+- **Name**: Vitaliy
 - **Telegram ID**: 5929886678
 - **Language**: Russian (Telegram replies), English (workspace docs, code)
 - **Timezone**: Europe/Kyiv (UTC+2 / UTC+3 DST)

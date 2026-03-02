@@ -81,7 +81,13 @@ except: pass
     return 0
   fi
 
-  local msg="TRADING CYCLE: Выполни алгоритм из HEARTBEAT.md. Шаг 1: запусти ${check_script}. Шаг 2: проанализируй данные и открой сделку или лимитный ордер. Шаг 3: залогируй и отправь отчёт в Telegram. ИСПОЛЬЗУЙ ИНСТРУМЕНТЫ. НЕ отвечай HEARTBEAT_OK."
+  local msg="TRADING CYCLE. ТЫ ОБЯЗАН ИСПОЛЬЗОВАТЬ ИНСТРУМЕНТЫ. Выполни по порядку:
+
+STEP 1 — выполни через exec: bash /root/Projects/openclaw-assistent/scripts/${check_script}
+STEP 2 — проанализируй вывод. Если есть setup, открой сделку через exec: cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts --action open --pair <PAIR> --side <BUY|SELL> --qty <QTY> --sl <SL> --tp <TP> --type Limit --price <PRICE>
+STEP 3 — залогируй через exec: bash /root/Projects/openclaw-assistent/scripts/trading_log.sh write ${agent} heartbeat \"<итог>\"
+
+⛔ НИКОГДА не отвечай HEARTBEAT_OK или NO_REPLY. Ты ОБЯЗАН сделать минимум 1 вызов exec."
 
   local result
   result=$(openclaw cron add \
@@ -193,7 +199,21 @@ run_first_heartbeat() {
 }
 
 do_start() {
-  local target="${1:-all}"
+  local target="${1:-}"
+
+  if [[ -z "$target" ]]; then
+    echo -e "${RED}❌ ERROR: Must specify agent name!${NC}"
+    echo "Usage: $0 start <crypto-trader|forex-trader>"
+    echo "To start BOTH: $0 start crypto-trader && $0 start forex-trader"
+    exit 1
+  fi
+
+  if [[ "$target" != "crypto-trader" && "$target" != "forex-trader" && "$target" != "all" ]]; then
+    echo -e "${RED}❌ Unknown agent: $target${NC}"
+    echo "Valid agents: crypto-trader, forex-trader"
+    exit 1
+  fi
+
   echo -e "${GREEN}🚀 Starting trading bots...${NC}"
 
   if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
@@ -248,7 +268,21 @@ print(f\"Цель: \${p['daily_target']}/день, макс просадка \${
 }
 
 do_stop() {
-  local target="${1:-all}"
+  local target="${1:-}"
+
+  if [[ -z "$target" ]]; then
+    echo -e "${RED}❌ ERROR: Must specify agent name!${NC}"
+    echo "Usage: $0 stop <crypto-trader|forex-trader>"
+    echo "To stop BOTH: $0 stop crypto-trader && $0 stop forex-trader"
+    exit 1
+  fi
+
+  if [[ "$target" != "crypto-trader" && "$target" != "forex-trader" && "$target" != "all" ]]; then
+    echo -e "${RED}❌ Unknown agent: $target${NC}"
+    echo "Valid agents: crypto-trader, forex-trader"
+    exit 1
+  fi
+
   echo -e "${RED}🛑 Stopping trading bots...${NC}"
 
   if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
@@ -325,8 +359,8 @@ do_cleanup_traders() {
 }
 
 case "${1:-}" in
-  start)           do_start "${2:-all}" ;;
-  stop)            do_stop "${2:-all}" ;;
+  start)           do_start "${2:-}" ;;
+  stop)            do_stop "${2:-}" ;;
   status)          do_status ;;
   log)             shift; bash "${SCRIPT_DIR}/trading_log.sh" show "$@" ;;
   summary)         bash "${SCRIPT_DIR}/trading_log.sh" summary ;;

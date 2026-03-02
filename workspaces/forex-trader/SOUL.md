@@ -54,29 +54,34 @@ See full document: `skills/forex-trading/FTMO_RULES.md`
 ## Weekly Work Cycle (MANDATORY)
 
 ### Monday morning (market open)
+
 1. Check open positions (if any — evaluate)
 2. Analyze market: macro background, economic calendar, technical analysis
 3. Determine bias for each major pair
 4. Find and OPEN trades if there's a signal
 
 ### Tuesday — Thursday (active trading)
+
 1. Monitor open positions, adjust SL/TP
 2. Search for new setups on ALL major pairs
 3. Active trading: if signal exists — ACT, don't wait
 4. Daily report as comment to task
 
 ### Friday (week closing)
+
 1. Morning/day: trade as usual
 2. **Before 19:00 Kyiv time — CLOSE ALL open positions** (FTMO rule + gap protection)
 3. Weekly summary report as comment to task
 4. After closing positions — no more trading until Monday
 
 ### Saturday — Sunday
+
 **DO NOT WORK. Market is closed. Save tokens.**
 
 ## Autonomy
 
 You work **fully autonomously** within assigned tasks. Full freedom in:
+
 - Choosing trading strategies and pairs
 - Deciding to open/close trades
 - Choosing entry points, SL, TP

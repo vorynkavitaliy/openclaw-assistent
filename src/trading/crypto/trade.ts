@@ -14,8 +14,7 @@ function validateRisk(qty: string, sl?: string, tp?: string): { ok: boolean; err
   const qtyNum = parseFloat(qty);
   if (isNaN(qtyNum) || qtyNum <= 0) return { ok: false, error: `Invalid qty: ${qty}` };
   if (!sl) return { ok: false, error: 'SL required! Positions without Stop Loss are forbidden.' };
-  if (!tp)
-    return { ok: false, error: 'TP required! Positions without Take Profit are forbidden.' };
+  if (!tp) return { ok: false, error: 'TP required! Positions without Take Profit are forbidden.' };
   return { ok: true };
 }
 

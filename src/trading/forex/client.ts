@@ -387,8 +387,18 @@ export async function submitOrder(params: {
 
       if (posId) {
         try {
-          await amendPositionSlTp(session, posId, symbolId, fixSide, units, slPriceFromPips, tpPriceFromPips);
-          log.info(`SL/TP set post-fill: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`);
+          await amendPositionSlTp(
+            session,
+            posId,
+            symbolId,
+            fixSide,
+            units,
+            slPriceFromPips,
+            tpPriceFromPips,
+          );
+          log.info(
+            `SL/TP set post-fill: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`,
+          );
         } catch (err) {
           log.warn(
             `Failed to set SL/TP post-fill via amendment: ${(err as Error).message}. ` +
@@ -529,7 +539,15 @@ export async function modifyPosition(
   const fixSide = pos.side === 'long' ? '1' : '2';
   const units = lotsToUnits(pos.symbol, parseFloat(pos.size));
 
-  await amendPositionSlTp(session, String(positionId), symbolId, fixSide, units, slAbsPrice, tpAbsPrice);
+  await amendPositionSlTp(
+    session,
+    String(positionId),
+    symbolId,
+    fixSide,
+    units,
+    slAbsPrice,
+    tpAbsPrice,
+  );
 
   log.info(
     `modifyPosition ${positionId}: ${pos.symbol} ` +

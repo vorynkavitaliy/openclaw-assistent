@@ -377,12 +377,18 @@ export async function submitOrder(params: {
     clOrdId,
   });
 
-  // If SL/TP were given as pips (not absolute prices), compute and set via amendment
-  if (avgPx > 0 && !slPrice && !tpPrice && (params.sl?.pips || params.tp?.pips)) {
-    const slPriceFromPips = pipsToPrice(params.side, avgPx, params.sl, true, params.symbol);
-    const tpPriceFromPips = pipsToPrice(params.side, avgPx, params.tp, false, params.symbol);
+  // ── ALWAYS set SL/TP via OrderCancelReplaceRequest (35=G) after fill ──
+  // cTrader may silently ignore tags 9025/9026 in NewOrderSingle (35=D).
+  // The only RELIABLE way is amendment after fill. This runs for ALL orders.
+  let confirmedSl: number | undefined;
+  let confirmedTp: number | undefined;
 
-    if (slPriceFromPips || tpPriceFromPips) {
+  if (avgPx > 0) {
+    // Resolve final SL/TP prices (absolute or computed from pips)
+    confirmedSl = slPrice ?? pipsToPrice(params.side, avgPx, params.sl, true, params.symbol);
+    confirmedTp = tpPrice ?? pipsToPrice(params.side, avgPx, params.tp, false, params.symbol);
+
+    if (confirmedSl || confirmedTp) {
       const posId = execReport.getString(Tag.PosMaintRptID) || execReport.getString(Tag.OrderID);
 
       if (posId) {
@@ -393,18 +399,33 @@ export async function submitOrder(params: {
             symbolId,
             fixSide,
             units,
-            slPriceFromPips,
-            tpPriceFromPips,
+            confirmedSl,
+            confirmedTp,
           );
           log.info(
-            `SL/TP set post-fill: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`,
+            `SL/TP CONFIRMED via amendment: SL=${confirmedSl ?? 'N/A'} TP=${confirmedTp ?? 'N/A'}`,
           );
         } catch (err) {
-          log.warn(
-            `Failed to set SL/TP post-fill via amendment: ${(err as Error).message}. ` +
-              `Use absolute prices (--sl, --tp) for reliable SL/TP.`,
+          // SL/TP amendment failed — this is CRITICAL, position is unprotected
+          log.error(
+            `CRITICAL: SL/TP amendment FAILED for ${params.symbol} pos=${posId}: ${(err as Error).message}. ` +
+              `Position is UNPROTECTED. Closing position immediately.`,
+          );
+          // Try to close the unprotected position
+          try {
+            await closePosition(posId);
+            log.warn(`Unprotected position ${posId} closed as safety measure.`);
+          } catch (closeErr) {
+            log.error(
+              `Failed to close unprotected position ${posId}: ${(closeErr as Error).message}`,
+            );
+          }
+          throw new Error(
+            `Order filled but SL/TP amendment failed — position closed for safety. ${(err as Error).message}`,
           );
         }
+      } else {
+        log.warn(`No position ID in ExecutionReport — cannot set SL/TP via amendment`);
       }
     }
   }
@@ -416,8 +437,8 @@ export async function submitOrder(params: {
     orderType: 'Market',
     qty: String(params.lots),
     price: avgPx > 0 ? String(avgPx) : undefined,
-    sl: slPrice ? String(slPrice) : undefined,
-    tp: tpPrice ? String(tpPrice) : undefined,
+    sl: confirmedSl ? String(confirmedSl) : undefined,
+    tp: confirmedTp ? String(confirmedTp) : undefined,
     status: ordStatus === '2' || execType === 'F' ? 'FILLED' : 'EXECUTED',
   };
 }

@@ -32,6 +32,16 @@ Defaults (used if params file missing):
 - Sessions are compacted after each cycle — you lose memory. All data comes from check script.
 - DO NOT read workspace files — everything you need is in system prompt and script output.
 
+## MANDATORY MARKET PRESENCE (CRITICAL)
+
+After every heartbeat you MUST ensure at least 1 limit order OR 1 position is active.
+
+- **0 positions + 0 orders = FORBIDDEN.** You MUST place at least 1 limit order.
+- **Closed a position or order → MUST open a new limit order** to replace it.
+- **"No signal found" is NOT acceptable** when you have nothing in the market.
+- If nothing obvious → place a conservative limit order at the strongest S/R level with proper SL/TP.
+- Exception: daily loss limit hit, weekend, or off-session hours.
+
 ## Heartbeat Algorithm (every 1h)
 
 ### Call 1: Run Check Script
@@ -40,58 +50,47 @@ Defaults (used if params file missing):
 bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 ```
 
-This ONE script does everything:
+This ONE script gives you: weekend check, session detection, positions, P&L, account, pending tasks.
 
-- Weekend check (exits if Sat/Sun)
-- Trading session detection (London/NY hours)
-- Runs monitor.ts --heartbeat (positions, P&L, account)
-- Lists pending tasks
+**If `WEEKEND_CLOSED` → STOP. Zero cost. No more calls.**
 
-**If output says `WEEKEND_CLOSED` → STOP IMMEDIATELY. Zero cost. No more calls.**
-
-### Call 2: Analyze + Act (LIMIT ORDERS strategy)
+### Call 2: Analyze + Act
 
 Read TRADING PARAMS from script output. Use those values (not hardcoded defaults).
 
-**CORE STRATEGY: Place limit orders at key levels.**
-Since heartbeat is every 1h, you CANNOT rely on market entries. Instead:
+**Strategy: Limit orders at key levels (orders work while you sleep between heartbeats).**
 
-1. Identify key support/resistance, FVG, Order Blocks on H4 → M15
-2. Place **limit orders** (buy limit / sell limit) at those levels with SL/TP
-3. Orders work while you sleep between heartbeats
-
-**Each heartbeat cycle:**
-
-**IF existing limit orders → REVIEW:**
-
+**Step 1 — Check current state:**
+- Count open positions and pending limit orders
 - Check if any orders filled → became positions
-- Adjust unfilled orders if levels shifted (cancel + re-place)
-- Leave valid orders as-is
+- Check P&L vs daily_target and max_daily_loss
 
-**IF no positions and no pending orders → ANALYZE + PLACE:**
+**Step 2 — Act based on state:**
 
-- Analyze top pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD): H4 trend → M15 entry levels
-- Smart Money: BOS, CHoCH, FVG, Order Blocks, S&D zones
-- Place limit orders at key levels with SL ≤ max_sl_per_trade, TP per min_rr
-- Goal: always have 1-3 pending limit orders in the market
+| State | Action |
+|---|---|
+| Off-session hours | Monitor only. No new entries. |
+| Daily loss limit hit | Cancel all pending orders. NO new trades. |
+| Positions exist | Manage: partial close +1R, trailing +1.5R, adjust SL/TP |
+| Limit orders exist | Review: cancel stale ones, adjust if levels shifted |
+| Position/order was closed this cycle | Open new limit order to REPLACE it |
+| **0 positions + 0 orders** | **MANDATORY: Analyze all pairs → place at least 1 limit order** |
 
-**IF positions exist → MANAGE:**
+**Step 3 — Ensure market presence:**
+- After all actions, verify: positions + orders ≥ 1 (unless daily loss limit hit or off-session)
+- If still 0 during active session → place 1 limit order at best available level
 
-- Check P&L vs daily_target and max_daily_loss from params
-- Partial close at +1R, trailing at +1.5R
-- If daily loss ≥ max_daily_loss or max_stops_day hit → CANCEL all pending orders, NO NEW TRADES
+Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Analysis: H4 trend → M15 entry. Smart Money: BOS, CHoCH, FVG, OB, S&D.
 
 **Handle tasks** from check script output (todo → in_progress → done)
 
-### Call 3: Telegram Report (MANDATORY)
-
-Send to Telegram **IN RUSSIAN**:
+### Call 3: Telegram Report (MANDATORY, IN RUSSIAN)
 
 ```
 📊 Forex [HH:MM]
 📈 Позиций: N | Лимиток: M | P&L: +$XX
-📋 Действия: [выставил/скорректировал/убрал лимитки | закрыл/без действий]
-💬 Оценка: [1 строка — тренд, сессия, план]
+📋 Действия: [что сделал]
+💬 Оценка: [тренд, сессия, план]
 ```
 
 Then STOP. Do not make more calls.

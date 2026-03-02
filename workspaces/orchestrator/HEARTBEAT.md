@@ -12,18 +12,20 @@ This saves tokens — orchestrator does NOT run when idle.
 ## When activated by user:
 
 1. Parse the request
-2. If trading → create task on Task Board for forex-trader/crypto-trader (they pick up on heartbeat)
-3. If urgent → create task + send `sessions_send` to agent directly
-4. If development → create task + send `sessions_send` to tech-lead
-5. If analysis → create task + send `sessions_send` to market-analyst
-6. Report result to user in Telegram (IN RUSSIAN)
+2. Create task on Task Board (assignee = target agent)
+3. **IMMEDIATELY send `sessions_send` to the agent** — agents do NOT poll task board
+4. Report to user in Telegram (IN RUSSIAN): task created, agent notified
+
+Priority routing:
+- Normal → `sessions_send target=AGENT message="TASK-XXX: description"`
+- Urgent (user says "срочно/сейчас/немедленно") → priority `critical` + `URGENT:` prefix in message → agent drops current work
 
 ## When activated by agent:
 
 1. Read agent's message
-2. If agent reports completion → check Task Board → report to user
-3. If agent asks for help → process and respond
-4. If agent reports error → notify user
+2. If completion → report to user
+3. If error → notify user
+4. If help request → process and respond
 
 ## Task Status Rules:
 

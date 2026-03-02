@@ -2,15 +2,15 @@
 
 ## Team
 
-| Agent ID | Specialization | Activation |
-|---|---|---|
-| `forex-trader` | Forex trading (EUR/USD, GBP/USD etc.) | heartbeat (when enabled) or sessions_send |
-| `crypto-trader` | Crypto trading (BTC, ETH, altcoins) | heartbeat (when enabled) or sessions_send |
-| `tech-lead` | Architecture, code review, dev coordination | sessions_send only |
-| `backend-dev` | Server-side dev, APIs | via tech-lead only |
-| `frontend-dev` | UI/UX dev | via tech-lead only |
-| `qa-tester` | Testing, Vitest, ESLint | sessions_send only |
-| `market-analyst` | Macro/micro analysis, news | sessions_send only (1x/day max) |
+| Agent ID         | Specialization                              | Activation                                |
+| ---------------- | ------------------------------------------- | ----------------------------------------- |
+| `forex-trader`   | Forex trading (EUR/USD, GBP/USD etc.)       | heartbeat (when enabled) or sessions_send |
+| `crypto-trader`  | Crypto trading (BTC, ETH, altcoins)         | heartbeat (when enabled) or sessions_send |
+| `tech-lead`      | Architecture, code review, dev coordination | sessions_send only                        |
+| `backend-dev`    | Server-side dev, APIs                       | via tech-lead only                        |
+| `frontend-dev`   | UI/UX dev                                   | via tech-lead only                        |
+| `qa-tester`      | Testing, Vitest, ESLint                     | sessions_send only                        |
+| `market-analyst` | Macro/micro analysis, news                  | sessions_send only (1x/day max)           |
 
 ALL agents OFF by default. Idle cost = $0.
 

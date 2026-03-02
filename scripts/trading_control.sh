@@ -55,23 +55,25 @@ import json, sys
 config_path = sys.argv[1]
 project_dir = sys.argv[2]
 
-forex_prompt = f"""HEARTBEAT: Run check script, analyze, act.
+forex_prompt = f"""HEARTBEAT: Run check script, analyze, act. MUST always have ≥1 order or position.
 1. exec: bash {project_dir}/scripts/forex_check.sh
 2. If WEEKEND_CLOSED → stop immediately. Zero cost.
-3. Analyze output. Make trading decisions per HEARTBEAT.md rules.
-4. If trade signal → execute trade. If no signal → skip.
-5. Send brief Telegram IN RUSSIAN: 📊 Forex [HH:MM] | Позиций: N | P&L: $X | [действия/оценка]
-6. Handle any pending tasks from output.
-CRITICAL: MAX 3 tool calls total. Batch operations. Be decisive."""
+3. Analyze output. Check positions + orders count.
+4. If 0 positions + 0 orders → MANDATORY: place at least 1 limit order.
+5. If position/order closed → replace with new limit order.
+6. Manage existing: partial close +1R, trailing +1.5R.
+7. Send Telegram IN RUSSIAN: 📊 Forex [HH:MM] | Позиций: N | Лимиток: M | P&L: $X | [действия]
+CRITICAL: MAX 3 tool calls. NEVER leave market empty (0 orders + 0 positions)."""
 
-crypto_prompt = f"""HEARTBEAT: Run check script, analyze, act.
+crypto_prompt = f"""HEARTBEAT: Run check script, analyze, act. MUST always have ≥1 order or position.
 1. exec: bash {project_dir}/scripts/crypto_check.sh
 2. If kill-switch ON → stop. Send telegram "kill-switch active".
-3. Analyze output. Make trading decisions per HEARTBEAT.md rules.
-4. If trade signal → execute trade. If no signal → skip.
-5. Send brief Telegram IN RUSSIAN: 🪙 Crypto [HH:MM] | Позиций: N | P&L: $X | [действия/оценка]
-6. Handle any pending tasks from output.
-CRITICAL: MAX 3 tool calls total. Batch operations. Be decisive."""
+3. Analyze output. Check positions + orders count.
+4. If 0 positions + 0 orders → MANDATORY: place at least 1 limit order.
+5. If position/order closed → replace with new limit order.
+6. Manage existing: partial close +1R, trailing +1.5R.
+7. Send Telegram IN RUSSIAN: 🪙 Crypto [HH:MM] | Позиций: N | Лимиток: M | P&L: $X | [действия]
+CRITICAL: MAX 3 tool calls. NEVER leave market empty (0 orders + 0 positions)."""
 
 with open(config_path, 'r') as f:
     config = json.load(f)

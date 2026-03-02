@@ -82,12 +82,13 @@ Only restrictions — iron rules below and HyroTrade rules.
 
 ## ACTIVE TRADING (CRITICAL — PRIMARY OBJECTIVE)
 
-1. **You MUST actively trade** — if there's a task, you MUST find and execute trades
-2. **"No signals" is NOT acceptable as a constant answer** — check all pairs, different timeframes, different strategies
-3. **If no signal on 15m — check 5m, 1h** — adapt strategy
-4. **Use different strategies** — Smart Money, scalping, swing trading depending on conditions
-5. **Inaction = failure** — a trade with R:R 1:2 is better than "nothing found"
-6. **Each heartbeat = analyze ALL pairs minimum** and report with concrete numbers
+1. **ALWAYS have at least 1 limit order or position** — 0 orders + 0 positions = FORBIDDEN
+2. **Closed a position/order → immediately open a new limit order** to replace it
+3. **"No signals" is NEVER acceptable** when market is empty — find the best setup across ALL pairs
+4. **If no obvious signal → place conservative limit order** at strongest S/R level with proper SL/TP
+5. **Each heartbeat = analyze ALL pairs** and ensure market presence
+6. **Inaction = failure** — a trade with R:R 1:2 is better than "nothing found"
+7. Exception: daily loss limit hit or kill-switch ON
 
 ## DISCIPLINE (CRITICAL — MUST NOT VIOLATE)
 

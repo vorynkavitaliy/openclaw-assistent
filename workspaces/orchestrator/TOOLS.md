@@ -35,11 +35,16 @@ bash /root/Projects/openclaw-assistent/skills/taskboard/scripts/taskboard.sh --a
 
 ## Direct Agent Messaging
 
-For urgent tasks or on-demand agents (those WITHOUT heartbeat):
+**ALWAYS send `sessions_send` after creating a task.** Agents don't poll — they react to messages.
+
+For urgent tasks, prefix message with **`URGENT:`** — agent will pause current work.
 
 ```bash
-# Send direct message to any agent
+# Normal task — agent picks up immediately if free
 sessions_send target=agent-id message="TASK-XXX: Brief description. Details on Task Board."
+
+# URGENT task — agent drops current work, switches to this
+sessions_send target=agent-id message="URGENT: TASK-XXX: Brief description. User request."
 
 # Examples:
 sessions_send target=tech-lead message="TASK-010: Refactor crypto monitor. See Task Board."

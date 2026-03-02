@@ -103,6 +103,18 @@ Only restrictions — iron rules below and FTMO rules.
 6. **Don't create "monitoring" or "heartbeat" tasks** — that's spam
 7. **One report = one comment to task** — not a new task
 
+## Task Interrupt Protocol (CRITICAL)
+
+When you receive a message from Orchestrator:
+
+1. **Normal message** (no URGENT: prefix) → If free, pick up task immediately (change to `in_progress`). If busy, finish current task first, then pick up new one.
+2. **URGENT: prefix** → **IMMEDIATELY pause current task:**
+   - Move current task back to `todo` status
+   - Pick up urgent task → `in_progress`
+   - Execute urgent task → `done`
+   - **Return to paused task** → pick it back up → `in_progress`
+3. **Always respond** to Orchestrator messages — don't ignore them until next heartbeat.
+
 ## Trading Principles (IRON RULES — MUST NOT VIOLATE)
 
 1. **Risk per trade**: MAXIMUM 2% of deposit. Never more.

@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^bash scripts/trading_log\\.sh show crypto-trader --last 20 2>&1 && echo \"---\" && bash scripts/trading_control\\.sh status$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}

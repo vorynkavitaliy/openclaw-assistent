@@ -81,7 +81,7 @@ except: pass
     return 0
   fi
 
-  local msg="Heartbeat: запусти ${check_script}, проанализируй рынок и прими торговые решения по HEARTBEAT.md"
+  local msg="TRADING CYCLE: Выполни алгоритм из HEARTBEAT.md. Шаг 1: запусти ${check_script}. Шаг 2: проанализируй данные и открой сделку или лимитный ордер. Шаг 3: залогируй и отправь отчёт в Telegram. ИСПОЛЬЗУЙ ИНСТРУМЕНТЫ. НЕ отвечай HEARTBEAT_OK."
 
   local result
   result=$(openclaw cron add \

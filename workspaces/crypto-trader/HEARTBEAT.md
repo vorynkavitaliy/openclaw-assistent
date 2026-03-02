@@ -1,5 +1,12 @@
 # HEARTBEAT.md — Crypto Trader
 
+## ⛔ CRITICAL: NEVER RESPOND HEARTBEAT_OK
+
+**This is a TRADING CYCLE, not a status check.**
+**You MUST use tools (run commands) to execute the algorithm below.**
+**Responding HEARTBEAT_OK without executing = VIOLATION.**
+**Text-only analysis without tool calls = VIOLATION.**
+
 ## Activation
 
 Heartbeat **DISABLED by default** (no config = $0 cost).
@@ -9,6 +16,7 @@ Heartbeat **DISABLED by default** (no config = $0 cost).
 ## TOKEN ECONOMY (HARD LIMIT)
 
 **MAX 5 tool calls per heartbeat. After 5 → STOP. No exceptions.**
+**MINIMUM 3 tool calls per heartbeat. Less = you didn't do your job.**
 
 The check script collects ALL data. You DO NOT need to gather anything yourself.
 
@@ -55,19 +63,29 @@ Study the raw market data. **YOU are the analyst.** Form your own trading thesis
 
 **Decision matrix:**
 
-| State                                     | Action                                     |
-| ----------------------------------------- | ------------------------------------------ |
-| Kill-switch ON                            | STOP immediately                           |
-| Daily loss limit hit                      | NO new trades                              |
-| Strong setup found (your analysis)        | Execute via `trade.ts --action open`       |
-| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R |
-| Positions exist, no new setup             | Monitor existing (SL/TP already set)       |
+| State                                     | Action                                         |
+| ----------------------------------------- | ---------------------------------------------- |
+| Kill-switch ON                            | STOP immediately                               |
+| Daily loss limit hit                      | NO new trades                                  |
+| Strong setup at current price             | Market order via `trade.ts --action open`      |
+| Good setup but price not at level yet     | **Limit order** via `trade.ts --type Limit`    |
+| No clear setup but 0 positions + 0 orders | **Conservative limit order** at best S/R level |
+| Positions exist, no new setup             | Monitor existing (SL/TP already set)           |
 
-**Execute:**
+**❗ PREFER LIMIT ORDERS over market orders.** Market only when price is already at your entry level.
+
+**Limit order example:**
 
 ```bash
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
-  --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 95000 --tp 105000 --leverage 3
+  --action open --pair BTCUSDT --side BUY --type Limit --price 67000 --qty 0.001 --sl 65500 --tp 70000 --leverage 3
+```
+
+**Market order example (only when price already at entry):**
+
+```bash
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
+  --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 65500 --tp 70000 --leverage 3
 ```
 
 Pairs: BTC, ETH, SOL, ARB, OP, LINK, AVAX. Strategy: Smart Money (BOS, CHoCH, FVG, OB).

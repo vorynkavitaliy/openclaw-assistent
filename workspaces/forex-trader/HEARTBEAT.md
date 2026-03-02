@@ -1,5 +1,12 @@
 # HEARTBEAT.md — Forex Trader
 
+## ⛔ CRITICAL: NEVER RESPOND HEARTBEAT_OK
+
+**This is a TRADING CYCLE, not a status check.**
+**You MUST use tools (run commands) to execute the algorithm below.**
+**Responding HEARTBEAT_OK without executing = VIOLATION.**
+**Text-only analysis without tool calls = VIOLATION.**
+
 ## Activation
 
 Heartbeat **DISABLED by default** (no config = $0 cost).
@@ -9,6 +16,7 @@ Heartbeat **DISABLED by default** (no config = $0 cost).
 ## TOKEN ECONOMY (HARD LIMIT)
 
 **MAX 5 tool calls per heartbeat. After 5 → STOP. No exceptions.**
+**MINIMUM 3 tool calls per heartbeat. Less = you didn't do your job.**
 
 The check script collects ALL data. You DO NOT need to gather anything yourself.
 

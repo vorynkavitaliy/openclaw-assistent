@@ -57,21 +57,24 @@ Study the raw market data. **YOU are the analyst.** Form your own trading thesis
 
 **Decision matrix:**
 
-| State                                     | Action                                            |
-| ----------------------------------------- | ------------------------------------------------- |
-| Weekend                                   | STOP immediately                                  |
-| Off-session hours                         | Monitor only, no new entries                       |
-| Daily loss limit hit                      | NO new trades                                     |
-| Strong setup found (your analysis)        | Execute via `trade.ts --action open`               |
-| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R         |
-| Positions exist, no new setup             | Monitor existing (SL/TP already set)               |
-| Friday after 17:00 Kyiv                   | Close all positions before 19:00                   |
+| State                                     | Action                                     |
+| ----------------------------------------- | ------------------------------------------ |
+| Weekend                                   | STOP immediately                           |
+| Off-session hours                         | Monitor only, no new entries               |
+| Daily loss limit hit                      | NO new trades                              |
+| Strong setup found (your analysis)        | Execute via `trade.ts --action open`       |
+| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R |
+| Positions exist, no new setup             | Monitor existing (SL/TP already set)       |
+| Friday after 17:00 Kyiv                   | Close all positions before 19:00           |
 
-**Execute:**
+**Execute (use ABSOLUTE PRICES for SL/TP — you have current prices from snapshot):**
+
 ```bash
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts \
-  --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
+  --action open --pair EURUSD --side BUY --lots 0.1 --sl 1.0800 --tp 1.0950
 ```
+
+> ⚠️ **SL and TP are MANDATORY.** Orders without `--sl` or `--tp` will be REJECTED.
 
 Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FVG, OB, S&D).
 
@@ -108,8 +111,9 @@ Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FV
 bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 
 # Open trade (Call 2) — YOU decide pair, side, lots, SL, TP based on your analysis
+# Use ABSOLUTE PRICES for SL/TP (from snapshot data)
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts \
-  --action open --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
+  --action open --pair EURUSD --side BUY --lots 0.1 --sl 1.0800 --tp 1.0950
 
 # Close position
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id POS_ID
@@ -117,8 +121,8 @@ cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --act
 # Close all
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
 
-# Modify SL/TP
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id POS_ID --sl-pips 40 --tp-pips 80
+# Modify SL/TP (absolute prices)
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id POS_ID --sl 1.0820 --tp 1.0970
 ```
 
 > ⚠️ FORBIDDEN: creating tasks. Only Orchestrator creates tasks.

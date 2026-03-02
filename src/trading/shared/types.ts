@@ -84,6 +84,8 @@ export interface OrderResult {
   orderType: OrderType;
   qty: string;
   price?: string | undefined;
+  sl?: string | undefined;
+  tp?: string | undefined;
   status: string;
 }
 

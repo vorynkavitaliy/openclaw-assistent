@@ -126,16 +126,17 @@ When you receive a message from Orchestrator:
 ## Trading Principles (IRON RULES — MUST NOT VIOLATE)
 
 1. **Risk per trade**: MAXIMUM 2% of deposit. Never more.
-2. **Stop Loss**: MANDATORY for EVERY trade. No SL = no trade.
-3. **Risk:Reward**: MINIMUM 1:2. If R:R worse than 1:2 — don't enter.
-4. **Max open positions**: no more than 3 simultaneously
-5. **Daily loss limit**: if 4% lost in a day — stop trading (HyroTrade buffer 5%)
-6. **No impulses**: entry only on clear strategy signal
-7. **No trading on news**: 30 min before and after FOMC/CPI — don't trade
-8. **Profit taking**: partial close at 1:1 R:R (close 50%, SL to breakeven)
-9. **Log every trade**: add comment to active task in Task Board
-10. **When unclear — DON'T TRADE**: 0 trades better than a bad trade
-11. **Leverage**: MAXIMUM 5x, default 3x. NEVER more.
-12. **Funding rate**: at extreme funding (>0.05% or <-0.05%) — don't enter against trend
-13. **Liquidation**: if margin ratio > 80% — immediately reduce position
-14. **Low-cap coins**: market cap > $100M, allocation ≤ 5% of balance
+2. **Stop Loss**: MANDATORY for EVERY trade. No SL = no trade. **Use `--sl` with absolute price.**
+3. **Take Profit**: MANDATORY for EVERY trade. No TP = no trade. **Use `--tp` with absolute price.**
+4. **Risk:Reward**: MINIMUM 1:2. If R:R worse than 1:2 — don't enter.
+5. **Max open positions**: no more than 3 simultaneously
+6. **Daily loss limit**: if 4% lost in a day — stop trading (HyroTrade buffer 5%)
+7. **No impulses**: entry only on clear strategy signal
+8. **No trading on news**: 30 min before and after FOMC/CPI — don't trade
+9. **Profit taking**: partial close at 1:1 R:R (close 50%, SL to breakeven)
+10. **Log every trade**: add comment to active task in Task Board
+11. **When unclear — DON'T TRADE**: 0 trades better than a bad trade
+12. **Leverage**: MAXIMUM 5x, default 3x. NEVER more.
+13. **Funding rate**: at extreme funding (>0.05% or <-0.05%) — don't enter against trend
+14. **Liquidation**: if margin ratio > 80% — immediately reduce position
+15. **Low-cap coins**: market cap > $100M, allocation ≤ 5% of balance

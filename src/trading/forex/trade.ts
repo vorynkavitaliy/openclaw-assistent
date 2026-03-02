@@ -10,11 +10,17 @@ import {
   submitOrder,
 } from './client.js';
 
-function validateRisk(lots: number, slPips?: number): { ok: boolean; error?: string } {
+function validateRisk(
+  lots: number,
+  hasSl: boolean,
+  hasTp: boolean,
+): { ok: boolean; error?: string } {
   if (lots > 10.0) return { ok: false, error: `Lot size ${lots} too large. Max 10.0` };
   if (lots < 0.01) return { ok: false, error: `Lot size ${lots} too small. Min 0.01` };
-  if (!slPips || slPips <= 0)
+  if (!hasSl)
     return { ok: false, error: 'SL required! Positions without Stop Loss are forbidden.' };
+  if (!hasTp)
+    return { ok: false, error: 'TP required! Positions without Take Profit are forbidden.' };
   return { ok: true };
 }
 
@@ -22,21 +28,32 @@ async function actionOpen(): Promise<void> {
   const pair = getRequiredArg('pair').toUpperCase();
   const side = getRequiredArg('side').toUpperCase() as 'BUY' | 'SELL';
   const lots = getNumArg('lots') ?? 0.01;
+
+  // Absolute prices take priority over pips
+  const slPrice = getNumArg('sl');
+  const tpPrice = getNumArg('tp');
   const slPips = getNumArg('sl-pips');
   const tpPips = getNumArg('tp-pips');
 
-  const validation = validateRisk(lots, slPips);
+  const hasSl = !!(slPrice || slPips);
+  const hasTp = !!(tpPrice || tpPips);
+
+  const validation = validateRisk(lots, hasSl, hasTp);
   if (!validation.ok) {
     console.log(JSON.stringify({ error: validation.error, action: 'REJECTED' }));
     return;
   }
 
+  // Build SL/TP specs — prefer absolute price over pips
+  const sl = slPrice ? { price: slPrice } : slPips ? { pips: slPips } : undefined;
+  const tp = tpPrice ? { price: tpPrice } : tpPips ? { pips: tpPips } : undefined;
+
   const result = await submitOrder({
     symbol: pair,
     side: side === 'BUY' ? 'Buy' : 'Sell',
     lots,
-    sl: slPips ? { pips: slPips } : undefined,
-    tp: tpPips ? { pips: tpPips } : undefined,
+    sl,
+    tp,
   });
 
   console.log(JSON.stringify({ ...result, timestamp: new Date().toISOString() }, null, 2));
@@ -66,18 +83,25 @@ async function actionCloseAll(): Promise<void> {
 
 async function actionModify(): Promise<void> {
   const positionId = getRequiredArg('position-id');
+  const slPrice = getNumArg('sl');
+  const tpPrice = getNumArg('tp');
   const slPips = getNumArg('sl-pips');
   const tpPips = getNumArg('tp-pips');
 
-  const opts: Record<string, unknown> = {};
-  if (slPips !== undefined) opts.sl = { pips: slPips };
-  if (tpPips !== undefined) opts.tp = { pips: tpPips };
+  const sl = slPrice ? { price: slPrice } : slPips ? { pips: slPips } : undefined;
+  const tp = tpPrice ? { price: tpPrice } : tpPips ? { pips: tpPips } : undefined;
 
-  await modifyPosition(positionId, opts as Parameters<typeof modifyPosition>[1]);
+  await modifyPosition(positionId, { sl, tp });
 
   console.log(
     JSON.stringify(
-      { status: 'MODIFIED', positionId, slPips, tpPips, timestamp: new Date().toISOString() },
+      {
+        status: 'MODIFIED',
+        positionId,
+        sl: slPrice ?? slPips,
+        tp: tpPrice ?? tpPips,
+        timestamp: new Date().toISOString(),
+      },
       null,
       2,
     ),

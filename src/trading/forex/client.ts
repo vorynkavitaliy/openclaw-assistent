@@ -322,6 +322,8 @@ export async function submitOrder(params: {
   const units = lotsToUnits(params.symbol, params.lots);
   const fixSide = params.side === 'Buy' ? '1' : '2';
   const symbolId = await resolveSymbolId(params.symbol);
+
+  // Use absolute prices if provided
   const slPrice = params.sl?.price;
   const tpPrice = params.tp?.price;
 
@@ -343,6 +345,13 @@ export async function submitOrder(params: {
       (slPrice ? ` SL=${slPrice}` : '') +
       (tpPrice ? ` TP=${tpPrice}` : ''),
   );
+
+  if (!slPrice && !tpPrice && (params.sl?.pips || params.tp?.pips)) {
+    log.warn(
+      `SL/TP provided as pips only. Will attempt to set after fill. ` +
+        `For reliability, use absolute prices (--sl, --tp) instead of --sl-pips, --tp-pips.`,
+    );
+  }
 
   const execReport = await session.request(
     MsgType.NewOrderSingle,
@@ -368,7 +377,8 @@ export async function submitOrder(params: {
     clOrdId,
   });
 
-  if (avgPx > 0 && (params.sl?.pips || params.tp?.pips)) {
+  // If SL/TP were given as pips (not absolute prices), compute and set via amendment
+  if (avgPx > 0 && !slPrice && !tpPrice && (params.sl?.pips || params.tp?.pips)) {
     const slPriceFromPips = pipsToPrice(params.side, avgPx, params.sl, true, params.symbol);
     const tpPriceFromPips = pipsToPrice(params.side, avgPx, params.tp, false, params.symbol);
 
@@ -377,10 +387,13 @@ export async function submitOrder(params: {
 
       if (posId) {
         try {
-          logSlTpLimitation(slPriceFromPips, tpPriceFromPips);
-          log.info(`SL/TP set: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`);
+          await amendPositionSlTp(session, posId, symbolId, fixSide, units, slPriceFromPips, tpPriceFromPips);
+          log.info(`SL/TP set post-fill: SL=${slPriceFromPips ?? 'N/A'} TP=${tpPriceFromPips ?? 'N/A'}`);
         } catch (err) {
-          log.warn(`Failed to set SL/TP after fill: ${(err as Error).message}`);
+          log.warn(
+            `Failed to set SL/TP post-fill via amendment: ${(err as Error).message}. ` +
+              `Use absolute prices (--sl, --tp) for reliable SL/TP.`,
+          );
         }
       }
     }
@@ -393,6 +406,8 @@ export async function submitOrder(params: {
     orderType: 'Market',
     qty: String(params.lots),
     price: avgPx > 0 ? String(avgPx) : undefined,
+    sl: slPrice ? String(slPrice) : undefined,
+    tp: tpPrice ? String(tpPrice) : undefined,
     status: ordStatus === '2' || execType === 'F' ? 'FILLED' : 'EXECUTED',
   };
 }
@@ -443,14 +458,48 @@ export async function closePosition(
   log.info(`Position ${positionId} closed`, { partial: partialLots });
 }
 
-function logSlTpLimitation(slPrice: number | undefined, tpPrice: number | undefined): void {
-  if (slPrice || tpPrice) {
-    log.warn(
-      `SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'} — ` +
-        `post-fill SL/TP modification requires cTrader Open API. ` +
-        `Use price-based SL/TP in submitOrder for best results.`,
-    );
+async function amendPositionSlTp(
+  session: FixSession,
+  posId: string,
+  symbolId: string,
+  fixSide: string,
+  units: number,
+  slPrice: number | undefined,
+  tpPrice: number | undefined,
+): Promise<void> {
+  const clOrdId = nextReqId('amend');
+
+  const fields: [number, string | number][] = [
+    [Tag.ClOrdID, clOrdId],
+    [Tag.OrigClOrdID, posId],
+    [Tag.Symbol, symbolId],
+    [Tag.Side, fixSide],
+    [Tag.OrderQty, units],
+    [Tag.OrdType, '1'],
+    [Tag.TransactTime, fixTransactTime()],
+  ];
+
+  if (slPrice) fields.push([Tag.StopLossPrice, slPrice]);
+  if (tpPrice) fields.push([Tag.TakeProfitPrice, tpPrice]);
+
+  log.info(`Amending position ${posId}: SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'}`);
+
+  const response = await session.request(
+    MsgType.OrderCancelReplaceRequest,
+    fields,
+    MsgType.ExecutionReport,
+    clOrdId,
+    REQUEST_TIMEOUT_MS,
+  );
+
+  const execType = response.getString(Tag.ExecType);
+  const rejectReason = response.getString(Tag.Text);
+
+  if (execType === '8') {
+    throw new Error(`Amendment rejected: ${rejectReason}`);
   }
+
+  log.info(`Position ${posId} amended: SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'}`);
 }
 
 export async function modifyPosition(
@@ -470,17 +519,22 @@ export async function modifyPosition(
   const slAbsPrice = opts.sl?.price ?? pipsToPrice(side, entryPrice, opts.sl, true, pos.symbol);
   const tpAbsPrice = opts.tp?.price ?? pipsToPrice(side, entryPrice, opts.tp, false, pos.symbol);
 
+  if (!slAbsPrice && !tpAbsPrice) {
+    log.warn('modifyPosition: no SL or TP values provided');
+    return;
+  }
+
+  const session = await getTradeSession();
+  const symbolId = await resolveSymbolId(pos.symbol);
+  const fixSide = pos.side === 'long' ? '1' : '2';
+  const units = lotsToUnits(pos.symbol, parseFloat(pos.size));
+
+  await amendPositionSlTp(session, String(positionId), symbolId, fixSide, units, slAbsPrice, tpAbsPrice);
+
   log.info(
     `modifyPosition ${positionId}: ${pos.symbol} ` +
       `SL=${slAbsPrice ?? 'unchanged'} TP=${tpAbsPrice ?? 'unchanged'}`,
   );
-
-  if (slAbsPrice || tpAbsPrice) {
-    log.warn(
-      `SL/TP modification on existing position requires cTrader Open API. ` +
-        `Current SL/TP: SL=${pos.stopLoss ?? 'none'} TP=${pos.takeProfit ?? 'none'}`,
-    );
-  }
 }
 
 export async function closeAll(): Promise<void> {

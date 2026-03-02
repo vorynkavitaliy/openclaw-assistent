@@ -55,15 +55,16 @@ Study the raw market data. **YOU are the analyst.** Form your own trading thesis
 
 **Decision matrix:**
 
-| State                                     | Action                                                  |
-| ----------------------------------------- | ------------------------------------------------------- |
-| Kill-switch ON                            | STOP immediately                                        |
-| Daily loss limit hit                      | NO new trades                                           |
-| Strong setup found (your analysis)        | Execute via `trade.ts --action open`                    |
-| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R              |
-| Positions exist, no new setup             | Monitor existing (SL/TP already set)                    |
+| State                                     | Action                                     |
+| ----------------------------------------- | ------------------------------------------ |
+| Kill-switch ON                            | STOP immediately                           |
+| Daily loss limit hit                      | NO new trades                              |
+| Strong setup found (your analysis)        | Execute via `trade.ts --action open`       |
+| No clear setup but 0 positions + 0 orders | Place conservative limit order at best S/R |
+| Positions exist, no new setup             | Monitor existing (SL/TP already set)       |
 
 **Execute:**
+
 ```bash
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/trade.ts \
   --action open --pair BTCUSDT --side BUY --qty 0.001 --sl 95000 --tp 105000 --leverage 3

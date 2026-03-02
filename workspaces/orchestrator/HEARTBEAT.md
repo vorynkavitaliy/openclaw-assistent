@@ -17,6 +17,7 @@ This saves tokens — orchestrator does NOT run when idle.
 4. Report to user in Telegram (IN RUSSIAN): task created, agent notified
 
 Priority routing:
+
 - Normal → `sessions_send target=AGENT message="TASK-XXX: description"`
 - Urgent (user says "срочно/сейчас/немедленно") → priority `critical` + `URGENT:` prefix in message → agent drops current work
 

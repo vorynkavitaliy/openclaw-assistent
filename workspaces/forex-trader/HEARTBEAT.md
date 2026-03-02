@@ -2,47 +2,36 @@
 
 ## Activation
 
-Heartbeat is **DISABLED by default** (no config in openclaw.json = $0 cost).
-When orchestrator runs `trading_control.sh start`, heartbeat config is injected: **every 1h**.
-When user says СТОП, config is removed → back to $0.
+Heartbeat **DISABLED by default** (no config = $0 cost).
+`trading_control.sh start` injects heartbeat: **every 1h**.
+`trading_control.sh stop` removes it → $0.
 
-## Guard Rails (DYNAMIC — read from check script output)
+## TOKEN ECONOMY (HARD LIMIT)
 
-Parameters are stored in `scripts/data/trading_params.json` and can be changed by user via Telegram at any time. **Always use values from the TRADING PARAMS section** in check script output, NOT the defaults below.
+**MAX 3 tool calls per heartbeat. After 3 → STOP. No exceptions.**
 
-Defaults (used if params file missing):
+The check script collects ALL data. You DO NOT need to gather anything yourself.
 
-| Parameter        | Default | Description                       |
-| ---------------- | ------- | --------------------------------- |
-| daily_target     | $100    | Profit goal per day               |
-| max_daily_loss   | $50     | On reach → stop trading for today |
-| max_stops_day    | 2       | On 2 stop losses → stop for today |
-| max_sl_per_trade | $300    | Hard limit on stop loss amount    |
-| budget           | $10,000 | Trading capital                   |
-| min_trades_day   | 2       | Trade actively, don't sit idle    |
-| max_positions    | 3       | Simultaneously open               |
-| risk_percent     | 1-3%    | Of deposit                        |
-| min_rr           | 1:2     | Don't enter below                 |
+## Guard Rails (DYNAMIC)
 
-> Weekend = OFF is hardcoded in check script (not a param).
+Parameters from `scripts/data/trading_params.json`. **Always use values from TRADING PARAMS section** in check script output.
 
-## Token Economy
+Defaults (if params missing):
 
-- **MAX 3 tool calls per heartbeat cycle.** This is a HARD LIMIT.
-- Sessions are compacted after each cycle — you lose memory. All data comes from check script.
-- DO NOT read workspace files — everything you need is in system prompt and script output.
+| Parameter | Default |
+| --------- | ------- |
+| daily_target | $100 |
+| max_daily_loss | $50 |
+| max_stops_day | 2 |
+| max_sl_per_trade | $300 |
+| budget | $10,000 |
+| max_positions | 3 |
+| risk_percent | 1-3% |
+| min_rr | 1:2 |
 
-## MANDATORY MARKET PRESENCE (CRITICAL)
+> Weekend = OFF is hardcoded in check script.
 
-After every heartbeat you MUST ensure at least 1 limit order OR 1 position is active.
-
-- **0 positions + 0 orders = FORBIDDEN.** You MUST place at least 1 limit order.
-- **Closed a position or order → MUST open a new limit order** to replace it.
-- **"No signal found" is NOT acceptable** when you have nothing in the market.
-- If nothing obvious → place a conservative limit order at the strongest S/R level with proper SL/TP.
-- Exception: daily loss limit hit, weekend, or off-session hours.
-
-## Heartbeat Algorithm (every 1h)
+## Heartbeat Algorithm (EXACTLY 3 calls)
 
 ### Call 1: Run Check Script
 
@@ -50,41 +39,31 @@ After every heartbeat you MUST ensure at least 1 limit order OR 1 position is ac
 bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 ```
 
-This ONE script gives you: weekend check, session detection, positions, P&L, account, pending tasks.
+This ONE script gives you EVERYTHING: weekend/session check, account, positions, drawdown,
+FTMO alerts, full market analysis (H4+M15 signals), market digest (news+calendar), tasks.
 
 **If `WEEKEND_CLOSED` → STOP. Zero cost. No more calls.**
+**If `Off-hours` → monitor only, no new entries.**
 
-### Call 2: Analyze + Act
+### Call 2: Execute (if signals exist)
 
-Read TRADING PARAMS from script output. Use those values (not hardcoded defaults).
+Review signals from check script output. Read TRADING PARAMS (use those values, not defaults).
 
-**Strategy: Limit orders at key levels (orders work while you sleep between heartbeats).**
-
-**Step 1 — Check current state:**
-- Count open positions and pending limit orders
-- Check if any orders filled → became positions
-- Check P&L vs daily_target and max_daily_loss
-
-**Step 2 — Act based on state:**
+**Decision matrix:**
 
 | State | Action |
-|---|---|
-| Off-session hours | Monitor only. No new entries. |
-| Daily loss limit hit | Cancel all pending orders. NO new trades. |
-| Positions exist | Manage: partial close +1R, trailing +1.5R, adjust SL/TP |
-| Limit orders exist | Review: cancel stale ones, adjust if levels shifted |
-| Position/order was closed this cycle | Open new limit order to REPLACE it |
-| **0 positions + 0 orders** | **MANDATORY: Analyze all pairs → place at least 1 limit order** |
+| ----- | ------ |
+| Weekend | STOP immediately |
+| Off-session hours | Monitor only, no new entries |
+| Daily loss limit hit | NO new trades |
+| Strong signal in output | Execute: `npx tsx src/trading/forex/monitor.ts --trade --pair=SYMBOL` |
+| Weak/no signal but 0 positions + 0 orders | Place conservative limit order at best S/R |
+| Positions exist, no signal | Skip (monitor manages SL/TP automatically) |
+| Friday after 17:00 Kyiv | Close all positions before 19:00 |
 
-**Step 3 — Ensure market presence:**
-- After all actions, verify: positions + orders ≥ 1 (unless daily loss limit hit or off-session)
-- If still 0 during active session → place 1 limit order at best available level
+Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Strategy: Smart Money (BOS, CHoCH, FVG, OB, S&D).
 
-Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Analysis: H4 trend → M15 entry. Smart Money: BOS, CHoCH, FVG, OB, S&D.
-
-**Handle tasks** from check script output (todo → in_progress → done)
-
-### Call 3: Telegram Report (MANDATORY, IN RUSSIAN)
+### Call 3: Telegram Report (IN RUSSIAN)
 
 ```
 📊 Forex [HH:MM]
@@ -93,33 +72,35 @@ Pairs: EUR/USD, GBP/USD, USD/JPY, AUD/USD. Analysis: H4 trend → M15 entry. Sma
 💬 Оценка: [тренд, сессия, план]
 ```
 
-Then STOP. Do not make more calls.
+**Then STOP. Do not make more calls.**
+
+## MANDATORY MARKET PRESENCE
+
+- **0 positions + 0 orders = FORBIDDEN** (during active sessions).
+- Closed a position/order → replace with new limit order.
+- Exception: daily loss limit, weekend, or off-session hours.
 
 ## Session Rules
 
-| Session          | Hours (UTC+3 Kyiv) | Priority |
-| ---------------- | ------------------ | -------- |
-| London           | 09:00 - 17:00      | HIGH     |
-| New York         | 16:00 - 00:00      | HIGH     |
-| Asian            | 02:00 - 09:00      | LOW      |
-| Outside sessions | —                  | SKIP     |
+| Session | Hours (UTC+3 Kyiv) | Priority |
+| ------- | ------------------ | -------- |
+| London | 09:00 - 17:00 | HIGH |
+| New York | 16:00 - 00:00 | HIGH |
+| Asian | 02:00 - 09:00 | LOW |
+| Outside | — | SKIP |
 
-Outside active sessions: monitor only, no new entries.
-
-## Management Commands
+## Quick Reference
 
 ```bash
-# All-in-one check (used by heartbeat)
+# All-in-one check (Call 1)
 bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 
-# Direct monitoring
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
+# Execute pair (Call 2)
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
 
-# Live trading
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
-
-# Risk check
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
+# Manual order
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
+  --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
 ```
 
 > ⚠️ FORBIDDEN: creating tasks. Only Orchestrator creates tasks.

@@ -1,156 +1,40 @@
 # TOOLS.md — Forex Trader Environment
 
-## Architecture (cTrader Open API)
+## Data Collection (pre-heartbeat)
 
-```
-cTrader Open API (Spotware)
-    ↕
-ctrader-ts SDK (TypeScript)
-    ↕
-TypeScript modules (src/trading/forex/)
-├── client.ts    — cTrader API client: connection, data, trading
-├── monitor.ts   — monitoring: heartbeat, positions, risk-check, trade
-├── trade.ts     — CLI for orders: open, close, modify, status
-└── config.ts    — config from ~/.openclaw/openclaw.json
-    ↕
-OpenClaw Forex Trader Agent
-    ↕
-Orchestrator → Telegram
-```
-
-### cTrader Credentials
-
-- **File**: `~/.openclaw/openclaw.json` → `forex` section
-- **Authentication**: `npx ctrader-ts auth` (one-time, OAuth2)
-- **Broker**: FTMO (prop trading firm)
-
----
-
-## TypeScript CLI — Monitoring
-
-### Heartbeat (primary)
+The check script collects ALL data before you wake up:
 
 ```bash
-# Full heartbeat — account, positions, drawdown, FTMO alerts
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --heartbeat
-
-# Positions only
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --positions
-
-# Account only
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --account
-
-# Risk check (FTMO max daily/total drawdown)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --risk-check
+bash /root/Projects/openclaw-assistent/scripts/forex_check.sh
 ```
 
-### Trading (analysis + execution)
+Output includes: trading params, weekend/session check, account, positions, drawdown,
+FTMO alerts, full market analysis (H4+M15 signals), market digest (news+calendar), tasks.
+
+**DO NOT call monitor.ts --heartbeat or --trade --dry-run yourself** — it's already in the check script output.
+
+## Execution (when you decide to trade)
 
 ```bash
-# Analysis + trading all pairs (dry-run — no execution)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --dry-run
+# Execute specific pair
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
 
-# Analysis + trading single pair (dry-run)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD --dry-run
-
-# Live mode — analysis + automatic execution
+# Execute all pairs with signals
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade
 
-# Live mode — single pair
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/monitor.ts --trade --pair=EURUSD
-```
-
-Monitor in `--trade` mode automatically:
-
-1. Manages open positions (partial close +1R, trailing SL +1.5R, BE)
-2. Scans all pairs for entry signals (4h trend + M15 RSI)
-3. Executes signals (if not dry-run)
-
----
-
-## TypeScript CLI — Orders (trade.ts)
-
-### Open Position
-
-```bash
+# Open order manually
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action open \
-  --pair EURUSD --side BUY --lots 0.1 \
-  --sl-pips 50 --tp-pips 100
-```
+  --pair EURUSD --side BUY --lots 0.1 --sl-pips 50 --tp-pips 100
 
-Required: `--pair`, `--side` (BUY/SELL), `--sl-pips` (risk management).
-Optional: `--lots` (default 0.01), `--tp-pips`.
+# Close position
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id ID
 
-### Close Position
-
-```bash
-# Full close
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678
-
-# Partial close (50% at +1R)
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close --position-id 12345678 --lots 0.05
-```
-
-### Modify SL/TP
-
-```bash
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action modify --position-id 12345678 \
-  --sl-pips 30 --tp-pips 100
-```
-
-### Close All Positions (emergency)
-
-```bash
+# Close all (emergency)
 cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action close-all
 ```
 
-### Account Status
+## Config
 
-```bash
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/forex/trade.ts --action status
-```
-
-All commands return JSON.
-
----
-
-## Market Digest (macro + news)
-
-```bash
-# Full digest (48 hours)
-cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts
-
-# Digest for 24 hours
-cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10
-```
-
-Parses: ForexFactory Calendar XML + CoinDesk/Cointelegraph RSS.
-
----
-
-## Economic Calendar
-
-- **Primary source**: Market Analyst agent (via sessions_send + Task Board)
-- ForexFactory: https://www.forexfactory.com/calendar
-- Investing.com: https://www.investing.com/economic-calendar/
-
-## Visual Tools (Browser)
-
-- **TradingView**: https://www.tradingview.com/chart/
-- **MT5 WebTerminal**: https://mt5-3.ftmo.com/ (visual analysis only)
-
-## Trading Hours (Kyiv time, Europe/Kyiv)
-
-- London: 09:00-17:00
-- New York: 16:00-00:00
-- Overlap: 16:00-17:00 (best trading time)
-- DON'T trade: 01:00-08:00 (Asia, except JPY pairs)
-
-## Timeframes (MANDATORY RULE)
-
-```
-H4  → Determine direction (trend, support/resistance zones)
-H1  → Identify key levels and demand/supply zones
-M15 → FIND ENTRY POINT (BOS, CHoCH, Order Block, FVG)
-M5  → FINE-TUNE ENTRY (pattern confirmation, minimal SL)
-```
+- Credentials: `~/.openclaw/openclaw.json` → `forex` section
+- Auth: `npx ctrader-ts auth` (one-time, OAuth2)
+- Broker: FTMO (prop trading firm)

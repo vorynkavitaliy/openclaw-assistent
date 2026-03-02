@@ -1,32 +1,9 @@
 {
   "tasks": [
     {
-      "id": "TASK-001",
-      "title": "Вход в тестовую позицию BTC/USDT",
-      "description": "Немедленный вход в тестовую позицию BTC/USDT для проверки функциональности и доступа к бирже.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-01T14:52:24Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-01T14:52:24Z",
-      "updated_at": "2026-03-01T14:52:24Z"
-    },
-    {
-      "id": "TASK-002",
-      "title": "Открыть реальную позицию BTC/USDT",
-      "description": "Открыть реальную торговую позицию BTC/USDT, используя актуальные настройки и доступ к бирже, согласно стратегии.",
+      "id": "TASK-014",
+      "title": "Открыть тестовую позицию на криптовалютном рынке",
+      "description": "По запросу пользователя, открыть небольшую тестовую позицию на криптовалютном рынке для проверки функциональности. Выбор монеты и размера позиции на усмотрение трейдера.",
       "type": "task",
       "status": "done",
       "assignee": "crypto-trader",
@@ -38,403 +15,81 @@
       "comments": [
         {
           "author": "crypto-trader",
-          "timestamp": "2026-03-01T14:58:14Z",
-          "text": "АНАЛИЗ РЫНКА BTC/USDT (01.03.2026 14:56)\n\n📊 ТЕХНИЧЕСКИЙ АНАЛИЗ:\n• 4H тренд: МЕДВЕЖИЙ (цена 6,815 < EMA200 1,301)\n• 15M: RSI 23.27 (перепроданность), цена > EMA20\n• Поддержка: 6,069 | Сопротивление: 7,337\n• Фандинг рейт: +0.0077% (преобладание лонгов)\n\n📈 МАКРО ДАННЫЕ:\n• Fear & Greed: 14 (Экстремальный страх)\n• BTC доминирование: 56.1%\n• Баланс: 0,000.36 USDT\n\n⚠️ РЕШЕНИЕ: ПОЗИЦИЯ НЕ ОТКРЫТА\nПричина: Противоречивые сигналы между таймфреймами. Медвежий 4H тренд против RSI перепроданности 15M. Отсутствие четкого входного сигнала.\n\nРекомендация: Ожидать более четкого сигнала или пробоя ключевых уровней."
+          "timestamp": "2026-03-02T09:45:30Z",
+          "text": "✅ Тестовая позиция размещена: BTCUSDT LONG лимит @ 6,013, объем 0.001 BTC (~6), SL 4,693, TP 8,654, R:R 1:2. Order ID: c94d662c-90d1-4b6c-8cf5-fc81654bf22b"
+        },
+        {
+          "author": "crypto-trader",
+          "timestamp": "2026-03-02T09:45:42Z",
+          "text": "✅ Задача выполнена: тестовая позиция успешно размещена в demo-режиме Bybit. Лимитный ордер на покупку 0.001 BTC по цене 6,013 с консервативными SL/TP. Система готова к работе."
         }
       ],
       "history": [
         {
-          "timestamp": "2026-03-01T14:55:49Z",
+          "timestamp": "2026-03-02T09:42:49Z",
           "agent": "orchestrator",
           "action": "created"
         },
         {
-          "timestamp": "2026-03-01T14:56:09Z",
+          "timestamp": "2026-03-02T09:43:23Z",
           "agent": "crypto-trader",
           "action": "status_changed",
           "from": "todo",
           "to": "in_progress"
         },
         {
-          "timestamp": "2026-03-01T14:58:16Z",
+          "timestamp": "2026-03-02T09:45:39Z",
           "agent": "crypto-trader",
           "action": "status_changed",
           "from": "in_progress",
           "to": "done"
         }
       ],
-      "created_at": "2026-03-01T14:55:49Z",
-      "updated_at": "2026-03-01T14:58:16Z"
+      "created_at": "2026-03-02T09:42:49Z",
+      "updated_at": "2026-03-02T09:45:42Z"
     },
     {
-      "id": "TASK-003",
-      "title": "Принудительное открытие позиции BTC/USDT для верификации",
-      "description": "Пользователь приказал открыть любую реальную позицию BTC/USDT для демонстрации функционала, несмотря на текущую рыночную оценку. Использовать минимальный объем.",
+      "id": "TASK-015",
+      "title": "Открыть тестовую позицию на рынке Форекс",
+      "description": "По запросу пользователя, открыть небольшую тестовую позицию на рынке Форекс для проверки функциональности. Выбор валютной пары и размера позиции на усмотрение трейдера.",
       "type": "task",
       "status": "done",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [
-        {
-          "author": "crypto-trader",
-          "timestamp": "2026-03-01T15:01:20Z",
-          "text": "✅ ВЫПОЛНЕНО: Открыта минимальная позиция BTCUSDT LONG 0.001 BTC @ $66,818.7, SL $66,608.7, TP $67,208.7, R:R 1:2. Ордер исполнен мгновенно в Demo режиме. Баланс: $10,000.69. Функционал торговли продемонстрирован."
-        }
-      ],
-      "history": [
-        {
-          "timestamp": "2026-03-01T14:59:49Z",
-          "agent": "orchestrator",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-03-01T15:01:16Z",
-          "agent": "crypto-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-03-01T14:59:49Z",
-      "updated_at": "2026-03-01T15:01:20Z"
-    },
-    {
-      "id": "TASK-004",
-      "title": "Закрыть текущую позицию BTC/USDT",
-      "description": "Пользователь приказал принудительно закрыть текущую открытую позицию BTC/USDT для верификации.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-01T15:06:07Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-01T15:06:07Z",
-      "updated_at": "2026-03-01T15:06:07Z"
-    },
-    {
-      "id": "TASK-005",
-      "title": "Отменить все активные ордера BTC/USDT (лимитные, условные)",
-      "description": "Пользователь приказал отменить все активные и висящие ордера по BTC/USDT для верификации работы с ордерами, отличными от позиций.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-01T15:07:58Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-01T15:07:58Z",
-      "updated_at": "2026-03-01T15:07:58Z"
-    },
-    {
-      "id": "TASK-006",
-      "title": "Окончательное закрытие всех позиций BTC/USDT",
-      "description": "Пользователь приказал окончательно закрыть все открытые позиции BTC/USDT перед уходом в спячку.",
-      "type": "task",
-      "status": "done",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [
-        {
-          "author": "crypto-trader",
-          "timestamp": "2026-03-01T15:11:22Z",
-          "text": "✅ Все позиции BTC/USDT закрыты. Kill Switch активирован. Баланс: 0,001.02. Торговля остановлена по приказу пользователя."
-        }
-      ],
-      "history": [
-        {
-          "timestamp": "2026-03-01T15:10:59Z",
-          "agent": "orchestrator",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-03-01T15:11:24Z",
-          "agent": "crypto-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-03-01T15:10:59Z",
-      "updated_at": "2026-03-01T15:11:24Z"
-    },
-    {
-      "id": "TASK-007",
-      "title": "Открыть сделку по маркету (BTC/USDT)",
-      "description": "Открыть сделку по рыночной цене BTC/USDT прямо сейчас, с соблюдением правил Hyro Trade (SL/TP).",
-      "type": "task",
-      "status": "done",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [
-        {
-          "author": "crypto-trader",
-          "timestamp": "2026-03-01T15:50:34Z",
-          "text": "✅ BTCUSDT LONG открыт: Entry 7,150, SL 5,767 (-2.06%), TP 9,916 (+4.12%), Size 0.433 BTC, R:R 1:2.00, Risk 00 (2%), OrderID: 627f4e10-dd93-421b-bcfe-7c5bafbb3631. Рынок в Extreme Fear (14) - хорошая возможность для покупки."
-        }
-      ],
-      "history": [
-        {
-          "timestamp": "2026-03-01T15:48:36Z",
-          "agent": "orchestrator",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-03-01T15:48:49Z",
-          "agent": "crypto-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "in_progress"
-        },
-        {
-          "timestamp": "2026-03-01T15:50:43Z",
-          "agent": "crypto-trader",
-          "action": "status_changed",
-          "from": "in_progress",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-03-01T15:48:36Z",
-      "updated_at": "2026-03-01T15:50:43Z"
-    },
-    {
-      "id": "TASK-008",
-      "title": "Закрытие всех текущих позиций",
-      "description": "Пользователь приказал закрыть все открытые позиции перед переходом системы в режим ожидания.",
-      "type": "task",
-      "status": "done",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [
-        {
-          "author": "crypto-trader",
-          "timestamp": "2026-03-01T16:05:55Z",
-          "text": "✅ Все позиции закрыты. BTCUSDT LONG 0.433 закрыта с P&L ~-0. Kill Switch активирован. Режим ожидания включен."
-        }
-      ],
-      "history": [
-        {
-          "timestamp": "2026-03-01T16:05:33Z",
-          "agent": "orchestrator",
-          "action": "created"
-        },
-        {
-          "timestamp": "2026-03-01T16:05:57Z",
-          "agent": "crypto-trader",
-          "action": "status_changed",
-          "from": "todo",
-          "to": "done"
-        }
-      ],
-      "created_at": "2026-03-01T16:05:33Z",
-      "updated_at": "2026-03-01T16:05:57Z"
-    },
-    {
-      "id": "TASK-009",
-      "title": "Начать торговлю по дефолтным настройкам",
-      "description": "Запустить торговлю финансовыми инструментами (валюты) согласно предопределенным дефолтным параметрам, используя механизм сердцебиения.",
-      "type": "task",
-      "status": "in_progress",
       "assignee": "forex-trader",
       "reporter": "orchestrator",
-      "priority": "high",
+      "priority": "critical",
       "labels": [],
       "parent": "",
       "subtasks": [],
       "comments": [
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T22:20:18Z",
-          "text": "🚫 Воскресенье 01.03.2026 22:20 UTC — рынок Forex закрыт. Торговля будет возобновлена в понедельник с открытия рынка. Ожидаю открытия для анализа всех пар и активной торговли."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T22:40:17Z",
-          "text": "🚫 ТОРГИ ПРИОСТАНОВЛЕНЫ: Воскресенье - рынок Forex закрыт. Следующий сеанс - понедельник после 09:00 по Киеву."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T22:50:15Z",
-          "text": "⏸️ Воскресенье 02.03.2026 22:50 UTC - рынок ЗАКРЫТ. Форекс торгуется Пн-Пт. Жду открытия в понедельник ~00:00 Киев (Sydney Open). Никаких позиций, токены не трачу."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T23:00:18Z",
-          "text": "🚫 ВОСКРЕСЕНЬЕ - рынок закрыт. Открытых позиций: 0. Баланс: 0,000. Торговля возобновится в понедельник утром при открытии рынка."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T23:10:16Z",
-          "text": "📅 Воскресенье 23:10 UTC - рынок форекс закрыт. Торговля недоступна до открытия в понедельник. Ожидаю открытия рынка для анализа и торговли."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-01T23:25:39Z",
-          "text": "Воскресенье 01.03.26 23:25 UTC: Рынок закрыт (выходной). Счет: 0,000. Позиций: 0. Торговля возобновится в понедельник при открытии рынка."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-02T00:26:32Z",
-          "text": "📊 Хартбит 00:25 UTC - Позиции: 0 открытых, Баланс: 0,000, Эквити: 0,000, Сигналы: анализ 5 мажор пар показал отсутствие четких сетапов на M15. Новости - низкий импакт PMI (без времени). Продолжаю мониторинг рынка."
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-02T01:27:55Z",
-          "text": "🕰️ 01:27 понедельник - Азиатская сессия\n\n📊 Анализ всех пар:\n• EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF: нет сигналов\n• Волатильность низкая (типично для Asian session)\n• Открытых позиций: 0\n• Баланс: 0,000 USD\n\n📅 Календарь: высокоимпактных новостей в ближайшие часы нет\n\n⏳ План: мониторинг каждые 10 мин, активная торговля с Лондонской сессии (09:00)"
-        },
-        {
-          "author": "forex-trader",
-          "timestamp": "2026-03-02T02:29:07Z",
-          "text": "🕐 02:29 UTC | Анализ выполнен:\n📊 Счет: 0,000 | Позиций: 0 | Риски: OK\n🔍 Проанализированы: EURUSD, GBPUSD, USDJPY\n⚡ Сигналов M15/M5: 0\n📰 Новости: критических событий в ±30мин нет\n💤 Азиатская сессия - низкая волатильность\n⏳ Ожидание Лондонской сессии (9:00 Kyiv)"
-        },
         {
           "author": "orchestrator",
-          "timestamp": "2026-03-02T05:15:27Z",
-          "text": "Оркестратор запрашивает отчет: почему лимитные ордера не были открыты, несмотря на статус задачи 'IN_PROGRESS'?"
+          "timestamp": "2026-03-02T09:57:20Z",
+          "text": "Тестовая позиция успешно открыта: BUY EURUSD 0.01 лота @ 1.17341. Position ID: 3046961. Ордер №5034916 исполнен."
         }
       ],
       "history": [
         {
-          "timestamp": "2026-03-01T20:08:51Z",
+          "timestamp": "2026-03-02T09:54:49Z",
           "agent": "orchestrator",
           "action": "created"
         },
         {
-          "timestamp": "2026-03-01T22:40:12Z",
-          "agent": "forex-trader",
+          "timestamp": "2026-03-02T09:55:01Z",
+          "agent": "orchestrator",
           "action": "status_changed",
           "from": "todo",
           "to": "in_progress"
-        }
-      ],
-      "created_at": "2026-03-01T20:08:51Z",
-      "updated_at": "2026-03-02T05:15:27Z"
-    },
-    {
-      "id": "TASK-010",
-      "title": "Начать торговлю по дефолтным настройкам",
-      "description": "Запустить торговлю криптоактивами согласно предопределенным дефолтным параметрам, используя механизм сердцебиения.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "high",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
+        },
         {
-          "timestamp": "2026-03-01T20:08:54Z",
+          "timestamp": "2026-03-02T09:57:22Z",
           "agent": "orchestrator",
-          "action": "created"
+          "action": "status_changed",
+          "from": "in_progress",
+          "to": "done"
         }
       ],
-      "created_at": "2026-03-01T20:08:54Z",
-      "updated_at": "2026-03-01T20:08:54Z"
-    },
-    {
-      "id": "TASK-011",
-      "title": "Остановить все торговые операции",
-      "description": "Полностью прекратить все торговые операции и подтвердить остановку. Отменить запуск торговли по TASK-009.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "forex-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-02T05:15:59Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-02T05:15:59Z",
-      "updated_at": "2026-03-02T05:15:59Z"
-    },
-    {
-      "id": "TASK-012",
-      "title": "Отменить запуск торговли",
-      "description": "Аннулировать задачу TASK-010 по запуску торговли и подтвердить отсутствие активных торговых операций.",
-      "type": "task",
-      "status": "todo",
-      "assignee": "crypto-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-02T05:15:59Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-02T05:15:59Z",
-      "updated_at": "2026-03-02T05:15:59Z"
-    },
-    {
-      "id": "TASK-013",
-      "title": "Немедленно войти в любую сделку для проверки",
-      "description": "Войти в любую доступную сделку (по усмотрению трейдера) для проверки работоспособности. СВЕРХСРОЧНО",
-      "type": "task",
-      "status": "todo",
-      "assignee": "forex-trader",
-      "reporter": "orchestrator",
-      "priority": "critical",
-      "labels": [],
-      "parent": "",
-      "subtasks": [],
-      "comments": [],
-      "history": [
-        {
-          "timestamp": "2026-03-02T05:18:30Z",
-          "agent": "orchestrator",
-          "action": "created"
-        }
-      ],
-      "created_at": "2026-03-02T05:18:30Z",
-      "updated_at": "2026-03-02T05:18:30Z"
+      "created_at": "2026-03-02T09:54:49Z",
+      "updated_at": "2026-03-02T09:57:22Z"
     }
   ],
   "nextId": 1

@@ -1,7 +1,18 @@
 export function getArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const found = process.argv.find((a) => a.startsWith(prefix));
-  return found ? found.slice(prefix.length) : undefined;
+  const eqPrefix = `--${name}=`;
+  const flag = `--${name}`;
+
+  for (let i = 0; i < process.argv.length; i++) {
+    const a = process.argv[i]!;
+    // --name=value
+    if (a.startsWith(eqPrefix)) return a.slice(eqPrefix.length);
+    // --name value
+    if (a === flag && i + 1 < process.argv.length) {
+      const next = process.argv[i + 1]!;
+      if (!next.startsWith('--')) return next;
+    }
+  }
+  return undefined;
 }
 
 export function getArgOrDefault(name: string, defaultValue: string): string {

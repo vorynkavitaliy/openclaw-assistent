@@ -275,7 +275,13 @@ export async function submitOrder(params: {
 
   const res = await client.submitOrder(orderParams);
   if (res.retCode !== 0) {
-    throw new Error(`Failed to create order: ${res.retMsg}`);
+    const msg = res.retMsg ?? 'Unknown error';
+    // Extract base price from error for helpful debugging
+    const priceMatch = msg.match(/base_price:(\d+)/);
+    const hint = priceMatch
+      ? ` (current price ≈ ${(parseInt(priceMatch[1]) / 10000000).toFixed(2)})`
+      : '';
+    throw new Error(`Order REJECTED: ${msg}${hint}`);
   }
 
   const result = res.result as { orderId: string; orderLinkId?: string };

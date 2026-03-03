@@ -1,1 +1,27 @@
-{"tasks": []}
+{
+  "tasks": [
+    {
+      "id": "TASK-029",
+      "title": "Детальный отчет по анализу рынка и торговым решениям crypto-trader за последние 24 часа",
+      "description": "",
+      "type": "task",
+      "status": "todo",
+      "assignee": "market-analyst",
+      "reporter": "orchestrator",
+      "priority": "high",
+      "labels": [],
+      "parent": "",
+      "subtasks": [],
+      "comments": [],
+      "history": [
+        {
+          "timestamp": "2026-03-03T05:19:00Z",
+          "agent": "orchestrator",
+          "action": "created"
+        }
+      ],
+      "created_at": "2026-03-03T05:19:00Z",
+      "updated_at": "2026-03-03T05:19:00Z"
+    }
+  ]
+}

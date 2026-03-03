@@ -32,3 +32,13 @@ __pycache__/
 # USER.md
 # HEARTBEAT.md
 skills/taskboard/data/telegram.conf
+
+# Claude Code — авто-память (per-machine, не шарить)
+.claude/memory/
+
+# skills.sh — загружаемые скилы (аналог node_modules, не коммитить)
+# Для установки:
+#   npx skills add https://github.com/antfu/skills --skill vitest --yes
+#   npx skills add https://github.com/github/awesome-copilot --skill git-commit --yes
+#   npx skills add https://github.com/wshobson/agents --skill typescript-advanced-types --yes
+.agents/

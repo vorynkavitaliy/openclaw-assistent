@@ -123,6 +123,99 @@ export interface TradeSignal {
   timeframe: string;
 }
 
+// ─── Confluence Scoring System ───────────────────────────────────
+
+export interface OrderbookData {
+  bids: Array<{ price: number; qty: number }>;
+  asks: Array<{ price: number; qty: number }>;
+  bidWallPrice: number;
+  askWallPrice: number;
+  imbalance: number; // -1..+1 (bid/ask volume ratio)
+  spread: number;
+  timestamp: string;
+}
+
+export interface OIDataPoint {
+  timestamp: string;
+  openInterest: number;
+  delta: number;
+}
+
+export interface FundingDataPoint {
+  timestamp: string;
+  rate: number;
+}
+
+export type MarketRegime = 'STRONG_TREND' | 'WEAK_TREND' | 'RANGING' | 'VOLATILE' | 'CHOPPY';
+
+export type ConfluenceSignal = 'STRONG_LONG' | 'LONG' | 'NEUTRAL' | 'SHORT' | 'STRONG_SHORT';
+
+export interface ConfluenceScore {
+  total: number; // -100..+100
+  trend: number; // -10..+10
+  momentum: number; // -10..+10
+  volume: number; // -10..+10
+  structure: number; // -10..+10
+  orderflow: number; // -10..+10
+  regime: number; // -10..+10
+  signal: ConfluenceSignal;
+  confidence: number; // 0..100
+  details: string[];
+}
+
+export interface VolumeProfile {
+  vwap: number;
+  volumeDelta: number; // buy_vol - sell_vol
+  relativeVolume: number; // current / average
+  highVolumeNodes: number[];
+}
+
+export interface PivotLevels {
+  pivotPoint: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+export interface VolumeClusterLevels {
+  highVolumeLevels: number[];
+  pocPrice: number; // Point of Control
+  valueAreaHigh: number;
+  valueAreaLow: number;
+}
+
+export interface MACDResult {
+  macd: number;
+  signal: number;
+  histogram: number;
+}
+
+export interface StochRSIResult {
+  k: number;
+  d: number;
+}
+
+export interface ConfluenceConfig {
+  trendWeight: number;
+  momentumWeight: number;
+  volumeWeight: number;
+  structureWeight: number;
+  orderflowWeight: number;
+  regimeWeight: number;
+  entryThreshold: number; // min score для входа
+  strongThreshold: number; // min score для auto-trade
+}
+
+export interface RecentTrade {
+  price: number;
+  qty: number;
+  side: 'Buy' | 'Sell';
+  time: string;
+}
+
 export interface TradeRecord {
   id: string;
   symbol: string;

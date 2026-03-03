@@ -3,6 +3,26 @@
 Мультиагентная система автоматизации торговли на платформе OpenClaw.
 TypeScript/Node.js (ES Modules), Bybit (крипто) + cTrader FIX 4.4 (Forex).
 
+## Язык общения
+
+Все ответы, документация, комментарии в коде и коммиты — **на русском языке**.
+
+## Мультиагентная архитектура
+
+Проект использует систему суб-агентов Claude Code. Основной подход — **оркестратор**,
+который принимает задачи и делегирует специализированным агентам:
+
+| Агент | Файл | Когда использовать |
+|-------|------|-------------------|
+| orchestrator | `.claude/agents/orchestrator.md` | Координация задач, декомпозиция, управление проектом |
+| developer | `.claude/agents/developer.md` | Написание/изменение TypeScript/Node.js кода |
+| tester | `.claude/agents/tester.md` | Тесты Vitest, ESLint, проверка качества |
+| planner | `.claude/agents/planner.md` | Анализ требований, архитектура, планирование |
+| analyst | `.claude/agents/analyst.md` | Анализ рынка, индикаторы, рыночный контекст |
+| trading-advisor | `.claude/agents/trading-advisor.md` | Настройка торгового агента, стратегии, рекомендации |
+
+При сложных задачах — **всегда** начинай с orchestrator для декомпозиции.
+
 ## Сборка и проверка качества
 
 ```bash
@@ -43,15 +63,18 @@ src/
 
 ## Конвенции кода
 
+Детальные правила — в `.claude/rules/`. Ключевые:
+
 - **ES Module импорты** — расширение `.js` обязательно:
   ```typescript
-  import { createLogger } from '../../utils/logger.js';   // ✅
-  import { createLogger } from '../../utils/logger';      // ❌
+  import { createLogger } from '../../utils/logger.js';   // OK
+  import { createLogger } from '../../utils/logger';      // ОШИБКА
   ```
 - **Логгер**: `const log = createLogger('module-name')` из `../../utils/logger.js`
-- **Типы**: все из `src/trading/shared/types.ts` (Position, OHLC, OrderParams, MarketAnalysis, TradingConfig...)
+- **Типы**: все из `src/trading/shared/types.ts` (Position, OHLC, OrderParams, MarketAnalysis...)
 - **Конфиг**: `getBybitCredentials()`, `getForexConfig()` из `../../utils/config.js`
 - **Ретрай**: `retryAsync(fn, { retries, backoffMs })` из `../../utils/retry.js`
+- **Strict TypeScript**: `noUnusedLocals`, `noImplicitReturns`, `noUncheckedIndexedAccess`
 
 ## Безопасность (КРИТИЧНО)
 
@@ -78,5 +101,13 @@ buildMarketAnalysis(ohlc: OHLC[], meta): MarketAnalysis
 ## OpenClaw платформа
 
 - Gateway: `ws://127.0.0.1:18789` | Config: `~/.openclaw/openclaw.json`
-- Telegram: @hyrotraders_bot | Агенты: orchestrator, developer, qa-tester, analyst
+- Telegram: @hyrotraders_bot | User ID: 5929886678
+- Агенты (OpenClaw): orchestrator, forex-trader, crypto-trader, market-analyst, tech-lead, backend-dev, frontend-dev, qa-tester
 - Skills: `skills/` (OpenClaw) vs `.claude/skills/` (Claude Code — разные системы!)
+
+## Контекстные файлы
+
+- Архитектура: @.github/docs/architecture.md
+- Правила код-ревью: @.github/docs/rules/code-review.md
+- Правила безопасности: @.github/docs/rules/security.md
+- Конфиг OpenClaw: @.github/docs/rules/openclaw-config.md

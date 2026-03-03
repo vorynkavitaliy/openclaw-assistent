@@ -1,11 +1,22 @@
 import { getArg, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
+import { calculateConfluenceScore, type ConfluenceInput } from '../shared/confluence.js';
+// levels используются в snapshot-v2, здесь пока не нужны
+
+import { detectMarketRegime, getRegimeThreshold } from '../shared/regime.js';
+import type { ConfluenceScore } from '../shared/types.js';
+import { buildVolumeProfile } from '../shared/volume-analysis.js';
 import {
   getBalance,
+  getFundingHistory,
+  getKlines,
   getMarketAnalysis,
   getMarketInfo,
+  getOIHistory,
+  getOrderbook,
   getPositions,
+  getRecentTrades,
   modifyPosition,
   partialClosePosition,
   setLeverage,
@@ -27,11 +38,9 @@ interface TradeSignalInternal {
   tp: number;
   rr: number;
   reason: string;
-  funding: number;
-  atr: number;
-  trendBias: string;
-  rsi4h: number;
-  rsi15m: number;
+  confluence: ConfluenceScore;
+  regime: string;
+  confidence: number;
 }
 
 interface SignalResult extends TradeSignalInternal {
@@ -190,94 +199,121 @@ async function analyzeMarket(): Promise<TradeSignalInternal[]> {
   const pairs = SINGLE_PAIR ? [SINGLE_PAIR.toUpperCase()] : config.pairs;
   const signals: TradeSignalInternal[] = [];
 
-  for (const pair of pairs) {
-    try {
-      const signal = await analyzePair(pair);
-      if (signal) signals.push(signal);
-    } catch (err) {
-      state.logEvent('analysis_error', { pair, error: (err as Error).message });
-    }
+  // Анализируем все пары параллельно
+  const results = await Promise.all(
+    pairs.map(async (pair) => {
+      try {
+        return await analyzePairV2(pair);
+      } catch (err) {
+        state.logEvent('analysis_error', { pair, error: (err as Error).message });
+        return null;
+      }
+    }),
+  );
+
+  for (const signal of results) {
+    if (signal) signals.push(signal);
   }
+
+  // Сортируем по силе confluence score (лучшие сигналы первыми)
+  signals.sort((a, b) => Math.abs(b.confluence.total) - Math.abs(a.confluence.total));
 
   return signals;
 }
 
-async function analyzePair(pair: string): Promise<TradeSignalInternal | null> {
-  const [h4, m15, mkt] = await Promise.all([
-    getMarketAnalysis(pair, '240', 100),
-    getMarketAnalysis(pair, '15', 100),
-    getMarketInfo(pair),
+async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> {
+  // Собираем все данные параллельно (как в snapshot-v2)
+  const [
+    market,
+    d1,
+    h4,
+    h1,
+    m15,
+    m5,
+    orderbook,
+    oiHistory,
+    fundingHistory,
+    recentTrades,
+    m15Candles,
+    h4Candles,
+  ] = await Promise.all([
+    getMarketInfo(pair).catch(() => null),
+    getMarketAnalysis(pair, 'D', 200).catch(() => null),
+    getMarketAnalysis(pair, '240', 200).catch(() => null),
+    getMarketAnalysis(pair, '60', 200).catch(() => null),
+    getMarketAnalysis(pair, '15', 200).catch(() => null),
+    getMarketAnalysis(pair, '5', 100).catch(() => null),
+    getOrderbook(pair, 25).catch(() => null),
+    getOIHistory(pair, 24).catch(() => []),
+    getFundingHistory(pair, 20).catch(() => []),
+    getRecentTrades(pair, 500).catch(() => []),
+    getKlines(pair, '15', 200).catch(() => []),
+    getKlines(pair, '240', 200).catch(() => []),
   ]);
 
-  if (!h4 || !m15) return null;
+  if (!m15 || !market || !orderbook) return null;
 
-  const trendBias = h4.bias.emaTrend;
-  const priceVsEma = h4.bias.priceVsEma200;
-  const rsi4h = h4.indicators.rsi14;
-  const rsi15m = m15.indicators.rsi14;
-  const atr15m = m15.indicators.atr14;
-  const currentPrice = m15.currentPrice;
-  const fundingRate = mkt?.fundingRate ?? 0;
+  // Volume profile from M15 candles + recent trades
+  const volumeProfile = m15Candles.length > 0 ? buildVolumeProfile(m15Candles, recentTrades) : null;
+  if (!volumeProfile) return null;
 
-  if (trendBias === 'UNKNOWN') return null;
+  // Market regime from H4 candles
+  const regime = h4Candles.length >= 50 ? detectMarketRegime(h4Candles) : 'RANGING';
 
-  if (trendBias === 'BULLISH' && fundingRate > config.maxFundingRate) return null;
-  if (trendBias === 'BEARISH' && fundingRate < config.minFundingRate) return null;
+  // Confluence scoring
+  const input: ConfluenceInput = {
+    trendTF: d1 ?? h4,
+    zonesTF: h1,
+    entryTF: m15,
+    precisionTF: m5,
+    entryCandles: m15Candles,
+    orderbook,
+    oiHistory,
+    fundingHistory,
+    volumeProfile,
+    regime,
+    market,
+  };
+  const confluence = calculateConfluenceScore(input);
 
-  if (trendBias === 'BULLISH' && priceVsEma === 'ABOVE') {
-    const support = m15.levels.support;
-    const distToSupport = support > 0 ? ((currentPrice - support) / currentPrice) * 100 : 999;
+  // Проверяем минимальный порог для режима рынка
+  const threshold = getRegimeThreshold(regime);
+  const absScore = Math.abs(confluence.total);
 
-    if (rsi15m < 40 || distToSupport < 1.5) {
-      const sl = support > 0 ? support - atr15m : currentPrice * 0.98;
-      const slDist = currentPrice - sl;
-      const tp = currentPrice + slDist * config.minRR;
+  if (absScore < threshold) return null; // Сигнал слишком слабый для текущего режима
 
-      return {
-        pair,
-        side: 'Buy',
-        entryPrice: currentPrice,
-        sl: roundPrice(sl, pair),
-        tp: roundPrice(tp, pair),
-        rr: config.minRR,
-        reason: `BULLISH trend H4 + RSI15m=${rsi15m.toFixed(1)} + support ${support}`,
-        funding: fundingRate,
-        atr: atr15m,
-        trendBias,
-        rsi4h,
-        rsi15m,
-      };
-    }
-  }
+  // Определяем сторону сделки
+  const side: 'Buy' | 'Sell' = confluence.total > 0 ? 'Buy' : 'Sell';
+  const atr = m15.indicators.atr14;
+  const price = market.lastPrice;
 
-  if (trendBias === 'BEARISH' && priceVsEma === 'BELOW') {
-    const resistance = m15.levels.resistance;
-    const distToResistance =
-      resistance > 0 ? ((resistance - currentPrice) / currentPrice) * 100 : 999;
+  if (atr === 0 || price === 0) return null;
 
-    if (rsi15m > 60 || distToResistance < 1.5) {
-      const sl = resistance > 0 ? resistance + atr15m : currentPrice * 1.02;
-      const slDist = sl - currentPrice;
-      const tp = currentPrice - slDist * config.minRR;
+  // Entry: Limit ордер (bid1 для Buy, ask1 для Sell)
+  const entry =
+    side === 'Buy' ? (orderbook.bids[0]?.price ?? price) : (orderbook.asks[0]?.price ?? price);
 
-      return {
-        pair,
-        side: 'Sell',
-        entryPrice: currentPrice,
-        sl: roundPrice(sl, pair),
-        tp: roundPrice(tp, pair),
-        rr: config.minRR,
-        reason: `BEARISH trend H4 + RSI15m=${rsi15m.toFixed(1)} + resistance ${resistance}`,
-        funding: fundingRate,
-        atr: atr15m,
-        trendBias,
-        rsi4h,
-        rsi15m,
-      };
-    }
-  }
+  // SL: 1.5 * ATR от entry
+  const slDistance = atr * 1.5;
+  const sl = side === 'Buy' ? entry - slDistance : entry + slDistance;
 
-  return null;
+  // TP: используем minRR из конфига
+  const tp = side === 'Buy' ? entry + slDistance * config.minRR : entry - slDistance * config.minRR;
+
+  const rr = config.minRR;
+
+  return {
+    pair,
+    side,
+    entryPrice: roundPrice(entry, pair),
+    sl: roundPrice(sl, pair),
+    tp: roundPrice(tp, pair),
+    rr,
+    reason: `${confluence.signal} score=${confluence.total} confidence=${confluence.confidence}% regime=${regime} [${confluence.details.slice(0, 3).join('; ')}]`,
+    confluence,
+    regime,
+    confidence: confluence.confidence,
+  };
 }
 
 async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalResult[]> {
@@ -326,11 +362,14 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
       await setLeverage(sig.pair, config.defaultLeverage);
 
       const qtyStr = formatQty(qty, sig.pair);
+
+      // Используем Limit ордер вместо Market для лучшего исполнения
       const orderRes = await submitOrder({
         symbol: sig.pair,
         side: sig.side,
-        orderType: 'Market',
+        orderType: 'Limit',
         qty: qtyStr,
+        price: String(sig.entryPrice),
         stopLoss: String(sig.sl),
         takeProfit: String(sig.tp),
       });
@@ -342,6 +381,11 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
         entry: sig.entryPrice,
         sl: sig.sl,
         tp: sig.tp,
+        orderType: 'Limit',
+        confluenceScore: sig.confluence.total,
+        confluenceSignal: sig.confluence.signal,
+        confidence: sig.confidence,
+        regime: sig.regime,
         reason: sig.reason,
         orderId: orderRes.orderId,
       });
@@ -416,6 +460,12 @@ async function main(): Promise<void> {
     executed: execResults.filter((r) => r.action === 'EXECUTED').length,
     positions: s.positions.length,
     mode: DRY_RUN ? 'dry-run' : 'execute',
+    topSignals: signals.slice(0, 3).map((s) => ({
+      pair: s.pair,
+      score: s.confluence.total,
+      signal: s.confluence.signal,
+      regime: s.regime,
+    })),
   });
 
   console.log(JSON.stringify(report, null, 2));

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "language": "russian",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(npm run build)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run format)",
+      "Bash(npm run test:run)",
+      "Bash(npm run test *)",
+      "Bash(npm run trade:crypto:monitor)",
+      "Bash(npm run trade:crypto:report)",
+      "Bash(npm run trade:forex:monitor)",
+      "Bash(npm run market:digest)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(npx tsx *)",
+      "Bash(npx vitest *)",
+      "Bash(npx skills *)",
+      "Bash(bash scripts/trading_log.sh *)",
+      "Bash(bash scripts/trading_check.sh *)",
+      "Bash(bash scripts/crypto_check.sh *)",
+      "Bash(bash scripts/forex_check.sh *)",
+      "Bash(bash scripts/trading_params.sh *)",
+      "Bash(bash skills/taskboard/scripts/taskboard.sh *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(jq *)",
+      "WebFetch(domain:docs.openclaw.ai)",
+      "WebFetch(domain:skills.sh)",
+      "WebFetch(domain:agentskills.io)",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:bybit-exchange.github.io)",
+      "Agent(orchestrator)",
+      "Agent(developer)",
+      "Agent(tester)",
+      "Agent(planner)",
+      "Agent(analyst)",
+      "Agent(trading-advisor)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(npm run trade:crypto:kill)",
+      "Edit(.env*)",
+      "Edit(**/credentials*)",
+      "Edit(**/keys.md)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(ts|tsx|js|json)$' | xargs -I {} npx prettier --write {} 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-files.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Напоминание после компакции: Используй русский язык. Используй суб-агентов из .claude/agents/ для делегирования задач. Перед коммитом: npm run lint && npm run build. ES Module: расширение .js обязательно в импортах.'"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Claude Code нуждается во внимании\" with title \"OpenClaw AI\"'"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

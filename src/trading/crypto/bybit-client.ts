@@ -10,11 +10,15 @@ import { retryAsync } from '../../utils/retry.js';
 import { buildMarketAnalysis } from '../shared/indicators.js';
 import type {
   AccountInfo,
+  FundingDataPoint,
   MarketAnalysis,
   MarketInfo,
+  OIDataPoint,
   OHLC,
+  OrderbookData,
   OrderResult,
   Position,
+  RecentTrade,
 } from '../shared/types.js';
 import { TIMEFRAME_MAP as TF_MAP } from '../shared/types.js';
 
@@ -278,7 +282,7 @@ export async function submitOrder(params: {
     const msg = res.retMsg ?? 'Unknown error';
     // Extract base price from error for helpful debugging
     const priceMatch = msg.match(/base_price:(\d+)/);
-    const hint = priceMatch
+    const hint = priceMatch?.[1]
       ? ` (current price ≈ ${(parseInt(priceMatch[1]) / 10000000).toFixed(2)})`
       : '';
     throw new Error(`Order REJECTED: ${msg}${hint}`);
@@ -473,6 +477,155 @@ export async function setLeverage(symbol: string, leverage: number): Promise<voi
   if (res.retCode !== 0 && res.retCode !== 110043) {
     throw new Error(`Failed to set leverage: ${res.retMsg}`);
   }
+}
+
+// ─── Extended Market Data (Confluence System) ────────────────────
+
+export async function getOrderbook(symbol: string, limit: number = 25): Promise<OrderbookData> {
+  const result = await apiGet('/v5/market/orderbook', {
+    category: CATEGORY,
+    symbol,
+    limit: String(Math.min(limit, 200)),
+  });
+
+  const empty: OrderbookData = {
+    bids: [],
+    asks: [],
+    bidWallPrice: 0,
+    askWallPrice: 0,
+    imbalance: 0,
+    spread: 0,
+    timestamp: new Date().toISOString(),
+  };
+
+  if ('error' in result) {
+    log.error('Failed to fetch orderbook', { symbol, error: result.error as string });
+    return empty;
+  }
+
+  const rawBids = (result.b ?? []) as string[][];
+  const rawAsks = (result.a ?? []) as string[][];
+
+  const bids = rawBids.map((b) => ({
+    price: parseFloat(b[0] ?? '0'),
+    qty: parseFloat(b[1] ?? '0'),
+  }));
+  const asks = rawAsks.map((a) => ({
+    price: parseFloat(a[0] ?? '0'),
+    qty: parseFloat(a[1] ?? '0'),
+  }));
+
+  let bidWall = bids[0] ?? { price: 0, qty: 0 };
+  for (const b of bids) {
+    if (b.qty > bidWall.qty) bidWall = b;
+  }
+
+  let askWall = asks[0] ?? { price: 0, qty: 0 };
+  for (const a of asks) {
+    if (a.qty > askWall.qty) askWall = a;
+  }
+
+  const totalBidQty = bids.reduce((s, b) => s + b.qty, 0);
+  const totalAskQty = asks.reduce((s, a) => s + a.qty, 0);
+  const totalQty = totalBidQty + totalAskQty;
+  const imbalance = totalQty > 0 ? (totalBidQty - totalAskQty) / totalQty : 0;
+
+  const bid1 = bids[0]?.price ?? 0;
+  const ask1 = asks[0]?.price ?? 0;
+
+  return {
+    bids: bids.slice(0, limit),
+    asks: asks.slice(0, limit),
+    bidWallPrice: bidWall.price,
+    askWallPrice: askWall.price,
+    imbalance: Math.round(imbalance * 1000) / 1000,
+    spread: Math.round((ask1 - bid1) * 100) / 100,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export async function getOIHistory(symbol: string, hours: number = 24): Promise<OIDataPoint[]> {
+  const result = await apiGet('/v5/market/open-interest', {
+    category: CATEGORY,
+    symbol,
+    intervalTime: '5min',
+    limit: String(Math.min(Math.ceil((hours * 60) / 5), 200)),
+  });
+
+  if ('error' in result) {
+    log.error('Failed to fetch OI history', { symbol, error: result.error as string });
+    return [];
+  }
+
+  const list = (result.list ?? []) as Array<Record<string, string>>;
+  const points: OIDataPoint[] = [];
+
+  const reversed = [...list].reverse();
+  for (let i = 0; i < reversed.length; i++) {
+    const item = reversed[i]!;
+    const oi = parseFloat(item.openInterest ?? '0');
+    const prevOi = i > 0 ? parseFloat(reversed[i - 1]!.openInterest ?? '0') : oi;
+
+    points.push({
+      timestamp: item.timestamp
+        ? new Date(parseInt(item.timestamp)).toISOString()
+        : new Date().toISOString(),
+      openInterest: oi,
+      delta: Math.round((oi - prevOi) * 100) / 100,
+    });
+  }
+
+  return points;
+}
+
+export async function getFundingHistory(
+  symbol: string,
+  limit: number = 20,
+): Promise<FundingDataPoint[]> {
+  const result = await apiGet('/v5/market/funding/history', {
+    category: CATEGORY,
+    symbol,
+    limit: String(Math.min(limit, 200)),
+  });
+
+  if ('error' in result) {
+    log.error('Failed to fetch funding history', { symbol, error: result.error as string });
+    return [];
+  }
+
+  const list = (result.list ?? []) as Array<Record<string, string>>;
+
+  return [...list].reverse().map((item) => ({
+    timestamp: item.fundingRateTimestamp
+      ? new Date(parseInt(item.fundingRateTimestamp)).toISOString()
+      : new Date().toISOString(),
+    rate: parseFloat(item.fundingRate ?? '0'),
+  }));
+}
+
+export async function getRecentTrades(
+  symbol: string,
+  limit: number = 1000,
+): Promise<RecentTrade[]> {
+  const result = await apiGet('/v5/market/recent-trade', {
+    category: CATEGORY,
+    symbol,
+    limit: String(Math.min(limit, 1000)),
+  });
+
+  if ('error' in result) {
+    log.error('Failed to fetch recent trades', { symbol, error: result.error as string });
+    return [];
+  }
+
+  const list = (result.list ?? []) as Array<Record<string, string>>;
+
+  return list.map((t) => ({
+    price: parseFloat(t.price ?? '0'),
+    qty: parseFloat(t.size ?? '0'),
+    side: (t.side ?? 'Buy') as 'Buy' | 'Sell',
+    time: t.time ? new Date(parseInt(t.time)).toISOString() : new Date().toISOString(),
+  }));
 }
 
 export function resetClient(): void {

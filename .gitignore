@@ -41,4 +41,3 @@ skills/taskboard/data/telegram.conf
 #   npx skills add https://github.com/antfu/skills --skill vitest --yes
 #   npx skills add https://github.com/github/awesome-copilot --skill git-commit --yes
 #   npx skills add https://github.com/wshobson/agents --skill typescript-advanced-types --yes
-.agents/

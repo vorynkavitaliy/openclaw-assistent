@@ -96,6 +96,9 @@ async function refreshAccount(): Promise<void> {
   } catch (err) {
     log.warn('Failed to get positions', { error: (err as Error).message });
   }
+
+  // Проверяем дневные лимиты с учётом unrealized P&L
+  state.checkDayLimits();
 }
 
 // Дефолтный SL: 1.5 * ATR от цены входа (fallback — 2% от entry)

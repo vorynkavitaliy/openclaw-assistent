@@ -249,10 +249,19 @@ export function checkDayLimits(): boolean {
   const s = get();
   const d = s.daily;
 
-  if (d.totalPnl <= -config.maxDailyLoss) {
+  // Учитываем unrealized P&L чтобы не ждать закрытия позиций
+  const unrealizedPnl = s.balance.unrealizedPnl || 0;
+  const effectivePnl = d.totalPnl + Math.min(0, unrealizedPnl); // только убытки
+
+  if (effectivePnl <= -config.maxDailyLoss) {
     d.stopDay = true;
-    d.stopDayReason = `Daily loss reached $${Math.abs(d.totalPnl).toFixed(2)} (limit $${config.maxDailyLoss})`;
-    logEvent('stop_day', { reason: d.stopDayReason });
+    d.stopDayReason = `Daily loss reached $${Math.abs(effectivePnl).toFixed(2)} (realized $${Math.abs(d.totalPnl).toFixed(2)} + unrealized $${unrealizedPnl.toFixed(2)}, limit $${config.maxDailyLoss})`;
+    logEvent('stop_day', {
+      reason: d.stopDayReason,
+      effectivePnl,
+      realizedPnl: d.totalPnl,
+      unrealizedPnl,
+    });
   }
 
   if (d.stops >= config.maxStopsPerDay) {
@@ -283,6 +292,23 @@ export function canTrade(): { allowed: boolean; reason: string } {
     return {
       allowed: false,
       reason: `Max positions: ${s.positions.length}/${config.maxOpenPositions}`,
+    };
+  }
+
+  // Aggregate risk: суммарный SL-риск по всем открытым позициям
+  const totalRisk = s.positions.reduce((sum, p) => {
+    const entry = parseFloat(p.entryPrice) || 0;
+    const sl = parseFloat(p.stopLoss ?? '0') || 0;
+    const size = parseFloat(p.size) || 0;
+    if (sl === 0) return sum + entry * size * 0.02; // fallback 2% если нет SL
+    return sum + Math.abs(entry - sl) * size;
+  }, 0);
+
+  const maxTotalRisk = config.maxDailyLoss * 0.5; // max 50% дневного лимита в открытых позициях
+  if (totalRisk >= maxTotalRisk) {
+    return {
+      allowed: false,
+      reason: `Aggregate risk $${totalRisk.toFixed(2)} >= limit $${maxTotalRisk.toFixed(2)}`,
     };
   }
 

@@ -359,7 +359,10 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
 
 export async function partialClosePosition(symbol: string, qty: string): Promise<OrderResult> {
   const client = getClient();
-  const posRes = await client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
+  const posRes = await retryAsync(
+    () => client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() }),
+    { retries: 2, backoffMs: 500 },
+  );
 
   if (posRes.retCode !== 0) {
     throw new Error(`Failed to get position: ${posRes.retMsg}`);
@@ -413,11 +416,15 @@ export async function modifyPosition(
     ...(takeProfit ? { takeProfit, tpTriggerBy: 'LastPrice' as const } : {}),
   };
 
-  const res = await client.setTradingStop(params);
-
-  if (res.retCode !== 0) {
-    throw new Error(`Failed to modify SL/TP: ${res.retMsg}`);
-  }
+  await retryAsync(
+    async () => {
+      const res = await client.setTradingStop(params);
+      if (res.retCode !== 0) {
+        throw new Error(`Failed to modify SL/TP: ${res.retMsg}`);
+      }
+    },
+    { retries: 3, backoffMs: 1000 },
+  );
 }
 
 export async function closeAllPositions(): Promise<{

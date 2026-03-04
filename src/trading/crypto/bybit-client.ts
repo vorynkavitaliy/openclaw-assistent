@@ -252,6 +252,21 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
     }));
 }
 
+export async function getOpenOrders(symbol?: string): Promise<string[]> {
+  const result = await apiGet('/v5/order/realtime', {
+    category: CATEGORY,
+    ...(symbol ? { symbol: symbol.toUpperCase() } : { settleCoin: 'USDT' }),
+  });
+
+  if ('error' in result) {
+    log.warn('Failed to fetch open orders', { error: result.error as string });
+    return [];
+  }
+
+  const list = (result.list ?? []) as Array<Record<string, string>>;
+  return list.map((o) => o.symbol ?? '').filter(Boolean);
+}
+
 export async function submitOrder(params: {
   symbol: string;
   side: 'Buy' | 'Sell';

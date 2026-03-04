@@ -14,6 +14,7 @@ import {
   getMarketAnalysis,
   getMarketInfo,
   getOIHistory,
+  getOpenOrders,
   getOrderbook,
   getPositions,
   getRecentTrades,
@@ -240,7 +241,7 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
           }
         } else {
           const newSl = mark + trailingDistance;
-          if (newSl < sl || sl === 0) {
+          if (newSl < sl) {
             await modifyPosition(pos.symbol, newSl.toFixed(2));
             actions.push({
               type: 'trailing_sl',
@@ -396,6 +397,7 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
   }
 
   const results: SignalResult[] = [];
+  const openOrderSymbols = await getOpenOrders();
 
   for (const sig of signals) {
     const perm = state.canTrade();
@@ -408,6 +410,11 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
     const existing = s.positions.find((p) => p.symbol === sig.pair);
     if (existing) {
       results.push({ ...sig, action: 'SKIP: position already open' });
+      continue;
+    }
+
+    if (openOrderSymbols.includes(sig.pair)) {
+      results.push({ ...sig, action: 'SKIP: pending order already exists' });
       continue;
     }
 

@@ -87,7 +87,7 @@ function getEmaAlignment(closes: number[]): EmaAlignmentResult {
     if (ema50.length === 0) return 'MIXED';
     const last20 = ema20[ema20.length - 1]!;
     const last50 = ema50[ema50.length - 1]!;
-    return last20 > last50 ? 'PARTIAL' : 'PARTIAL';
+    return last20 !== last50 ? 'PARTIAL' : 'MIXED';
   }
 
   // Выравниваем по длине EMA200 (самый короткий)

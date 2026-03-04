@@ -296,7 +296,9 @@ export function calculateAtr(
 
   const recentTrs = trs.slice(-period);
 
-  return Math.round((recentTrs.reduce((a, b) => a + b, 0) / period) * 100) / 100;
+  const avg = recentTrs.reduce((a, b) => a + b, 0) / period;
+  // Динамическое округление: 8 знаков для дешёвых активов, чтобы ATR не обнулялся
+  return parseFloat(avg.toPrecision(8));
 }
 
 /**
@@ -418,16 +420,18 @@ export function buildMarketAnalysis(
   const currentPrice = closes[closes.length - 1]!;
   const lastBar = candles[candles.length - 1]!;
 
-  const ema200Val = ema200.length > 0 ? Math.round(ema200[ema200.length - 1]! * 100) / 100 : null;
-  const ema50Val = ema50.length > 0 ? Math.round(ema50[ema50.length - 1]! * 100) / 100 : null;
-  const ema20Val = ema20.length > 0 ? Math.round(ema20[ema20.length - 1]! * 100) / 100 : null;
+  // Динамическое округление: toPrecision(8) сохраняет точность для любых ценовых уровней
+  const roundSig = (v: number): number => parseFloat(v.toPrecision(8));
+  const ema200Val = ema200.length > 0 ? roundSig(ema200[ema200.length - 1]!) : null;
+  const ema50Val = ema50.length > 0 ? roundSig(ema50[ema50.length - 1]!) : null;
+  const ema20Val = ema20.length > 0 ? roundSig(ema20[ema20.length - 1]!) : null;
 
   return {
     pair: params.pair,
     timeframe: params.timeframe,
     barsCount: candles.length,
     source: params.source,
-    currentPrice: Math.round(currentPrice * 100) / 100,
+    currentPrice: roundSig(currentPrice),
     lastBar,
     indicators: { ema200: ema200Val, ema50: ema50Val, ema20: ema20Val, rsi14, atr14 },
     levels,

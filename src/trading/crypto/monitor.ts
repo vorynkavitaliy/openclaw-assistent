@@ -345,6 +345,12 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
 
   if (!m15 || !market || !orderbook) return null;
 
+  // D0: Пустой orderbook — API вернул ошибку или данных нет
+  if (orderbook.bids.length === 0 || orderbook.asks.length === 0) {
+    log.debug('Empty orderbook: skip', { pair });
+    return null;
+  }
+
   // D1: Спред-фильтр — отклоняем вход при аномальном спреде
   const spreadPct = market.lastPrice > 0 ? (orderbook.spread / market.lastPrice) * 100 : 0;
   if (spreadPct > config.maxSpreadPercent) {
@@ -408,8 +414,33 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   const entry =
     side === 'Buy' ? (orderbook.bids[0]?.price ?? price) : (orderbook.asks[0]?.price ?? price);
 
+  // Sanity check: entry не должен отклоняться от lastPrice более чем на 5%
+  const entryDeviation = Math.abs(entry - price) / price;
+  if (entryDeviation > 0.05) {
+    log.warn('Entry price sanity check failed', {
+      pair,
+      entry,
+      lastPrice: price,
+      deviationPct: (entryDeviation * 100).toFixed(2),
+    });
+    return null;
+  }
+
   // SL: ATR * atrSlMultiplier от entry
   const slDistance = atr * config.atrSlMultiplier;
+
+  // Sanity check: SL distance должен быть в разумных пределах (0.1%–20% от entry)
+  const slDistancePct = slDistance / entry;
+  if (slDistancePct < 0.001 || slDistancePct > 0.2) {
+    log.warn('SL distance sanity check failed', {
+      pair,
+      slDistance,
+      entry,
+      slDistancePct: (slDistancePct * 100).toFixed(4),
+    });
+    return null;
+  }
+
   const sl = side === 'Buy' ? entry - slDistance : entry + slDistance;
 
   // TP: используем minRR из конфига

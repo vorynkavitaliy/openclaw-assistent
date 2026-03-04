@@ -5,6 +5,7 @@ import { fmt, fmtPrice, sendViaOpenClaw } from '../../utils/telegram.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
 import config from './config.js';
 import * as state from './state.js';
+import type { StoredEvent } from './state.js';
 
 const log = createLogger('crypto-report');
 
@@ -40,6 +41,8 @@ interface ReportData {
   };
   market: Record<string, MarketSnapshot>;
   trades: unknown[];
+  todayActivity: StoredEvent[];
+  apiErrors: StoredEvent[];
   killSwitch: boolean;
   lastMonitor: string | null;
 }
@@ -97,6 +100,15 @@ async function collectData(): Promise<ReportData> {
   }
 
   const todayTrades = state.getTodayTrades();
+  const todayActivity = state.getTodayEvents([
+    'order_opened',
+    'partial_close',
+    'trailing_sl',
+    'sl_guard',
+    'trade',
+    'monitor',
+  ]);
+  const apiErrors = state.getTodayEvents(['api_error', 'analysis_error']);
   const s = state.get();
 
   return {
@@ -105,6 +117,8 @@ async function collectData(): Promise<ReportData> {
     daily: s.daily,
     market,
     trades: todayTrades,
+    todayActivity,
+    apiErrors,
     killSwitch: state.isKillSwitchActive(),
     lastMonitor: s.lastMonitor,
   };
@@ -168,6 +182,64 @@ function formatTelegramReport(data: ReportData): string {
       lines.push(
         `  ${changeEmoji} ${sym}: $${fmtPrice(m.price)} (${m.change24h >= 0 ? '+' : ''}${m.change24h.toFixed(2)}%) | FR: ${fundingSign}${(m.funding * 100).toFixed(4)}%`,
       );
+    }
+    lines.push('');
+  }
+
+  // Безопасное извлечение строкового значения из StoredEvent
+  const sv = (e: StoredEvent, key: string, fallback = '?'): string => {
+    const v = e[key];
+    if (v === null || v === undefined) return fallback;
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    return fallback;
+  };
+
+  // Активность за сутки
+  const orderEvents = data.todayActivity.filter((e) => e.type === 'order_opened');
+  const slGuardEvents = data.todayActivity.filter((e) => e.type === 'sl_guard');
+  const partialEvents = data.todayActivity.filter((e) => e.type === 'partial_close');
+  const trailingEvents = data.todayActivity.filter((e) => e.type === 'trailing_sl');
+
+  if (data.todayActivity.length > 0) {
+    lines.push('📋 *История за сутки*');
+    if (orderEvents.length > 0) {
+      lines.push(`  📥 Открыто ордеров: ${orderEvents.length}`);
+      for (const e of orderEvents.slice(-3)) {
+        const time = sv(e, 'ts', '').slice(11, 16);
+        lines.push(
+          `     [${time}] ${sv(e, 'symbol', '')} ${sv(e, 'side', '')} @ ${sv(e, 'entry')} | SL: ${sv(e, 'sl', '—')} | score: ${sv(e, 'confluenceScore')}`,
+        );
+      }
+    }
+    if (partialEvents.length > 0) lines.push(`  📤 Частичных закрытий: ${partialEvents.length}`);
+    if (trailingEvents.length > 0)
+      lines.push(`  🔄 Trailing SL обновлений: ${trailingEvents.length}`);
+    if (slGuardEvents.length > 0) {
+      lines.push(`  🛡 SL-Guard сработал: ${slGuardEvents.length} раз`);
+      for (const e of slGuardEvents) {
+        const time = sv(e, 'ts', '').slice(11, 16);
+        lines.push(`     [${time}] ${sv(e, 'symbol', '')} — дефолтный SL: ${sv(e, 'defaultSl')}`);
+      }
+    }
+    lines.push('');
+  }
+
+  // Ошибки API
+  if (data.apiErrors.length > 0) {
+    lines.push(`⚠️ *Ошибки API за сутки: ${data.apiErrors.length}*`);
+    const byType: Record<string, number> = {};
+    for (const e of data.apiErrors) {
+      const t = sv(e, 'type', 'unknown');
+      byType[t] = (byType[t] ?? 0) + 1;
+    }
+    for (const [t, cnt] of Object.entries(byType)) {
+      lines.push(`  ${t}: ${cnt}`);
+    }
+    const last = data.apiErrors[data.apiErrors.length - 1];
+    if (last) {
+      const time = sv(last, 'ts', '').slice(11, 16);
+      lines.push(`  Последняя [${time}]: ${sv(last, 'error').slice(0, 60)}`);
     }
     lines.push('');
   }

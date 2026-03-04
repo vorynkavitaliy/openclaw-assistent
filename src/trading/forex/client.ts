@@ -422,6 +422,7 @@ export async function submitOrder(params: {
           }
           throw new Error(
             `Order filled but SL/TP amendment failed — position closed for safety. ${(err as Error).message}`,
+            { cause: err },
           );
         }
       } else {

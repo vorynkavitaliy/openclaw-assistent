@@ -32,13 +32,14 @@ echo ""
 echo "=== KILL SWITCH ==="
 cd "$PROJECT_DIR" && npx tsx src/trading/crypto/killswitch.ts 2>&1 || echo "ERROR: killswitch.ts failed"
 
-# ─── 3. Market Snapshot (RAW DATA — no signals, no execution)
-# snapshot.ts collects: balance, positions, H4+M15 indicators
-# (EMA/RSI/ATR/bias), funding rate, OI, volume for ALL pairs.
+# ─── 3. Market Snapshot V2 (FULL DATA — confluence, regime, setups)
+# snapshot-v2.ts collects: balance, positions, multi-TF analysis (D1/H4/H1/M15/M5),
+# orderbook, OI, funding, volume profile, pivot levels, confluence score (-100..+100),
+# market regime, pre-computed trade setups for top pairs.
 # YOU analyze this data and decide what to trade.
 echo ""
-echo "=== MARKET SNAPSHOT (raw data for your analysis) ==="
-cd "$PROJECT_DIR" && npx tsx src/trading/crypto/snapshot.ts 2>&1 || echo "ERROR: snapshot.ts failed"
+echo "=== MARKET SNAPSHOT V2 (full analysis for your decision) ==="
+cd "$PROJECT_DIR" && npx tsx src/trading/crypto/snapshot-v2.ts 2>&1 || echo "ERROR: snapshot-v2.ts failed"
 
 # ─── 4. Macro Sentiment (quick API calls) ────────────────────
 echo ""

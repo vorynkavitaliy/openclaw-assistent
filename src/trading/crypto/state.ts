@@ -71,7 +71,7 @@ interface EventData {
   [key: string]: unknown;
 }
 
-interface StoredEvent {
+export interface StoredEvent {
   ts: string;
   type: string;
   [key: string]: unknown;
@@ -367,4 +367,12 @@ export function getRecentEvents(count: number = 50): StoredEvent[] {
 export function getTodayTrades(): StoredEvent[] {
   const today = new Date().toISOString().slice(0, 10);
   return getRecentEvents(200).filter((e) => e.type === 'trade' && e.ts?.startsWith(today));
+}
+
+export function getTodayEvents(types?: string[]): StoredEvent[] {
+  const today = new Date().toISOString().slice(0, 10);
+  return getRecentEvents(500).filter((e) => {
+    if (!e.ts?.startsWith(today)) return false;
+    return types ? types.includes(e.type) : true;
+  });
 }

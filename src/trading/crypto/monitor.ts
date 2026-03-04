@@ -97,6 +97,18 @@ async function refreshAccount(): Promise<void> {
   }
 }
 
+// Дефолтный SL: 1.5 * ATR от цены входа (fallback — 2% от entry)
+function calcDefaultSl(entry: number, side: string, atrEstimate?: number): number {
+  const slDist = atrEstimate ? atrEstimate * 1.5 : entry * 0.02;
+  return side === 'long' ? entry - slDist : entry + slDist;
+}
+
+// Дефолтный TP: SL_distance * minRR от entry
+function calcDefaultTp(entry: number, sl: number, side: string): number {
+  const slDist = Math.abs(entry - sl);
+  return side === 'long' ? entry + slDist * config.minRR : entry - slDist * config.minRR;
+}
+
 async function managePositions(): Promise<Array<Record<string, unknown>>> {
   const s = state.get();
   const actions: Array<Record<string, unknown>> = [];
@@ -105,12 +117,69 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
     const uPnl = parseFloat(pos.unrealisedPnl) || 0;
     const entry = parseFloat(pos.entryPrice) || 0;
     const sl = parseFloat(pos.stopLoss ?? '0') || 0;
+    const tp = parseFloat(pos.takeProfit ?? '0') || 0;
     const size = parseFloat(pos.size) || 0;
 
     if (entry === 0 || size === 0) continue;
 
     const slDistance = Math.abs(entry - sl);
-    if (slDistance === 0) continue;
+
+    // SL-Guard: позиция без стоп-лосса — установить дефолтный SL/TP
+    if (slDistance === 0) {
+      const defaultSl = roundPrice(calcDefaultSl(entry, pos.side), pos.symbol);
+      const defaultTp =
+        tp === 0 ? roundPrice(calcDefaultTp(entry, defaultSl, pos.side), pos.symbol) : undefined;
+
+      if (!DRY_RUN) {
+        try {
+          await modifyPosition(
+            pos.symbol,
+            String(defaultSl),
+            defaultTp ? String(defaultTp) : undefined,
+          );
+          actions.push({
+            type: 'sl_guard_applied',
+            symbol: pos.symbol,
+            defaultSl,
+            defaultTp: defaultTp ?? 'unchanged',
+            result: 'OK',
+          });
+          state.logEvent('sl_guard', {
+            symbol: pos.symbol,
+            entry,
+            defaultSl,
+            defaultTp,
+            reason: 'Position found without SL — default SL/TP applied',
+          });
+          log.warn('SL-Guard: applied default SL/TP', { symbol: pos.symbol, defaultSl, defaultTp });
+        } catch (err) {
+          actions.push({
+            type: 'sl_guard_failed',
+            symbol: pos.symbol,
+            result: `ERROR: ${(err as Error).message}`,
+          });
+          state.logEvent('api_error', {
+            type: 'sl_guard_failed',
+            symbol: pos.symbol,
+            entry,
+            error: (err as Error).message,
+          });
+          log.error('SL-Guard: failed to apply default SL/TP', {
+            symbol: pos.symbol,
+            error: (err as Error).message,
+          });
+        }
+      } else {
+        actions.push({
+          type: 'sl_guard_applied',
+          symbol: pos.symbol,
+          defaultSl,
+          defaultTp: defaultTp ?? 'unchanged',
+          result: 'DRY_RUN',
+        });
+      }
+      continue; // Пропускаем trailing/partial для этой позиции до следующего цикла
+    }
 
     const oneR = slDistance * size;
     const currentR = uPnl / oneR;
@@ -392,7 +461,18 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
 
       results.push({ ...sig, action: 'EXECUTED', orderId: orderRes.orderId, qty: qtyStr });
     } catch (err) {
-      results.push({ ...sig, action: `ERROR: ${(err as Error).message}` });
+      const errMsg = (err as Error).message;
+      results.push({ ...sig, action: `ERROR: ${errMsg}` });
+      state.logEvent('api_error', {
+        type: 'submit_order_failed',
+        symbol: sig.pair,
+        side: sig.side,
+        entry: sig.entryPrice,
+        sl: sig.sl,
+        tp: sig.tp,
+        error: errMsg,
+      });
+      log.error('Failed to submit order', { symbol: sig.pair, error: errMsg });
     }
   }
 

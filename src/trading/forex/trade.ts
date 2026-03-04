@@ -35,8 +35,8 @@ async function actionOpen(): Promise<void> {
   const slPips = getNumArg('sl-pips');
   const tpPips = getNumArg('tp-pips');
 
-  const hasSl = !!(slPrice || slPips);
-  const hasTp = !!(tpPrice || tpPips);
+  const hasSl = !!(slPrice ?? slPips);
+  const hasTp = !!(tpPrice ?? tpPips);
 
   const validation = validateRisk(lots, hasSl, hasTp);
   if (!validation.ok) {

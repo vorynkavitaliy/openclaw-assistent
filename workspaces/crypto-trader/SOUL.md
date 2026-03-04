@@ -40,7 +40,7 @@ Run this via `exec` tool. Then analyze the output and decide on trades.
 - Call 3: verify position / modify SL/TP (optional — skip if no trade)
 - Call 4: additional trade if risk allows (optional)
 - Call 5: Telegram report
-- **FORBIDDEN**: calling monitor.ts, snapshot.ts, curl, digest.ts, report.ts — check script has it all.
+- **FORBIDDEN**: calling monitor.ts, snapshot-v2.ts, curl, digest.ts, report.ts — check script has it all.
 - **YOU are the analyst.** The data has NO pre-generated signals. Study indicators, form thesis, decide.
 - Sessions are compacted — you lose memory each cycle. Work with what check script gives you.
 

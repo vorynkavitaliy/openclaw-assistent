@@ -253,6 +253,20 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
 }
 
 export async function getOpenOrders(symbol?: string): Promise<string[]> {
+  const orders = await getOpenOrdersFull(symbol);
+  return orders.map((o) => o.symbol).filter(Boolean);
+}
+
+export interface OpenOrder {
+  orderId: string;
+  symbol: string;
+  side: string;
+  price: string;
+  qty: string;
+  createdTime: string; // ms timestamp string
+}
+
+export async function getOpenOrdersFull(symbol?: string): Promise<OpenOrder[]> {
   const result = await apiGet('/v5/order/realtime', {
     category: CATEGORY,
     ...(symbol ? { symbol: symbol.toUpperCase() } : { settleCoin: 'USDT' }),
@@ -264,7 +278,28 @@ export async function getOpenOrders(symbol?: string): Promise<string[]> {
   }
 
   const list = (result.list ?? []) as Array<Record<string, string>>;
-  return list.map((o) => o.symbol ?? '').filter(Boolean);
+  return list
+    .filter((o) => o.symbol)
+    .map((o) => ({
+      orderId: o.orderId ?? '',
+      symbol: o.symbol ?? '',
+      side: o.side ?? '',
+      price: o.price ?? '0',
+      qty: o.qty ?? '0',
+      createdTime: o.createdTime ?? '0',
+    }));
+}
+
+export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
+  const client = getClient();
+  const res = await client.cancelOrder({
+    category: CATEGORY,
+    symbol: symbol.toUpperCase(),
+    orderId,
+  });
+  if (res.retCode !== 0) {
+    throw new Error(`Failed to cancel order ${orderId}: ${res.retMsg}`);
+  }
 }
 
 export async function submitOrder(params: {

@@ -44,6 +44,15 @@ const config: TradingConfig = {
   maxFundingRate: 0.0005,
   minFundingRate: -0.0005,
   maxSpreadPercent: 0.1,
+  atrSlMultiplier: 1.5,
+  staleOrderMinutes: 30,
+
+  // Группы коррелированных пар — не более 1 позиции на группу
+  ecosystemGroups: [
+    ['ETHUSDT', 'ARBUSDT', 'OPUSDT'], // Ethereum ecosystem
+    ['MATICUSDT', 'ADAUSDT', 'DOTUSDT'], // L1 altcoins
+    ['AVAXUSDT', 'SOLUSDT', 'LINKUSDT'], // Alt L1 / DeFi
+  ],
 
   mode: 'execute',
   demoTrading: true,

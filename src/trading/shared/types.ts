@@ -270,6 +270,9 @@ export interface TradingConfig extends BaseTradingConfig {
   maxFundingRate: number;
   minFundingRate: number;
   maxSpreadPercent: number;
+  atrSlMultiplier: number; // ATR multiplier for SL distance (default 1.5)
+  staleOrderMinutes: number; // Cancel limit orders older than N minutes
+  ecosystemGroups: string[][]; // Correlated pairs groups (max 1 position per group)
   demoTrading: boolean;
   trendTF: string;
   zonesTF: string;

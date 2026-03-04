@@ -8,6 +8,7 @@ import { detectMarketRegime, getRegimeThreshold } from '../shared/regime.js';
 import type { ConfluenceScore } from '../shared/types.js';
 import { buildVolumeProfile } from '../shared/volume-analysis.js';
 import {
+  cancelOrder,
   getBalance,
   getFundingHistory,
   getKlines,
@@ -15,6 +16,7 @@ import {
   getMarketInfo,
   getOIHistory,
   getOpenOrders,
+  getOpenOrdersFull,
   getOrderbook,
   getPositions,
   getRecentTrades,
@@ -101,9 +103,9 @@ async function refreshAccount(): Promise<void> {
   state.checkDayLimits();
 }
 
-// Дефолтный SL: 1.5 * ATR от цены входа (fallback — 2% от entry)
+// Дефолтный SL: ATR * atrSlMultiplier от цены входа (fallback — 2% от entry)
 function calcDefaultSl(entry: number, side: string, atrEstimate?: number): number {
-  const slDist = atrEstimate ? atrEstimate * 1.5 : entry * 0.02;
+  const slDist = atrEstimate ? atrEstimate * config.atrSlMultiplier : entry * 0.02;
   return side === 'long' ? entry - slDist : entry + slDist;
 }
 
@@ -201,11 +203,20 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
             result: 'OK',
           });
 
-          await modifyPosition(pos.symbol, String(entry));
+          // D4: После частичного закрытия — SL в безубыток + пересчёт TP на расширенную цель (3R)
+          const extendedTp = roundPrice(
+            pos.side === 'long'
+              ? entry + slDistance * (config.minRR + 1)
+              : entry - slDistance * (config.minRR + 1),
+            pos.symbol,
+          );
+          await modifyPosition(pos.symbol, String(entry), String(extendedTp));
           actions.push({
-            type: 'sl_breakeven',
+            type: 'sl_breakeven_tp_extended',
             symbol: pos.symbol,
             newSl: entry,
+            newTp: extendedTp,
+            note: `TP extended to ${config.minRR + 1}R after partial close`,
             result: 'OK',
           });
 
@@ -214,6 +225,7 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
             qty: partialQty,
             pnlAtClose: uPnl,
             rMultiple: currentR.toFixed(2),
+            newTp: extendedTp,
           });
         } catch (err) {
           actions.push({
@@ -268,24 +280,31 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
   return actions;
 }
 
+// E4: Параллельный анализ с ограничением пропускной способности
+// Каждая пара делает ~12 API запросов, Bybit лимит ~20 req/sec
+// Запускаем не более CONCURRENCY пар одновременно
+const ANALYSIS_CONCURRENCY = 3;
+
 async function analyzeMarket(): Promise<TradeSignalInternal[]> {
   const pairs = SINGLE_PAIR ? [SINGLE_PAIR.toUpperCase()] : config.pairs;
   const signals: TradeSignalInternal[] = [];
 
-  // Анализируем все пары параллельно
-  const results = await Promise.all(
-    pairs.map(async (pair) => {
-      try {
-        return await analyzePairV2(pair);
-      } catch (err) {
-        state.logEvent('analysis_error', { pair, error: (err as Error).message });
-        return null;
-      }
-    }),
-  );
-
-  for (const signal of results) {
-    if (signal) signals.push(signal);
+  // E4: Батчи по ANALYSIS_CONCURRENCY пар
+  for (let i = 0; i < pairs.length; i += ANALYSIS_CONCURRENCY) {
+    const batch = pairs.slice(i, i + ANALYSIS_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (pair) => {
+        try {
+          return await analyzePairV2(pair);
+        } catch (err) {
+          state.logEvent('analysis_error', { pair, error: (err as Error).message });
+          return null;
+        }
+      }),
+    );
+    for (const signal of batchResults) {
+      if (signal) signals.push(signal);
+    }
   }
 
   // Сортируем по силе confluence score (лучшие сигналы первыми)
@@ -325,6 +344,29 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   ]);
 
   if (!m15 || !market || !orderbook) return null;
+
+  // D1: Спред-фильтр — отклоняем вход при аномальном спреде
+  const spreadPct = market.lastPrice > 0 ? (orderbook.spread / market.lastPrice) * 100 : 0;
+  if (spreadPct > config.maxSpreadPercent) {
+    log.debug('Spread filter: skip', {
+      pair,
+      spreadPct: spreadPct.toFixed(4),
+      max: config.maxSpreadPercent,
+    });
+    return null;
+  }
+
+  // D2: Funding rate фильтр — не входим против перегретого рынка
+  const fr = market.fundingRate;
+  if (fr > config.maxFundingRate || fr < config.minFundingRate) {
+    log.debug('Funding rate filter: skip', {
+      pair,
+      fundingRate: fr,
+      max: config.maxFundingRate,
+      min: config.minFundingRate,
+    });
+    return null;
+  }
 
   // Volume profile from M15 candles + recent trades
   const volumeProfile = m15Candles.length > 0 ? buildVolumeProfile(m15Candles, recentTrades) : null;
@@ -366,8 +408,8 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   const entry =
     side === 'Buy' ? (orderbook.bids[0]?.price ?? price) : (orderbook.asks[0]?.price ?? price);
 
-  // SL: 1.5 * ATR от entry
-  const slDistance = atr * 1.5;
+  // SL: ATR * atrSlMultiplier от entry
+  const slDistance = atr * config.atrSlMultiplier;
   const sl = side === 'Buy' ? entry - slDistance : entry + slDistance;
 
   // TP: используем minRR из конфига
@@ -389,6 +431,65 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   };
 }
 
+// E3: Отмена зависших лимитных ордеров (старше staleOrderMinutes)
+async function cancelStaleOrders(): Promise<Array<Record<string, unknown>>> {
+  if (DRY_RUN) return [];
+  const actions: Array<Record<string, unknown>> = [];
+
+  try {
+    const orders = await getOpenOrdersFull();
+    const now = Date.now();
+    const staleMs = config.staleOrderMinutes * 60 * 1000;
+
+    for (const order of orders) {
+      const createdAt = parseInt(order.createdTime) || 0;
+      if (createdAt === 0) continue;
+      const ageMs = now - createdAt;
+      if (ageMs < staleMs) continue;
+
+      // Только лимитные ордера (у рыночных createdTime обычно = 0 и они быстро исполняются)
+      try {
+        await cancelOrder(order.symbol, order.orderId);
+        const ageMin = Math.round(ageMs / 60000);
+        actions.push({
+          type: 'stale_order_cancelled',
+          symbol: order.symbol,
+          orderId: order.orderId,
+          ageMin,
+          price: order.price,
+          result: 'OK',
+        });
+        state.logEvent('stale_order_cancelled', {
+          symbol: order.symbol,
+          orderId: order.orderId,
+          ageMin,
+          price: order.price,
+        });
+        log.info('Stale order cancelled', { symbol: order.symbol, orderId: order.orderId, ageMin });
+      } catch (err) {
+        actions.push({
+          type: 'stale_order_cancel_failed',
+          symbol: order.symbol,
+          orderId: order.orderId,
+          result: `ERROR: ${(err as Error).message}`,
+        });
+      }
+    }
+  } catch (err) {
+    log.warn('Failed to check stale orders', { error: (err as Error).message });
+  }
+
+  return actions;
+}
+
+// E2: Возвращает название группы экосистемы для символа (или null)
+function getEcosystemGroup(symbol: string): string | null {
+  for (const group of config.ecosystemGroups) {
+    if (group.includes(symbol)) return group[0] ?? symbol;
+  }
+  return null;
+}
+
 async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalResult[]> {
   if (DRY_RUN) {
     return signals.map((s) => ({ ...s, action: 'DRY_RUN (not executed)' }));
@@ -401,6 +502,12 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
 
   const results: SignalResult[] = [];
   const openOrderSymbols = await getOpenOrders();
+
+  // E2: Собираем экосистемы уже открытых позиций
+  const s0 = state.get();
+  const openEcosystems = new Set(
+    s0.positions.map((p) => getEcosystemGroup(p.symbol)).filter(Boolean) as string[],
+  );
 
   for (const sig of signals) {
     const perm = state.canTrade();
@@ -421,6 +528,13 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
       continue;
     }
 
+    // E2: Фильтр корреляции — не открываем 2+ позиции в одной экосистеме
+    const ecosystem = getEcosystemGroup(sig.pair);
+    if (ecosystem && openEcosystems.has(ecosystem)) {
+      results.push({ ...sig, action: `SKIP: ecosystem already has open position (${ecosystem})` });
+      continue;
+    }
+
     const qty = state.calcPositionSize(sig.entryPrice, sig.sl);
     if (qty <= 0) {
       results.push({ ...sig, action: 'SKIP: failed to calculate qty' });
@@ -433,6 +547,17 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
       results.push({
         ...sig,
         action: `SKIP: risk $${risk.toFixed(2)} > max $${config.maxRiskPerTrade}`,
+      });
+      continue;
+    }
+
+    // F2: Проверка доступной маржи перед ордером
+    const balance = s.balance.available;
+    const requiredMargin = (sig.entryPrice * qty) / config.defaultLeverage;
+    if (balance > 0 && requiredMargin > balance) {
+      results.push({
+        ...sig,
+        action: `SKIP: insufficient margin $${requiredMargin.toFixed(2)} > available $${balance.toFixed(2)}`,
       });
       continue;
     }
@@ -469,6 +594,16 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
         orderId: orderRes.orderId,
       });
 
+      log.info('Order executed', {
+        symbol: sig.pair,
+        side: sig.side,
+        qty: qtyStr,
+        orderId: orderRes.orderId,
+      });
+
+      // E2: Помечаем экосистему как занятую
+      if (ecosystem) openEcosystems.add(ecosystem);
+
       results.push({ ...sig, action: 'EXECUTED', orderId: orderRes.orderId, qty: qtyStr });
     } catch (err) {
       const errMsg = (err as Error).message;
@@ -489,11 +624,25 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
   return results;
 }
 
+// Точные спецификации Bybit USDT Perpetual (qty step → decimals, price tick → decimals)
+// Источник: Bybit Instruments Info API для каждого символа
+const SYMBOL_SPECS: Record<string, { qtyDec: number; priceDec: number }> = {
+  BTCUSDT: { qtyDec: 3, priceDec: 1 }, // step=0.001, tick=0.1
+  ETHUSDT: { qtyDec: 2, priceDec: 2 }, // step=0.01,  tick=0.01
+  SOLUSDT: { qtyDec: 1, priceDec: 2 }, // step=0.1,   tick=0.01
+  XRPUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+  DOGEUSDT: { qtyDec: 0, priceDec: 5 }, // step=1,     tick=0.00001
+  AVAXUSDT: { qtyDec: 1, priceDec: 2 }, // step=0.1,   tick=0.01
+  LINKUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
+  ADAUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+  DOTUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
+  MATICUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+  ARBUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+  OPUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+};
+
 function getQtyPrecision(symbol: string): number {
-  if (symbol.startsWith('BTC')) return 3;
-  if (symbol.startsWith('ETH')) return 2;
-  if (symbol.startsWith('SOL')) return 1;
-  return 1;
+  return SYMBOL_SPECS[symbol]?.qtyDec ?? 1;
 }
 
 function formatQty(qty: number, symbol: string): string {
@@ -504,9 +653,8 @@ function formatQty(qty: number, symbol: string): string {
 }
 
 function roundPrice(val: number, symbol: string): number {
-  if (symbol.startsWith('BTC')) return parseFloat(val.toFixed(1));
-  if (symbol.startsWith('ETH')) return parseFloat(val.toFixed(2));
-  return parseFloat(val.toFixed(4));
+  const prec = SYMBOL_SPECS[symbol]?.priceDec ?? 4;
+  return parseFloat(val.toFixed(prec));
 }
 
 async function main(): Promise<void> {
@@ -520,7 +668,7 @@ async function main(): Promise<void> {
   report.status = status;
   if (!status.ok) {
     report.result = 'STOPPED';
-    console.log(JSON.stringify(report, null, 2));
+    log.warn('Monitor stopped', { reason: status.reason });
     return;
   }
 
@@ -530,6 +678,10 @@ async function main(): Promise<void> {
 
   const posActions = await managePositions();
   report.positionActions = posActions;
+
+  // E3: Отменяем зависшие лимитные ордера перед анализом
+  const staleActions = await cancelStaleOrders();
+  report.staleOrdersCancelled = staleActions;
 
   const signals = await analyzeMarket();
   report.signals = signals;
@@ -558,7 +710,7 @@ async function main(): Promise<void> {
     })),
   });
 
-  console.log(JSON.stringify(report, null, 2));
+  log.info('Monitor cycle complete', report);
 }
 
 runMain(main, () => state.save());

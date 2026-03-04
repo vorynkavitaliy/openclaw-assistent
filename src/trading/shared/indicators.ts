@@ -299,18 +299,80 @@ export function calculateAtr(
   return Math.round((recentTrs.reduce((a, b) => a + b, 0) / period) * 100) / 100;
 }
 
+/**
+ * Кластерный расчёт S/R уровней.
+ * Находит свинг-хаи и свинг-лоу (3-барные пивоты), группирует их в кластеры
+ * по близости цены (± clusterPct%), возвращает наиболее значимые.
+ * Fallback: min/max как раньше если нет достаточно данных.
+ */
 export function calculateSupportResistance(
   highs: number[],
   lows: number[],
-  lookback: number = 20,
+  lookback: number = 50,
 ): { support: number; resistance: number } {
-  const recent = Math.min(lookback, highs.length);
-  const recentHighs = highs.slice(-recent);
-  const recentLows = lows.slice(-recent);
+  const n = Math.min(lookback, highs.length);
+  if (n < 5) {
+    const recentHighs = highs.slice(-n);
+    const recentLows = lows.slice(-n);
+    return {
+      support: Math.round(Math.min(...recentLows) * 100) / 100,
+      resistance: Math.round(Math.max(...recentHighs) * 100) / 100,
+    };
+  }
+
+  const startIdx = highs.length - n;
+  const currentPrice = (highs[highs.length - 1]! + lows[lows.length - 1]!) / 2;
+  const clusterPct = 0.5; // ±0.5% для группировки
+
+  // Собираем свинг-хаи (pivot high: середина выше обоих соседей)
+  const swingHighs: number[] = [];
+  const swingLows: number[] = [];
+
+  for (let i = startIdx + 1; i < highs.length - 1; i++) {
+    if (highs[i]! > highs[i - 1]! && highs[i]! > highs[i + 1]!) {
+      swingHighs.push(highs[i]!);
+    }
+    if (lows[i]! < lows[i - 1]! && lows[i]! < lows[i + 1]!) {
+      swingLows.push(lows[i]!);
+    }
+  }
+
+  // Группируем уровни в кластеры, берём среднее кластера
+  function cluster(levels: number[]): number[] {
+    if (levels.length === 0) return [];
+    const sorted = [...levels].sort((a, b) => a - b);
+    const clusters: number[][] = [[sorted[0]!]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const last = clusters[clusters.length - 1]!;
+      const avg = last.reduce((s, v) => s + v, 0) / last.length;
+      if (Math.abs(sorted[i]! - avg) / avg < clusterPct / 100) {
+        last.push(sorted[i]!);
+      } else {
+        clusters.push([sorted[i]!]);
+      }
+    }
+
+    return clusters.map((c) => c.reduce((s, v) => s + v, 0) / c.length);
+  }
+
+  const resistanceLevels = cluster(swingHighs).filter((r) => r > currentPrice);
+  const supportLevels = cluster(swingLows).filter((s) => s < currentPrice);
+
+  // Ближайший resistance сверху, ближайший support снизу
+  const resistance =
+    resistanceLevels.length > 0
+      ? Math.min(...resistanceLevels)
+      : Math.round(Math.max(...highs.slice(-n)) * 100) / 100;
+
+  const support =
+    supportLevels.length > 0
+      ? Math.max(...supportLevels)
+      : Math.round(Math.min(...lows.slice(-n)) * 100) / 100;
 
   return {
-    support: Math.round(Math.min(...recentLows) * 100) / 100,
-    resistance: Math.round(Math.max(...recentHighs) * 100) / 100,
+    support: Math.round(support * 100) / 100,
+    resistance: Math.round(resistance * 100) / 100,
   };
 }
 

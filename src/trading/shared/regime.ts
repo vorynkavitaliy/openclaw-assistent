@@ -176,14 +176,14 @@ function countRecentCrosses(
 export function getRegimeThreshold(regime: MarketRegime): number {
   switch (regime) {
     case 'STRONG_TREND':
-      return 50;
+      return 45; // Тренд подтверждён — входим при относительно слабом сигнале
     case 'WEAK_TREND':
-      return 65;
+      return 60;
     case 'RANGING':
-      return 70;
+      return 65; // В боковике нужен чёткий отскок от S/R
     case 'VOLATILE':
-      return 75;
+      return 80; // Высокая волатильность — только очень сильные сигналы
     case 'CHOPPY':
-      return 85;
+      return 90; // Чоппи — практически не торгуем
   }
 }

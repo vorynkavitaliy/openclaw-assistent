@@ -1,4 +1,9 @@
-import { calculateMACD, calculateRsi, calculateStochRSI } from './indicators.js';
+import {
+  calculateMACD,
+  calculateRsi,
+  calculateRsiSeries,
+  calculateStochRSI,
+} from './indicators.js';
 import { analyzeOrderflow } from './orderflow.js';
 import { getRegimeThreshold } from './regime.js';
 import type {
@@ -51,7 +56,10 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
   const details: string[] = [];
 
   const trend = scoreTrend(input.trendTF, input.zonesTF, input.entryTF, details);
-  const momentum = scoreMomentum(input.entryCandles, details);
+  // Передаём направление тренда чтобы RSI-зоны оценивались симметрично
+  const trendDirection: 'long' | 'short' | 'neutral' =
+    trend > 0 ? 'long' : trend < 0 ? 'short' : 'neutral';
+  const momentum = scoreMomentum(input.entryCandles, trendDirection, details);
   const volume = scoreVolume(input.volumeProfile, details);
   const structure = scoreStructure(input.entryTF, input.volumeProfile, input.market, details);
   const orderflow = scoreOrderflow(
@@ -71,8 +79,19 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     orderflow * cfg.orderflowWeight +
     regime * cfg.regimeWeight;
 
+  // Conflict filter: тренд и моментум прямо противоположны — снижаем score
+  // Например: trend=+8 (bullish) но momentum=-7 (bearish momentum) — сигнал ненадёжен
+  let conflictPenalty = 0;
+  if (trend > 5 && momentum < -5) {
+    conflictPenalty = -15;
+    details.push('Conflict: тренд bullish, но momentum bearish — снижен score');
+  } else if (trend < -5 && momentum > 5) {
+    conflictPenalty = 15;
+    details.push('Conflict: тренд bearish, но momentum bullish — снижен score');
+  }
+
   // Normalize to -100..+100
-  const total = Math.round(raw * 10);
+  const total = Math.round(raw * 10) + conflictPenalty;
   const clamped = Math.max(-100, Math.min(100, total));
 
   const signal = getSignal(clamped);
@@ -139,7 +158,11 @@ function scoreTrend(
 
 // ─── Module 2: Momentum Score (weight 15%) ───────────────────────
 
-function scoreMomentum(entryCandles: OHLC[], details: string[]): number {
+function scoreMomentum(
+  entryCandles: OHLC[],
+  direction: 'long' | 'short' | 'neutral',
+  details: string[],
+): number {
   if (entryCandles.length < 30) {
     details.push('Momentum: недостаточно данных');
     return 0;
@@ -152,20 +175,42 @@ function scoreMomentum(entryCandles: OHLC[], details: string[]): number {
 
   let score = 0;
 
-  // RSI momentum zone for longs (40-50 = bullish momentum)
-  if (rsi >= 40 && rsi <= 50) {
-    score += 4;
-    details.push(`Momentum: RSI=${rsi} в зоне momentum (bullish)`);
-  } else if (rsi >= 50 && rsi <= 60) {
-    score += 2;
-  } else if (rsi < 30) {
-    score += 3; // Oversold = potential reversal long
-    details.push(`Momentum: RSI=${rsi} oversold (potential long)`);
-  } else if (rsi > 70) {
-    score -= 4; // Overbought for longs, good for shorts
-    details.push(`Momentum: RSI=${rsi} overbought`);
-  } else if (rsi > 60 && rsi <= 70) {
-    score -= 2;
+  // RSI: симметричная оценка по направлению тренда
+  if (direction === 'long') {
+    if (rsi >= 40 && rsi <= 55) {
+      score += 4;
+      details.push(`Momentum: RSI=${rsi} в зоне bullish momentum`);
+    } else if (rsi > 55 && rsi <= 65) {
+      score += 2;
+    } else if (rsi < 30) {
+      score += 3;
+      details.push(`Momentum: RSI=${rsi} oversold (потенциальный long)`);
+    } else if (rsi > 70) {
+      score -= 4;
+      details.push(`Momentum: RSI=${rsi} overbought — риск для long`);
+    } else if (rsi > 65) {
+      score -= 2;
+    }
+  } else if (direction === 'short') {
+    if (rsi >= 45 && rsi <= 60) {
+      score -= 4;
+      details.push(`Momentum: RSI=${rsi} в зоне bearish momentum`);
+    } else if (rsi >= 35 && rsi < 45) {
+      score -= 2;
+    } else if (rsi > 70) {
+      score -= 3;
+      details.push(`Momentum: RSI=${rsi} overbought (потенциальный short)`);
+    } else if (rsi < 30) {
+      score += 4;
+      details.push(`Momentum: RSI=${rsi} oversold — риск для short`);
+    } else if (rsi < 35) {
+      score += 2;
+    }
+  } else {
+    // neutral: старая логика
+    if (rsi >= 40 && rsi <= 50) score += 4;
+    else if (rsi > 70) score -= 4;
+    else if (rsi < 30) score += 3;
   }
 
   // StochRSI confirmation
@@ -184,7 +229,56 @@ function scoreMomentum(entryCandles: OHLC[], details: string[]): number {
     details.push('Momentum: MACD bearish');
   }
 
+  // RSI Divergence (последние 20 свечей)
+  const divergence = detectRsiDivergence(entryCandles, closes);
+  if (divergence === 'BULLISH') {
+    score += 4;
+    details.push('Momentum: bullish RSI divergence (цена ↓, RSI ↑)');
+  } else if (divergence === 'BEARISH') {
+    score -= 4;
+    details.push('Momentum: bearish RSI divergence (цена ↑, RSI ↓)');
+  }
+
   return Math.max(-10, Math.min(10, score));
+}
+
+/**
+ * Определяет RSI дивергенцию за последние N свечей.
+ * BULLISH: цена делает новый лоу, RSI — нет (потенциальный разворот вверх).
+ * BEARISH: цена делает новый хай, RSI — нет (потенциальный разворот вниз).
+ */
+function detectRsiDivergence(
+  candles: OHLC[],
+  closes: number[],
+  lookback: number = 20,
+): 'BULLISH' | 'BEARISH' | 'NONE' {
+  if (candles.length < lookback + 14) return 'NONE';
+
+  const rsiSeries = calculateRsiSeries(closes, 14);
+  if (rsiSeries.length < lookback) return 'NONE';
+
+  const recentCandles = candles.slice(-lookback);
+  const recentRsi = rsiSeries.slice(-lookback);
+
+  const firstHalf = Math.floor(lookback / 2);
+
+  const priceHi1 = Math.max(...recentCandles.slice(0, firstHalf).map((c) => c.high));
+  const priceHi2 = Math.max(...recentCandles.slice(firstHalf).map((c) => c.high));
+  const priceLo1 = Math.min(...recentCandles.slice(0, firstHalf).map((c) => c.low));
+  const priceLo2 = Math.min(...recentCandles.slice(firstHalf).map((c) => c.low));
+
+  const rsiHi1 = Math.max(...recentRsi.slice(0, firstHalf));
+  const rsiHi2 = Math.max(...recentRsi.slice(firstHalf));
+  const rsiLo1 = Math.min(...recentRsi.slice(0, firstHalf));
+  const rsiLo2 = Math.min(...recentRsi.slice(firstHalf));
+
+  // Bearish: цена выше, RSI ниже
+  if (priceHi2 > priceHi1 && rsiHi2 < rsiHi1 - 3) return 'BEARISH';
+
+  // Bullish: цена ниже, RSI выше
+  if (priceLo2 < priceLo1 && rsiLo2 > rsiLo1 + 3) return 'BULLISH';
+
+  return 'NONE';
 }
 
 // ─── Module 3: Volume Score (weight 15%) ─────────────────────────

@@ -53,6 +53,7 @@ interface CryptoState {
   pendingSignals: unknown[];
   lastMonitor: string | null;
   lastReport: string | null;
+  lastLLMCycleAt: string | null;
   balance: BalanceSnapshot;
 }
 
@@ -100,6 +101,7 @@ function defaultState(): CryptoState {
     pendingSignals: [],
     lastMonitor: null,
     lastReport: null,
+    lastLLMCycleAt: null,
     balance: {
       total: 0,
       available: 0,

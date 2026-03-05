@@ -41,8 +41,8 @@ const config: TradingConfig = {
   trailingStartR: 1.5,
   trailingDistanceR: 0.5,
 
-  maxFundingRate: 0.0005,
-  minFundingRate: -0.0005,
+  maxFundingRate: 0.001,
+  minFundingRate: -0.001,
   maxSpreadPercent: 0.1,
   atrSlMultiplier: 1.5,
   staleOrderMinutes: 30,

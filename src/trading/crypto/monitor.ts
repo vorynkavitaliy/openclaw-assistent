@@ -26,12 +26,16 @@ import {
   submitOrder,
 } from './bybit-client.js';
 import config from './config.js';
+import { generateCycleId, logDecision, rotateIfNeeded } from './decision-journal.js';
 import * as state from './state.js';
 
 const log = createLogger('crypto-monitor');
 
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
+
+// ID текущего цикла мониторинга — обновляется в main()
+let currentCycleId = '';
 
 interface TradeSignalInternal {
   pair: string;
@@ -157,6 +161,17 @@ async function managePositions(): Promise<Array<Record<string, unknown>>> {
             defaultTp,
             reason: 'Position found without SL — default SL/TP applied',
           });
+          logDecision(
+            currentCycleId,
+            'manage',
+            pos.symbol,
+            'SL_GUARD',
+            [
+              'Позиция без стоп-лосса — установлен дефолтный SL/TP',
+              `SL: ${defaultSl}, TP: ${defaultTp ?? 'без изменений'}`,
+            ],
+            { entry, sl: defaultSl, ...(defaultTp !== undefined ? { tp: defaultTp } : {}) },
+          );
           log.warn('SL-Guard: applied default SL/TP', { symbol: pos.symbol, defaultSl, defaultTp });
         } catch (err) {
           actions.push({
@@ -348,6 +363,9 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   // D0: Пустой orderbook — API вернул ошибку или данных нет
   if (orderbook.bids.length === 0 || orderbook.asks.length === 0) {
     log.debug('Empty orderbook: skip', { pair });
+    logDecision(currentCycleId, 'skip', pair, 'EMPTY_ORDERBOOK', [
+      'Orderbook пуст — нет данных для анализа',
+    ]);
     return null;
   }
 
@@ -359,18 +377,47 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
       spreadPct: spreadPct.toFixed(4),
       max: config.maxSpreadPercent,
     });
+    logDecision(
+      currentCycleId,
+      'skip',
+      pair,
+      'SPREAD_TOO_HIGH',
+      [`Спред ${spreadPct.toFixed(4)}% > лимит ${config.maxSpreadPercent}%`],
+      {
+        filters: {
+          spread: {
+            passed: false,
+            value: spreadPct.toFixed(4) + '%',
+            threshold: config.maxSpreadPercent + '%',
+          },
+        },
+        marketContext: { price: market.lastPrice, spread: spreadPct },
+      },
+    );
     return null;
   }
 
   // D2: Funding rate фильтр — не входим против перегретого рынка
   const fr = market.fundingRate;
   if (fr > config.maxFundingRate || fr < config.minFundingRate) {
-    log.debug('Funding rate filter: skip', {
+    log.debug('Funding rate filter: skip', { pair, fundingRate: fr });
+    logDecision(
+      currentCycleId,
+      'skip',
       pair,
-      fundingRate: fr,
-      max: config.maxFundingRate,
-      min: config.minFundingRate,
-    });
+      'FUNDING_RATE_EXTREME',
+      [`Funding rate ${fr} вне диапазона [${config.minFundingRate}, ${config.maxFundingRate}]`],
+      {
+        filters: {
+          fundingRate: {
+            passed: false,
+            value: String(fr),
+            threshold: `[${config.minFundingRate}, ${config.maxFundingRate}]`,
+          },
+        },
+        marketContext: { price: market.lastPrice, fundingRate: fr },
+      },
+    );
     return null;
   }
 
@@ -401,7 +448,31 @@ async function analyzePairV2(pair: string): Promise<TradeSignalInternal | null> 
   const threshold = getRegimeThreshold(regime);
   const absScore = Math.abs(confluence.total);
 
-  if (absScore < threshold) return null; // Сигнал слишком слабый для текущего режима
+  if (absScore < threshold) {
+    logDecision(
+      currentCycleId,
+      'skip',
+      pair,
+      'CONFLUENCE_BELOW_THRESHOLD',
+      [
+        `Confluence ${confluence.total} (|${absScore}|) < порог ${threshold} для ${regime}`,
+        ...confluence.details.slice(0, 3),
+      ],
+      {
+        confluenceScore: confluence.total,
+        confluenceSignal: confluence.signal,
+        confidence: confluence.confidence,
+        regime,
+        marketContext: {
+          price: market.lastPrice,
+          rsi14: m15.indicators.rsi14,
+          atr14: m15.indicators.atr14,
+          fundingRate: fr,
+        },
+      },
+    );
+    return null;
+  }
 
   // Определяем сторону сделки
   const side: 'Buy' | 'Sell' = confluence.total > 0 ? 'Buy' : 'Sell';
@@ -550,11 +621,27 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
     const s = state.get();
     const existing = s.positions.find((p) => p.symbol === sig.pair);
     if (existing) {
+      logDecision(
+        currentCycleId,
+        'skip',
+        sig.pair,
+        'POSITION_ALREADY_OPEN',
+        [`Позиция ${existing.side} уже открыта`],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
       results.push({ ...sig, action: 'SKIP: position already open' });
       continue;
     }
 
     if (openOrderSymbols.includes(sig.pair)) {
+      logDecision(
+        currentCycleId,
+        'skip',
+        sig.pair,
+        'PENDING_ORDER_EXISTS',
+        ['Лимитный ордер уже ожидает исполнения'],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
       results.push({ ...sig, action: 'SKIP: pending order already exists' });
       continue;
     }
@@ -562,12 +649,23 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
     // E2: Фильтр корреляции — не открываем 2+ позиции в одной экосистеме
     const ecosystem = getEcosystemGroup(sig.pair);
     if (ecosystem && openEcosystems.has(ecosystem)) {
+      logDecision(
+        currentCycleId,
+        'skip',
+        sig.pair,
+        'ECOSYSTEM_OCCUPIED',
+        [`Группа ${ecosystem} уже занята открытой позицией`],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
       results.push({ ...sig, action: `SKIP: ecosystem already has open position (${ecosystem})` });
       continue;
     }
 
     const qty = state.calcPositionSize(sig.entryPrice, sig.sl);
     if (qty <= 0) {
+      logDecision(currentCycleId, 'skip', sig.pair, 'QTY_CALCULATION_FAILED', [
+        'Не удалось рассчитать размер позиции',
+      ]);
       results.push({ ...sig, action: 'SKIP: failed to calculate qty' });
       continue;
     }
@@ -575,6 +673,14 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
     const slDist = Math.abs(sig.entryPrice - sig.sl);
     const risk = slDist * qty;
     if (risk > config.maxRiskPerTrade) {
+      logDecision(
+        currentCycleId,
+        'skip',
+        sig.pair,
+        'RISK_TOO_HIGH',
+        [`Риск $${risk.toFixed(2)} > лимит $${config.maxRiskPerTrade}`],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
       results.push({
         ...sig,
         action: `SKIP: risk $${risk.toFixed(2)} > max $${config.maxRiskPerTrade}`,
@@ -586,6 +692,14 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
     const balance = s.balance.available;
     const requiredMargin = (sig.entryPrice * qty) / config.defaultLeverage;
     if (balance > 0 && requiredMargin > balance) {
+      logDecision(
+        currentCycleId,
+        'skip',
+        sig.pair,
+        'INSUFFICIENT_MARGIN',
+        [`Маржа $${requiredMargin.toFixed(2)} > доступно $${balance.toFixed(2)}`],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
       results.push({
         ...sig,
         action: `SKIP: insufficient margin $${requiredMargin.toFixed(2)} > available $${balance.toFixed(2)}`,
@@ -624,6 +738,31 @@ async function executeSignals(signals: TradeSignalInternal[]): Promise<SignalRes
         reason: sig.reason,
         orderId: orderRes.orderId,
       });
+
+      logDecision(
+        currentCycleId,
+        'entry',
+        sig.pair,
+        `OPEN_${sig.side.toUpperCase()}`,
+        [
+          sig.reason,
+          `Entry: ${sig.entryPrice}, SL: ${sig.sl}, TP: ${sig.tp}, R:R: ${sig.rr}`,
+          `Qty: ${qtyStr}, Risk: $${(Math.abs(sig.entryPrice - sig.sl) * parseFloat(qtyStr)).toFixed(2)}`,
+        ],
+        {
+          confluenceScore: sig.confluence.total,
+          confluenceSignal: sig.confluence.signal,
+          confidence: sig.confidence,
+          regime: sig.regime,
+          side: sig.side,
+          entry: sig.entryPrice,
+          sl: sig.sl,
+          tp: sig.tp,
+          qty: qtyStr,
+          rr: sig.rr,
+          orderId: orderRes.orderId,
+        },
+      );
 
       log.info('Order executed', {
         symbol: sig.pair,
@@ -690,9 +829,13 @@ function roundPrice(val: number, symbol: string): number {
 
 async function main(): Promise<void> {
   const startTime = Date.now();
+  currentCycleId = generateCycleId();
+  rotateIfNeeded();
+
   const report: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     mode: DRY_RUN ? 'dry-run' : 'execute',
+    cycleId: currentCycleId,
   };
 
   const status = checkStatus();

@@ -19,6 +19,9 @@
     "trade:crypto:monitor": "tsx src/trading/crypto/monitor.ts",
     "trade:crypto:kill": "tsx src/trading/crypto/killswitch.ts",
     "trade:crypto:report": "tsx src/trading/crypto/report.ts",
+    "trade:crypto:journal": "tsx src/trading/crypto/journal-cli.ts",
+    "trade:crypto:explain": "tsx src/trading/crypto/journal-cli.ts --last",
+    "trade:crypto:diary": "tsx src/trading/crypto/journal-cli.ts --summary",
     "market:digest": "tsx src/market/digest.ts"
   },
   "repository": {

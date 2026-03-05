@@ -4,6 +4,7 @@ import { runMain } from '../../utils/process.js';
 import { fmt, fmtPrice, sendViaOpenClaw } from '../../utils/telegram.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
 import config from './config.js';
+import { generateSummary } from './decision-journal.js';
 import * as state from './state.js';
 import type { StoredEvent } from './state.js';
 
@@ -240,6 +241,20 @@ function formatTelegramReport(data: ReportData): string {
     if (last) {
       const time = sv(last, 'ts', '').slice(11, 16);
       lines.push(`  Последняя [${time}]: ${sv(last, 'error').slice(0, 60)}`);
+    }
+    lines.push('');
+  }
+
+  // Дневник решений за 24ч
+  const dj = generateSummary(24);
+  if (dj.totalDecisions > 0) {
+    lines.push('🧠 *Дневник решений (24ч)*');
+    lines.push(`  Решений: ${dj.totalDecisions} (входы: ${dj.entries}, пропуски: ${dj.skips})`);
+    if (dj.topSkipReason !== 'none') {
+      lines.push(`  Топ причина пропуска: ${dj.topSkipReason}`);
+    }
+    if (dj.entrySymbols.length > 0) {
+      lines.push(`  Входы: ${dj.entrySymbols.join(', ')}`);
     }
     lines.push('');
   }

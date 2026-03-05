@@ -2,7 +2,7 @@
 type: plan
 title: "Crypto Trader: баг-фиксы, рефакторинг и дневник решений"
 date: 2026-03-05
-status: active
+status: completed
 priority: high
 complexity: XL
 scope: crypto-trader

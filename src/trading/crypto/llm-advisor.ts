@@ -1,12 +1,14 @@
 import { createLogger } from '../../utils/logger.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
+import * as state from './state.js';
 import { isWatched } from './watchlist.js';
 
 const log = createLogger('llm-advisor');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'anthropic/claude-sonnet-4';
+const DAILY_TRADE_TARGET = 3; // Целевое количество сделок в день
 
 export type LLMDecisionType = 'ENTER' | 'SKIP' | 'WAIT';
 
@@ -83,15 +85,40 @@ Score history (last 4 cycles): ${scoreHistory} — ${trend}
 Key factors: ${sig.confluence.details.slice(0, 4).join(' | ')}`;
 }
 
+function buildDailyContext(): string {
+  const s = state.get();
+  const d = s.daily;
+  const hour = new Date().getUTCHours();
+  const hoursLeft = 24 - hour;
+  const tradesNeeded = Math.max(0, DAILY_TRADE_TARGET - d.trades);
+  const urgency =
+    tradesNeeded > 0 && hoursLeft <= 8
+      ? 'HIGH — few trades today, time running out, prefer ENTER over SKIP'
+      : tradesNeeded > 0 && hoursLeft <= 16
+        ? 'MODERATE — still need trades, lean towards ENTER for decent signals'
+        : 'NORMAL';
+
+  return `Daily context:
+- Trades today: ${d.trades} (target: ${DAILY_TRADE_TARGET}, need ${tradesNeeded} more)
+- Day P&L: $${d.totalPnl.toFixed(2)} (wins: ${d.wins}, losses: ${d.losses}, stops: ${d.stops})
+- Open positions: ${s.positions.length} / ${3}
+- Balance: $${s.balance.total.toFixed(0)} (available: $${s.balance.available.toFixed(0)})
+- Hours left in day (UTC): ${hoursLeft}
+- Urgency: ${urgency}`;
+}
+
 function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
   const match = content.match(/\[[\s\S]*?\]/);
   if (!match) {
-    log.warn('LLM response missing JSON array', { preview: content.slice(0, 300) });
+    log.warn('LLM response missing JSON array — defaulting to ENTER', {
+      preview: content.slice(0, 300),
+    });
+    // Fallback: ENTER вместо SKIP — лучше войти, чем пропустить всё
     return pairs.map((pair) => ({
       pair,
-      decision: 'SKIP' as LLMDecisionType,
-      reason: 'parse error — defaulting to SKIP',
-      confidence: 0,
+      decision: 'ENTER' as LLMDecisionType,
+      reason: 'LLM parse error — defaulting to ENTER',
+      confidence: 50,
     }));
   }
 
@@ -101,31 +128,37 @@ function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
     const valid = new Set<LLMDecisionType>(['ENTER', 'SKIP', 'WAIT']);
     return raw.map((d) => ({
       pair: d.pair,
-      decision: valid.has(d.decision as LLMDecisionType) ? (d.decision as LLMDecisionType) : 'SKIP',
+      decision: valid.has(d.decision as LLMDecisionType)
+        ? (d.decision as LLMDecisionType)
+        : 'ENTER',
       reason: String(d.reason ?? ''),
       confidence: Math.max(0, Math.min(100, Number(d.confidence ?? 50))),
     }));
   } catch {
-    log.warn('LLM JSON parse failed', { preview: content.slice(0, 300) });
+    log.warn('LLM JSON parse failed — defaulting to ENTER', {
+      preview: content.slice(0, 300),
+    });
     return pairs.map((pair) => ({
       pair,
-      decision: 'SKIP' as LLMDecisionType,
-      reason: 'JSON parse error — defaulting to SKIP',
-      confidence: 0,
+      decision: 'ENTER' as LLMDecisionType,
+      reason: 'LLM JSON parse error — defaulting to ENTER',
+      confidence: 50,
     }));
   }
 }
 
-const SYSTEM_PROMPT = `You are a professional crypto futures trading assistant reviewing pre-screened signals.
+const SYSTEM_PROMPT = `You are a professional crypto futures trading assistant. You review pre-screened signals and make final ENTER/SKIP/WAIT decisions.
 
-Each signal passed technical filters (confluence scoring, spread/funding checks, regime detection). Your role: final ENTER/SKIP/WAIT judgment.
+Each signal already passed technical filters (confluence scoring, spread/funding, regime detection). Your role: add judgment based on overall context.
 
-Decision guide:
-- ENTER: Strong signal, execute now. Use when confluence > 45, improving trend, matches regime.
-- SKIP: Pass this cycle. Use when signal is weak, deteriorating, or risk too high.
-- WAIT: Has potential but needs confirmation. Adds to 4h watchlist. Use sparingly (max 2/cycle).
+Decision rules:
+- ENTER: Execute now. Default choice for signals with confluence > 40 and confidence > 60%.
+- SKIP: Too weak or risky. Use only when signal clearly deteriorating, regime hostile, or R:R poor.
+- WAIT: Needs more data. Adds to 4h watchlist. Max 2 per cycle.
 
-Default to ENTER for strong signals (confluence > 50, confidence > 65%). Be decisive.`;
+IMPORTANT: You are a TRADER, not a risk manager. Your job is to find opportunities, not avoid all risk. The pre-filters already removed bad setups. If a signal looks decent — ENTER it.
+
+Pay attention to daily context: if few trades have been made today and urgency is HIGH, lower your threshold and favor ENTER.`;
 
 export async function runLLMAdvisorCycle(
   cycleId: string,
@@ -144,11 +177,22 @@ export async function runLLMAdvisorCycle(
   }
 
   const allSnapshots = loadAllRecentSnapshots(2);
+  const dailyContext = buildDailyContext();
+
   const signalBlocks = signals
     .map((sig) => formatSignal(sig, allSnapshots.get(sig.pair) ?? [], isWatched(sig.pair)))
     .join('\n\n---\n\n');
 
-  const userPrompt = `Review ${signals.length} trading signal(s) for cycle ${cycleId}:\n\n${signalBlocks}\n\nRespond with ONLY a JSON array:\n[{"pair": "BTCUSDT", "decision": "ENTER|SKIP|WAIT", "reason": "...", "confidence": 0-100}]`;
+  const userPrompt = `${dailyContext}
+
+---
+
+Review ${signals.length} trading signal(s) for cycle ${cycleId}:
+
+${signalBlocks}
+
+Respond with ONLY a JSON array:
+[{"pair": "BTCUSDT", "decision": "ENTER|SKIP|WAIT", "reason": "brief reason", "confidence": 0-100}]`;
 
   try {
     const { content, promptTokens, completionTokens } = await callOpenRouter([
@@ -181,7 +225,6 @@ export async function runLLMAdvisorCycle(
     log.error('LLM advisor failed — falling back to auto-enter', {
       error: (err as Error).message,
     });
-    // Fallback: enter all signals (same as pre-LLM behavior)
     return signals.map((s) => ({
       pair: s.pair,
       decision: 'ENTER' as LLMDecisionType,

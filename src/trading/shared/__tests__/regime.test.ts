@@ -68,11 +68,11 @@ describe('detectMarketRegime', () => {
 
 describe('getRegimeThreshold', () => {
   it('STRONG_TREND имеет самый низкий порог', () => {
-    expect(getRegimeThreshold('STRONG_TREND')).toBe(45);
+    expect(getRegimeThreshold('STRONG_TREND')).toBe(30);
   });
 
   it('CHOPPY имеет самый высокий порог', () => {
-    expect(getRegimeThreshold('CHOPPY')).toBe(90);
+    expect(getRegimeThreshold('CHOPPY')).toBe(80);
   });
 
   it('пороги растут от тренда к чоппу', () => {

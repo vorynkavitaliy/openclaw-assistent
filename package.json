@@ -22,7 +22,8 @@
     "trade:crypto:journal": "tsx src/trading/crypto/journal-cli.ts",
     "trade:crypto:explain": "tsx src/trading/crypto/journal-cli.ts --last",
     "trade:crypto:diary": "tsx src/trading/crypto/journal-cli.ts --summary",
-    "market:digest": "tsx src/market/digest.ts"
+    "market:digest": "tsx src/market/digest.ts",
+    "bot": "tsx src/bot.ts"
   },
   "repository": {
     "type": "git",

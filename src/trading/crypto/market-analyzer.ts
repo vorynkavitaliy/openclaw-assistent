@@ -14,6 +14,7 @@ import {
 } from './bybit-client.js';
 import config from './config.js';
 import { logDecision } from './decision-journal.js';
+import { saveScore } from './market-snapshot.js';
 import * as state from './state.js';
 import { roundPrice } from './symbol-specs.js';
 
@@ -186,6 +187,28 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
   // Проверяем минимальный порог для режима рынка
   const threshold = getRegimeThreshold(regime);
   const absScore = Math.abs(confluence.total);
+
+  // Логируем и сохраняем ВСЕ confluence scores для калибровки и истории
+  log.info('Confluence score', {
+    pair,
+    cycleId,
+    score: confluence.total,
+    absScore,
+    threshold,
+    regime,
+    confidence: confluence.confidence,
+    signal: confluence.signal,
+    pass: absScore >= threshold,
+  });
+  saveScore(
+    cycleId,
+    pair,
+    market.lastPrice,
+    regime,
+    confluence.total,
+    confluence.signal,
+    confluence.confidence,
+  );
 
   if (absScore < threshold) {
     logDecision(

@@ -178,9 +178,9 @@ export function getRegimeThreshold(regime: MarketRegime): number {
     case 'STRONG_TREND':
       return 30; // Тренд подтверждён — агрессивный вход, LLM решит остальное
     case 'WEAK_TREND':
-      return 45;
+      return 32;
     case 'RANGING':
-      return 50; // В боковике — пропускаем больше кандидатов к LLM
+      return 35; // В боковике — чуть строже чем тренд
     case 'VOLATILE':
       return 65; // Высокая волатильность — LLM оценит риски
     case 'CHOPPY':

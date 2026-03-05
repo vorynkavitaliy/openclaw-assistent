@@ -69,14 +69,16 @@ function formatSignal(
   snapshots: MarketSnapshot[],
   watched: boolean,
 ): string {
-  const scores = snapshots.map((s) => s.confluenceScore);
+  const recent = snapshots.slice(-4);
+  const scores = recent.map((s) => s.confluenceScore);
   const trend =
     scores.length >= 2
       ? scores[scores.length - 1]! > scores[0]!
         ? 'improving'
         : 'weakening'
       : 'no history';
-  const scoreHistory = scores.slice(-4).join(', ') || 'none';
+  const scoreHistory =
+    recent.map((s) => `${s.confluenceScore}@${s.timestamp.slice(11, 16)}`).join(', ') || 'none';
 
   return `**${sig.pair}**${watched ? ' [WATCHED — re-evaluating]' : ''}
 Direction: ${sig.side} @ ${sig.entryPrice} | SL=${sig.sl} | TP=${sig.tp} | R:R ${sig.rr}
@@ -91,12 +93,16 @@ function buildDailyContext(): string {
   const hour = new Date().getUTCHours();
   const hoursLeft = 24 - hour;
   const tradesNeeded = Math.max(0, DAILY_TRADE_TARGET - d.trades);
+  // Активные торговые сессии: 08-22 UTC (Европа + Америка)
+  const isActiveSession = hour >= 8 && hour < 22;
   const urgency =
-    tradesNeeded > 0 && hoursLeft <= 8
+    tradesNeeded > 0 && hoursLeft <= 8 && isActiveSession
       ? 'HIGH — few trades today, time running out, prefer ENTER over SKIP'
-      : tradesNeeded > 0 && hoursLeft <= 16
+      : tradesNeeded > 0 && hoursLeft <= 16 && isActiveSession
         ? 'MODERATE — still need trades, lean towards ENTER for decent signals'
-        : 'NORMAL';
+        : !isActiveSession
+          ? 'LOW — Asian session (00-08 UTC), lower liquidity, be more selective'
+          : 'NORMAL';
 
   return `Daily context:
 - Trades today: ${d.trades} (target: ${DAILY_TRADE_TARGET}, need ${tradesNeeded} more)
@@ -110,15 +116,14 @@ function buildDailyContext(): string {
 function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
   const match = content.match(/\[[\s\S]*?\]/);
   if (!match) {
-    log.warn('LLM response missing JSON array — defaulting to ENTER', {
+    log.warn('LLM response missing JSON array — defaulting to SKIP', {
       preview: content.slice(0, 300),
     });
-    // Fallback: ENTER вместо SKIP — лучше войти, чем пропустить всё
     return pairs.map((pair) => ({
       pair,
-      decision: 'ENTER' as LLMDecisionType,
-      reason: 'LLM parse error — defaulting to ENTER',
-      confidence: 50,
+      decision: 'SKIP' as LLMDecisionType,
+      reason: 'LLM parse error — defaulting to SKIP',
+      confidence: 0,
     }));
   }
 
@@ -128,21 +133,19 @@ function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
     const valid = new Set<LLMDecisionType>(['ENTER', 'SKIP', 'WAIT']);
     return raw.map((d) => ({
       pair: d.pair,
-      decision: valid.has(d.decision as LLMDecisionType)
-        ? (d.decision as LLMDecisionType)
-        : 'ENTER',
+      decision: valid.has(d.decision as LLMDecisionType) ? (d.decision as LLMDecisionType) : 'SKIP',
       reason: String(d.reason ?? ''),
       confidence: Math.max(0, Math.min(100, Number(d.confidence ?? 50))),
     }));
   } catch {
-    log.warn('LLM JSON parse failed — defaulting to ENTER', {
+    log.warn('LLM JSON parse failed — defaulting to SKIP', {
       preview: content.slice(0, 300),
     });
     return pairs.map((pair) => ({
       pair,
-      decision: 'ENTER' as LLMDecisionType,
-      reason: 'LLM JSON parse error — defaulting to ENTER',
-      confidence: 50,
+      decision: 'SKIP' as LLMDecisionType,
+      reason: 'LLM JSON parse error — defaulting to SKIP',
+      confidence: 0,
     }));
   }
 }

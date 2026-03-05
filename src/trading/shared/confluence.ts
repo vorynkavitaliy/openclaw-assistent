@@ -304,13 +304,15 @@ function scoreVolume(volumeProfile: VolumeProfile, details: string[]): number {
     score -= 3;
   }
 
-  // Volume delta (buy vs sell pressure)
+  // Volume delta (buy vs sell pressure) — нормализован по среднему объёму пары
+  const avgVol = volumeProfile.avgCandleVolumeUsd;
+  const deltaPct = avgVol > 0 ? (Math.abs(delta) / avgVol) * 100 : 0;
   if (delta > 0) {
-    score += Math.min(5, Math.round(Math.abs(delta) / 10000));
-    if (delta > 50000) details.push('Volume: strong buy pressure');
+    score += Math.min(5, Math.round(deltaPct / 5));
+    if (deltaPct > 30) details.push(`Volume: strong buy pressure (${deltaPct.toFixed(0)}% avg)`);
   } else if (delta < 0) {
-    score -= Math.min(5, Math.round(Math.abs(delta) / 10000));
-    if (delta < -50000) details.push('Volume: strong sell pressure');
+    score -= Math.min(5, Math.round(deltaPct / 5));
+    if (deltaPct > 30) details.push(`Volume: strong sell pressure (${deltaPct.toFixed(0)}% avg)`);
   }
 
   return Math.max(-10, Math.min(10, score));
@@ -335,18 +337,18 @@ function scoreStructure(
   const distToResistance = ((resistance - price) / price) * 100;
 
   // Near support (good for longs)
-  if (distToSupport < 0.5) {
+  if (distToSupport < 1.0) {
     score += 5;
     details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%)`);
-  } else if (distToSupport < 1.5) {
+  } else if (distToSupport < 2.0) {
     score += 3;
   }
 
   // Near resistance (bad for longs)
-  if (distToResistance < 0.5) {
+  if (distToResistance < 1.0) {
     score -= 5;
     details.push(`Structure: цена у resistance (${distToResistance.toFixed(1)}%)`);
-  } else if (distToResistance < 1.5) {
+  } else if (distToResistance < 2.0) {
     score -= 3;
   }
 

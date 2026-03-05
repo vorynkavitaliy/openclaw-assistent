@@ -1,41 +1,23 @@
-# OpenClaw AI Assistant
+# Crypto Trading Bot
 
-Мультиагентная система автоматизации торговли на платформе OpenClaw.
-TypeScript/Node.js (ES Modules), Bybit (крипто) + cTrader FIX 4.4 (Forex).
+Автоматическая торговля криптовалютами на Bybit + Forex через cTrader FIX 4.4.
+TypeScript/Node.js (ES Modules). Управление через Telegram бот.
 
 ## Язык общения
 
 Все ответы, документация, комментарии в коде и коммиты — **на русском языке**.
 
-## Мультиагентная архитектура
+## Архитектура
 
-Проект использует систему суб-агентов Claude Code. Основной подход — **оркестратор**,
-который принимает задачи и делегирует специализированным агентам:
-
-| Агент | Файл | Когда использовать |
-|-------|------|-------------------|
-| orchestrator | `.claude/agents/orchestrator.md` | Координация задач, декомпозиция, управление проектом |
-| developer | `.claude/agents/developer.md` | Написание/изменение TypeScript/Node.js кода |
-| tester | `.claude/agents/tester.md` | Тесты Vitest, ESLint, проверка качества |
-| planner | `.claude/agents/planner.md` | Анализ требований, архитектура, планирование |
-| analyst | `.claude/agents/analyst.md` | Анализ рынка, индикаторы, рыночный контекст |
-| trading-advisor | `.claude/agents/trading-advisor.md` | Настройка торгового агента, стратегии, рекомендации |
-
-При сложных задачах — **всегда** начинай с orchestrator для декомпозиции.
-
-## Разделение систем
-
-В проекте две НЕЗАВИСИМЫЕ системы:
-
-| Система | Директория | Назначение |
-|---------|-----------|------------|
-| **Claude Code** | `.claude/` | Инструменты РАЗРАБОТКИ (агенты, правила, планы, анализы) |
-| **OpenClaw** | `workspaces/`, `skills/`, `openclaw.json` | PRODUCTION система агентов (торговля, мониторинг) |
-
-- `.claude/agents/` работают с исходным кодом в `src/` — НЕ ссылаются на `workspaces/`
-- `workspaces/` — конфигурация OpenClaw агентов — НЕ ссылается на `.claude/`
-- Общий код: `src/trading/`, `src/utils/`, `src/market/`
-- Общие credentials: `~/.openclaw/credentials.json`
+```
+Telegram Bot (src/bot.ts) — принимает команды /start, /stop, /status, /report
+    ↓
+System Cron (*/5) → monitor.ts — анализ рынка каждые 5 мин (бесплатно)
+    ↓
+LLM Advisor (event-driven) — вызывается ТОЛЬКО при наличии сигналов
+    ↓
+Signal Executor → Bybit API — исполнение ордеров
+```
 
 ## Сборка и проверка качества
 
@@ -52,27 +34,33 @@ npm run test           # Vitest watch mode
 Перед коммитом: `npm run lint && npm run build`
 Коммит-формат: `feat(crypto):`, `fix(forex):`, `refactor(shared):`, `test(indicators):`
 
-## Торговые модули (запуск)
+## Запуск
 
 ```bash
-npm run trade:crypto:monitor   # Bybit мониторинг позиций
+npm run bot                    # Telegram бот (long polling)
+npm run trade:crypto:monitor   # Ручной запуск мониторинга
 npm run trade:crypto:report    # Отчёт по крипто-позициям
-npm run trade:crypto:kill      # СТОП: закрыть все крипто-позиции (необратимо!)
+npm run trade:crypto:kill      # СТОП: закрыть все позиции (необратимо!)
 npm run trade:forex:monitor    # cTrader мониторинг
-npm run trade:forex:trade      # cTrader ручная торговля
 npm run market:digest          # RSS дайджест рынка
+
+# Управление трейдером через скрипты
+bash scripts/trading_control.sh start crypto-trader   # Создать cron */5
+bash scripts/trading_control.sh stop crypto-trader    # Убрать cron
+bash scripts/trading_control.sh status                # Статус
 ```
 
 ## Структура src/
 
 ```
 src/
+├── bot.ts              — Telegram бот (polling, команды /start /stop /status /report)
 ├── trading/
 │   ├── crypto/         — Bybit: bybit-client.ts, monitor.ts, killswitch.ts, report.ts, state.ts, config.ts
 │   ├── forex/          — cTrader FIX4.4: client.ts, fix-connection.ts, monitor.ts, trade.ts, config.ts
-│   └── shared/         — types.ts, indicators.ts (EMA/RSI/ATR), risk.ts, index.ts
+│   └── shared/         — types.ts, indicators.ts (EMA/RSI/ATR), risk.ts, confluence.ts, regime.ts
 ├── market/digest.ts    — RSS market digest
-└── utils/              — config.ts, logger.ts, telegram.ts, args.ts, retry.ts, process.ts
+└── utils/              — config.ts, logger.ts, telegram.ts, env.ts, args.ts, retry.ts, process.ts
 ```
 
 ## Конвенции кода
@@ -86,16 +74,15 @@ src/
   ```
 - **Логгер**: `const log = createLogger('module-name')` из `../../utils/logger.js`
 - **Типы**: все из `src/trading/shared/types.ts` (Position, OHLC, OrderParams, MarketAnalysis...)
-- **Конфиг**: `getBybitCredentials()`, `getForexConfig()` из `../../utils/config.js`
+- **Конфиг**: `getBybitCredentials()` из `../../utils/config.js`
 - **Ретрай**: `retryAsync(fn, { retries, backoffMs })` из `../../utils/retry.js`
 - **Strict TypeScript**: `noUnusedLocals`, `noImplicitReturns`, `noUncheckedIndexedAccess`
 
-## Безопасность (КРИТИЧНО)
+## Credentials
 
+- `.env` в корне проекта (НЕ коммитить!) — TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, OPENROUTER_API_KEY
+- `~/.openclaw/credentials.json` — Bybit API keys, cTrader FIX credentials
 - **НИКОГДА** не хардкодить API ключи, токены, пароли в коде
-- Credentials → только `~/.openclaw/openclaw.json` или env vars
-- В документации → safe-формат: `7467…umn4` (80% значения скрыть)
-- `keys.md` в `.gitignore` — не коммитить
 - Проверка утечек: `grep -r 'apiKey\s*=\s*"' src/`
 
 ## Технические индикаторы (src/trading/shared/indicators.ts)
@@ -107,21 +94,8 @@ calculateAtr(ohlc: OHLC[], period: number): number[]
 buildMarketAnalysis(ohlc: OHLC[], meta): MarketAnalysis
 ```
 
-Интерпретация `MarketAnalysis`:
-- `bias.emaTrend: BULLISH` — цена выше EMA50 > EMA200
-- `bias.rsiZone: OVERBOUGHT` — RSI > 70
-- `marketInfo.fundingSignal: LONGS_OVERHEATED` — funding rate > 0.03%
-
-## OpenClaw платформа
-
-- Gateway: `ws://127.0.0.1:18789` | Config: `~/.openclaw/openclaw.json`
-- Telegram: @hyrotraders_bot | User ID: 5929886678
-- Агенты (OpenClaw): orchestrator, forex-trader, crypto-trader, market-analyst, tech-lead, backend-dev, frontend-dev, qa-tester
-- Skills: `skills/` (OpenClaw) vs `.claude/skills/` (Claude Code — разные системы!)
-
 ## Контекстные файлы
 
 - Архитектура: @.github/docs/architecture.md
 - Правила код-ревью: @.github/docs/rules/code-review.md
 - Правила безопасности: @.github/docs/rules/security.md
-- Конфиг OpenClaw: @.github/docs/rules/openclaw-config.md

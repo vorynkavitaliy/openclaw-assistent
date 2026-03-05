@@ -1,6 +1,0 @@
-# Рыночный дайджест — доступные команды
-# Полный дайджест (48 часов)
-cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts
-
-# Дайджест с параметрами
-cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts --hours=24 --max-news=10

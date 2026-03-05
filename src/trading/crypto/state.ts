@@ -306,7 +306,7 @@ export function canTrade(): { allowed: boolean; reason: string } {
     return sum + Math.abs(entry - sl) * size;
   }, 0);
 
-  const maxTotalRisk = config.maxDailyLoss * 0.5; // max 50% дневного лимита в открытых позициях
+  const maxTotalRisk = config.maxDailyLoss * 0.8; // max 80% дневного лимита в открытых позициях
   if (totalRisk >= maxTotalRisk) {
     return {
       allowed: false,

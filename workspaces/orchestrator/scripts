@@ -1,7 +1,0 @@
-# Оркестратор — системные команды
-openclaw status
-openclaw status --deep
-openclaw gateway restart
-openclaw logs --follow
-cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
-cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts

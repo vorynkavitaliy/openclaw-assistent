@@ -2,38 +2,57 @@ import { createLogger } from './logger.js';
 import { retryAsync } from './retry.js';
 
 const log = createLogger('telegram');
-const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL ?? 'http://127.0.0.1:18789';
 
-export async function sendViaOpenClaw(
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
+const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+/**
+ * Отправить сообщение в Telegram напрямую через Bot API.
+ */
+export async function sendTelegram(
   message: string,
-  agentId: string = 'crypto-trader',
+  parseMode: 'HTML' | 'Markdown' = 'Markdown',
 ): Promise<boolean> {
+  if (!BOT_TOKEN || !CHAT_ID) {
+    log.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — skipping send');
+    return false;
+  }
+
   try {
     const resp = await retryAsync(
       () =>
-        fetch(`${GATEWAY_URL}/api/send-message`, {
+        fetch(`${API_BASE}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agent: agentId, message, channel: 'telegram' }),
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: parseMode,
+          }),
           signal: AbortSignal.timeout(10_000),
         }),
       { retries: 2, backoffMs: 500 },
     );
 
     if (!resp.ok) {
-      log.error(`Send failed: HTTP ${resp.status}`, { status: resp.status });
+      const text = await resp.text();
+      log.error(`Telegram send failed: HTTP ${resp.status}`, { body: text.slice(0, 200) });
       return false;
     }
 
-    log.info('Message sent to Telegram');
+    log.debug('Message sent to Telegram');
     return true;
   } catch (err) {
-    log.error('Failed to send message', {
+    log.error('Failed to send Telegram message', {
       error: err instanceof Error ? err.message : String(err),
     });
     return false;
   }
 }
+
+// Обратная совместимость — старое имя функции
+export const sendViaOpenClaw = sendTelegram;
 
 export function fmt(val: number | string, decimals: number = 2): string {
   const n = typeof val === 'string' ? parseFloat(val) : val;

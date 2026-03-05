@@ -52,6 +52,7 @@ function makeVolumeProfile(): VolumeProfile {
     volumeDelta: 5000,
     relativeVolume: 1.5,
     highVolumeNodes: [49800, 50200],
+    avgCandleVolumeUsd: 100000,
   };
 }
 

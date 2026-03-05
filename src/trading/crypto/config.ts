@@ -23,13 +23,13 @@ const config: TradingConfig = {
 
   allowedOrderTypes: ['Market', 'Limit'],
 
-  monitorIntervalMin: 10,
+  monitorIntervalMin: 5,
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
   riskPerTrade: 0.02,
   maxDailyLoss: 500,
-  maxStopsPerDay: 2,
+  maxStopsPerDay: 4,
   maxRiskPerTrade: 250,
   maxOpenPositions: 3,
   maxLeverage: 5,

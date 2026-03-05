@@ -1,14 +1,8 @@
-# OpenClaw: never commit secrets or local config
-openclaw.json
-~/.openclaw/
+# Secrets
+.env
 *.env
 *.local.json
 *.secret
-*.bak
-*.swp
-*.log
-*.pyc
-.DS_Store
 keys.md
 
 # Node.js
@@ -21,23 +15,18 @@ dist/
 # Runtime data
 data/
 
-# Python virtual environment
+# Logs
+*.log
+
+# OS
+.DS_Store
+*.bak
+*.swp
+*.pyc
+
+# Python
 .venv/
 __pycache__/
 
-# OpenClaw runtime state (создаётся автоматически в каждом workspace)
-**/.openclaw/
-
-# OpenClaw auto-generated templates (можно добавить, если полезны)
-# USER.md
-# HEARTBEAT.md
-skills/taskboard/data/telegram.conf
-
-# Claude Code — авто-память (per-machine, не шарить)
+# Claude Code auto-memory
 .claude/memory/
-
-# skills.sh — загружаемые скилы (аналог node_modules, не коммитить)
-# Для установки:
-#   npx skills add https://github.com/antfu/skills --skill vitest --yes
-#   npx skills add https://github.com/github/awesome-copilot --skill git-commit --yes
-#   npx skills add https://github.com/wshobson/agents --skill typescript-advanced-types --yes

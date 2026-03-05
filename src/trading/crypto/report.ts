@@ -301,7 +301,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(formatJsonReport(data), null, 2));
   } else {
     const text = formatTelegramReport(data);
-    await sendViaOpenClaw(text, 'crypto-trader');
+    await sendViaOpenClaw(text);
     console.log(text);
   }
 }

@@ -1,5 +1,0 @@
-# Tech Lead — инструменты разработки
-cd /root/Projects/openclaw-assistent && npx tsc --noEmit
-cd /root/Projects/openclaw-assistent && npx eslint src/
-cd /root/Projects/openclaw-assistent && npx prettier --check src/
-cd /root/Projects/openclaw-assistent && npx vitest run

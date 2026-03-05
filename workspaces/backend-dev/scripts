@@ -1,6 +1,0 @@
-# Backend Dev — инструменты
-cd /root/Projects/openclaw-assistent && npx tsc --noEmit
-cd /root/Projects/openclaw-assistent && npx eslint src/ --fix
-cd /root/Projects/openclaw-assistent && npx prettier --write src/
-cd /root/Projects/openclaw-assistent && npx vitest run
-cd /root/Projects/openclaw-assistent && npm run build

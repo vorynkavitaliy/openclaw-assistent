@@ -22,11 +22,19 @@ export function buildVolumeProfile(candles: OHLC[], recentTrades: RecentTrade[])
   // High Volume Nodes из свечей
   const highVolumeNodes = findHighVolumeNodes(candles);
 
+  // Средний объём одной свечи в USD для нормализации delta
+  const avgCandleVolume =
+    candles.length > 0
+      ? candles.reduce((s, c) => s + c.volume * ((c.high + c.low + c.close) / 3), 0) /
+        candles.length
+      : 0;
+
   return {
     vwap,
     volumeDelta,
     relativeVolume,
     highVolumeNodes,
+    avgCandleVolumeUsd: Math.round(avgCandleVolume),
   };
 }
 

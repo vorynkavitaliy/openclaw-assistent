@@ -168,6 +168,7 @@ export interface VolumeProfile {
   volumeDelta: number; // buy_vol - sell_vol
   relativeVolume: number; // current / average
   highVolumeNodes: number[];
+  avgCandleVolumeUsd: number; // средний объём свечи в USD для нормализации
 }
 
 export interface PivotLevels {

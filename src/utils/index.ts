@@ -18,4 +18,4 @@ export type { LogLevel } from './logger.js';
 export { runMain } from './process.js';
 export { retryAsync } from './retry.js';
 export type { RetryOptions } from './retry.js';
-export { fmt, fmtPrice, sendViaOpenClaw } from './telegram.js';
+export { fmt, fmtPrice, sendTelegram, sendViaOpenClaw } from './telegram.js';

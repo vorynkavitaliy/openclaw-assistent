@@ -62,6 +62,48 @@ export function saveSnapshots(cycleId: string, signals: TradeSignalInternal[]): 
   fs.appendFileSync(SNAPSHOTS_FILE, lines.join('\n') + '\n', 'utf8');
 }
 
+/**
+ * Сохраняет confluence score для любой пары (даже если ниже порога).
+ * Используется для истории scores и калибровки.
+ */
+export function saveScore(
+  cycleId: string,
+  pair: string,
+  price: number,
+  regime: string,
+  confluenceScore: number,
+  confluenceSignal: string,
+  confidence: number,
+): void {
+  const dir = path.dirname(SNAPSHOTS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  try {
+    if (fs.existsSync(SNAPSHOTS_FILE) && fs.statSync(SNAPSHOTS_FILE).size > MAX_SIZE_BYTES) {
+      fs.unlinkSync(SNAPSHOTS_FILE);
+    }
+  } catch {
+    // OK
+  }
+
+  const snap: MarketSnapshot = {
+    timestamp: new Date().toISOString(),
+    cycleId,
+    pair,
+    price,
+    side: confluenceScore >= 0 ? 'Buy' : 'Sell',
+    regime,
+    confluenceScore,
+    confluenceSignal,
+    confidence,
+    sl: 0,
+    tp: 0,
+    rr: 0,
+    details: [],
+  };
+  fs.appendFileSync(SNAPSHOTS_FILE, JSON.stringify(snap) + '\n', 'utf8');
+}
+
 export function loadRecentSnapshots(pair: string, maxCount = 12): MarketSnapshot[] {
   if (!fs.existsSync(SNAPSHOTS_FILE)) return [];
 

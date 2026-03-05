@@ -294,11 +294,19 @@ export function calculateAtr(
     trs.push(tr);
   }
 
-  const recentTrs = trs.slice(-period);
+  // Wilder smoothing (как в RSI/ADX): первое значение = SMA, далее экспоненциальное
+  let atr = 0;
+  for (let i = 0; i < period; i++) {
+    atr += trs[i] ?? 0;
+  }
+  atr /= period;
 
-  const avg = recentTrs.reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < trs.length; i++) {
+    atr = (atr * (period - 1) + (trs[i] ?? 0)) / period;
+  }
+
   // Динамическое округление: 8 знаков для дешёвых активов, чтобы ATR не обнулялся
-  return parseFloat(avg.toPrecision(8));
+  return parseFloat(atr.toPrecision(8));
 }
 
 /**

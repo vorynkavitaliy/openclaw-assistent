@@ -3,9 +3,13 @@ import { retryAsync } from './retry.js';
 
 const log = createLogger('telegram');
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
-const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+function getToken(): string {
+  return process.env.TELEGRAM_BOT_TOKEN ?? '';
+}
+
+function getChatId(): string {
+  return process.env.TELEGRAM_CHAT_ID ?? '';
+}
 
 /**
  * Отправить сообщение в Telegram напрямую через Bot API.
@@ -14,7 +18,10 @@ export async function sendTelegram(
   message: string,
   parseMode: 'HTML' | 'Markdown' = 'Markdown',
 ): Promise<boolean> {
-  if (!BOT_TOKEN || !CHAT_ID) {
+  const token = getToken();
+  const chatId = getChatId();
+
+  if (!token || !chatId) {
     log.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — skipping send');
     return false;
   }
@@ -22,11 +29,11 @@ export async function sendTelegram(
   try {
     const resp = await retryAsync(
       () =>
-        fetch(`${API_BASE}/sendMessage`, {
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: CHAT_ID,
+            chat_id: chatId,
             text: message,
             parse_mode: parseMode,
           }),

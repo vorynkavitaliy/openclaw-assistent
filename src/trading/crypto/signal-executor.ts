@@ -147,6 +147,15 @@ export async function executeSignals(
       continue;
     }
 
+    // Валидация SL/TP перед отправкой ордера
+    if (!sig.sl || !sig.tp || sig.sl === sig.entryPrice || sig.tp === sig.entryPrice) {
+      logDecision(cycleId, 'skip', sig.pair, 'INVALID_SL_TP', [
+        `SL=${sig.sl}, TP=${sig.tp}, Entry=${sig.entryPrice} — невалидные уровни`,
+      ]);
+      results.push({ ...sig, action: 'SKIP: invalid SL/TP values' });
+      continue;
+    }
+
     try {
       await setLeverage(sig.pair, config.defaultLeverage);
 

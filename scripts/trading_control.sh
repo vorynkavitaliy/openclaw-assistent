@@ -30,6 +30,10 @@ CRON_TAG_CRYPTO="# openclaw-crypto-monitor"
 CRON_TAG_FOREX="# openclaw-forex-monitor"
 
 send_telegram() {
+  # Пропускаем отправку если вызвано из бота (бот сам отправляет сообщения)
+  if [[ "${NO_TELEGRAM:-}" == "1" ]]; then
+    return 0
+  fi
   local msg="$1"
   curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
     -d chat_id="${TELEGRAM_CHAT}" \
@@ -79,12 +83,15 @@ create_cron() {
     return 0
   fi
 
+  local node_bin
+  node_bin="$(dirname "$(which node)")"
+
   local cron_line=""
   if [[ "$agent" == "crypto-trader" ]]; then
     # Каждые 5 минут: monitor.ts анализирует рынок, триггерит LLM при необходимости
-    cron_line="*/5 * * * * cd ${PROJECT_DIR} && /root/.nvm/versions/node/v22.22.0/bin/npx tsx src/trading/crypto/monitor.ts >> ${LOG_DIR}/monitor.log 2>&1 ${CRON_TAG_CRYPTO}"
+    cron_line="*/5 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/crypto/monitor.ts >> ${LOG_DIR}/monitor.log 2>&1 ${CRON_TAG_CRYPTO}"
   elif [[ "$agent" == "forex-trader" ]]; then
-    cron_line="*/10 * * * * cd ${PROJECT_DIR} && /root/.nvm/versions/node/v22.22.0/bin/npx tsx src/trading/forex/monitor.ts >> ${LOG_DIR}/forex-monitor.log 2>&1 ${CRON_TAG_FOREX}"
+    cron_line="*/10 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/forex/monitor.ts >> ${LOG_DIR}/forex-monitor.log 2>&1 ${CRON_TAG_FOREX}"
   else
     echo -e "${RED}Unknown agent: $agent${NC}"
     return 1
@@ -124,6 +131,23 @@ do_start() {
     exit 1
   fi
 
+  # Проверяем, уже запущен ли
+  local already_running=true
+  if [[ "$target" == "all" ]]; then
+    if ! has_cron "crypto-trader" || ! has_cron "forex-trader"; then
+      already_running=false
+    fi
+  else
+    if ! has_cron "$target"; then
+      already_running=false
+    fi
+  fi
+
+  if [[ "$already_running" == "true" ]]; then
+    echo "ALREADY_RUNNING"
+    return 0
+  fi
+
   echo -e "${GREEN}Starting trading bots...${NC}"
 
   if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
@@ -151,16 +175,9 @@ EOF
 📌 Агенты: ${target}
 🛑 Для остановки: СТОП"
 
-  # Первый запуск НЕМЕДЛЕННО
-  echo -e "${GREEN}Running first cycle immediately...${NC}"
-  if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
-    mkdir -p "$LOG_DIR"
-    cd "$PROJECT_DIR" && npx tsx src/trading/crypto/monitor.ts >> "${LOG_DIR}/monitor.log" 2>&1 &
-    echo -e "${GREEN}crypto-trader: first cycle launched (background)${NC}"
-  fi
-
+  mkdir -p "$LOG_DIR"
   echo ""
-  echo -e "${GREEN}Trading started. Next cycle: in 5 min.${NC}"
+  echo -e "${GREEN}Trading started. Cron will run every 5 min.${NC}"
 }
 
 do_stop() {
@@ -176,6 +193,23 @@ do_stop() {
     echo -e "${RED}Unknown agent: $target${NC}"
     echo "Valid agents: crypto-trader, forex-trader"
     exit 1
+  fi
+
+  # Проверяем, уже остановлен ли
+  local any_running=false
+  if [[ "$target" == "all" ]]; then
+    if has_cron "crypto-trader" || has_cron "forex-trader"; then
+      any_running=true
+    fi
+  else
+    if has_cron "$target"; then
+      any_running=true
+    fi
+  fi
+
+  if [[ "$any_running" == "false" ]]; then
+    echo "ALREADY_STOPPED"
+    return 0
   fi
 
   echo -e "${RED}Stopping trading bots...${NC}"

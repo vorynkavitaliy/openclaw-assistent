@@ -439,9 +439,9 @@ function scoreRegime(regime: MarketRegime, details: string[]): number {
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function getSignal(score: number): ConfluenceSignal {
-  if (score >= 70) return 'STRONG_LONG';
-  if (score >= 40) return 'LONG';
-  if (score <= -70) return 'STRONG_SHORT';
-  if (score <= -40) return 'SHORT';
+  if (score >= 55) return 'STRONG_LONG';
+  if (score >= 25) return 'LONG';
+  if (score <= -55) return 'STRONG_SHORT';
+  if (score <= -25) return 'SHORT';
   return 'NEUTRAL';
 }

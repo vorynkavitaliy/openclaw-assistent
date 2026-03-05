@@ -1,113 +1,141 @@
 #!/usr/bin/env bash
-# Market Summary — выводит последние данные монитора для оркестратора
+# Market Summary — читабельный формат для Telegram
 set -euo pipefail
 
 PROJECT_DIR="/root/Projects/openclaw-assistent"
 STATE_FILE="${PROJECT_DIR}/data/state.json"
 SNAPSHOTS_FILE="${PROJECT_DIR}/data/market-snapshots.jsonl"
 DECISIONS_FILE="${PROJECT_DIR}/data/decisions.jsonl"
-WATCHLIST_FILE="${PROJECT_DIR}/data/watchlist.json"
 
-echo "=== CRYPTO MARKET SUMMARY $(date -u '+%Y-%m-%d %H:%M UTC') ==="
-
-# State
-echo ""
-echo "--- STATE ---"
-if [ -f "$STATE_FILE" ]; then
-  python3 -c "
-import json
-with open('$STATE_FILE') as f:
-    s = json.load(f)
-d = s.get('daily', {})
-b = s.get('balance', {})
-print(f'Balance: \${b.get(\"total\", 0):.0f} (available: \${b.get(\"available\", 0):.0f})')
-print(f'Positions: {len(s.get(\"positions\", []))}')
-for p in s.get('positions', []):
-    pnl = float(p.get('unrealisedPnl', '0') or '0')
-    emoji = '+' if pnl >= 0 else ''
-    print(f'  {p[\"symbol\"]} {p[\"side\"]} x{p.get(\"leverage\",\"?\")} size={p[\"size\"]} entry={p[\"entryPrice\"]} P&L={emoji}\${pnl:.2f} SL={p.get(\"stopLoss\",\"-\")} TP={p.get(\"takeProfit\",\"-\")}')
-print(f'Daily: trades={d.get(\"trades\",0)} wins={d.get(\"wins\",0)} losses={d.get(\"losses\",0)} stops={d.get(\"stops\",0)} P&L=\${d.get(\"totalPnl\",0):.2f}')
-print(f'Stop day: {d.get(\"stopDay\", False)}')
-llm = s.get('lastLLMCycleAt')
-mon = s.get('lastMonitor')
-print(f'Last monitor: {mon or \"never\"}')
-print(f'Last LLM cycle: {llm or \"never\"}')
-" 2>/dev/null || echo "(state parse error)"
-fi
-
-# Latest confluence scores from snapshots
-echo ""
-echo "--- LATEST CONFLUENCE SCORES ---"
-if [ -f "$SNAPSHOTS_FILE" ]; then
-  python3 -c "
-import json
+python3 - "$STATE_FILE" "$SNAPSHOTS_FILE" "$DECISIONS_FILE" << 'PYEOF'
+import json, sys
 from collections import defaultdict
+from datetime import datetime, timezone
 
-scores = defaultdict(list)
-with open('$SNAPSHOTS_FILE') as f:
-    for line in f:
-        try:
-            s = json.loads(line.strip())
-            scores[s['pair']].append(s)
-        except:
-            pass
+STATE_FILE = sys.argv[1]
+SNAPSHOTS_FILE = sys.argv[2]
+DECISIONS_FILE = sys.argv[3]
 
-# Show latest score per pair
-pairs = sorted(scores.keys())
-for pair in pairs:
-    latest = scores[pair][-1]
-    hist = [x['confluenceScore'] for x in scores[pair][-4:]]
-    hist_str = ' -> '.join(str(h) for h in hist)
-    print(f'{pair}: score={latest[\"confluenceScore\"]} conf={latest[\"confidence\"]}% regime={latest[\"regime\"]} signal={latest[\"confluenceSignal\"]} [{hist_str}]')
-" 2>/dev/null || echo "(no snapshots)"
-else
-  echo "(no snapshots file)"
-fi
+state = {}
+try:
+    with open(STATE_FILE) as f:
+        state = json.load(f)
+except:
+    pass
 
-# Watchlist
-echo ""
-echo "--- WATCHLIST ---"
-if [ -f "$WATCHLIST_FILE" ]; then
-  python3 -c "
-import json
-with open('$WATCHLIST_FILE') as f:
-    w = json.load(f)
-items = w.get('items', [])
-if not items:
-    print('(empty)')
-else:
-    for item in items:
-        print(f'{item[\"pair\"]}: reason={item.get(\"reason\",\"?\")} expires={item.get(\"expiresAt\",\"?\")}')
-" 2>/dev/null || echo "(empty)"
-else
-  echo "(no watchlist)"
-fi
+b = state.get('balance', {})
+d = state.get('daily', {})
+positions = state.get('positions', [])
+last_mon = state.get('lastMonitor', '')
 
-# Recent decisions (last 10)
-echo ""
-echo "--- RECENT DECISIONS (last 10) ---"
-if [ -f "$DECISIONS_FILE" ]; then
-  tail -10 "$DECISIONS_FILE" | python3 -c "
-import sys, json
-for line in sys.stdin:
+mon_ago = ''
+if last_mon:
     try:
-        d = json.loads(line.strip())
-        ts = d.get('timestamp','')[:16]
-        sym = d.get('symbol', d.get('pair','?'))
-        action = d.get('action','?')
-        data = d.get('data', {})
-        score = data.get('confluenceScore','')
-        regime = data.get('regime','')
-        reason_list = d.get('reasoning', [])
-        reason = reason_list[0][:60] if reason_list else ''
-        extra = f' score={score} {regime}' if score else ''
-        print(f'[{ts}] {sym} {action}{extra}: {reason}')
+        dt = datetime.fromisoformat(last_mon.replace('Z', '+00:00'))
+        mins = int((datetime.now(timezone.utc) - dt).total_seconds() / 60)
+        mon_ago = f'{mins} мин назад'
     except:
-        pass
-" 2>/dev/null || echo "(no decisions)"
-else
-  echo "(no decisions file)"
-fi
+        mon_ago = last_mon[:16]
 
-echo ""
-echo "=== END ==="
+lines = []
+lines.append(f'💰 ${b.get("total", 0):,.0f} | Позиций: {len(positions)} | Сделок: {d.get("trades", 0)} | P&L: ${d.get("totalPnl", 0):+.2f}')
+if mon_ago:
+    lines.append(f'🔄 Обновлено: {mon_ago}')
+lines.append('')
+
+# --- CONFLUENCE SCORES ---
+scores = defaultdict(list)
+try:
+    with open(SNAPSHOTS_FILE) as f:
+        for line in f:
+            try:
+                s = json.loads(line.strip())
+                scores[s['pair']].append(s)
+            except:
+                pass
+except:
+    pass
+
+if scores:
+    pairs_sorted = sorted(scores.keys(), key=lambda p: abs(scores[p][-1]['confluenceScore']), reverse=True)
+
+    lines.append('🎯 Сигналы (порог входа: 32-35)')
+    lines.append('')
+
+    for pair in pairs_sorted:
+        latest = scores[pair][-1]
+        sc = latest['confluenceScore']
+        conf = latest['confidence']
+        regime = latest['regime']
+        abs_sc = abs(sc)
+
+        if abs_sc >= 50:
+            bar = '🟢🟢🟢🟢🟢'
+        elif abs_sc >= 35:
+            bar = '🟡🟡🟡🟡⚪'
+        elif abs_sc >= 20:
+            bar = '🟠🟠🟠⚪⚪'
+        elif abs_sc >= 10:
+            bar = '🔴🔴⚪⚪⚪'
+        else:
+            bar = '⚫⚪⚪⚪⚪'
+
+        direction = '📉' if sc < -5 else ('📈' if sc > 5 else '➖')
+        sym = pair.replace('USDT', '')
+
+        hist = [x['confluenceScore'] for x in scores[pair][-4:]]
+        if len(hist) >= 2:
+            diff = hist[-1] - hist[0]
+            trend = '↗' if diff > 5 else ('↘' if diff < -5 else '→')
+        else:
+            trend = ''
+
+        regime_short = {
+            'RANGING': 'Бок', 'WEAK_TREND': 'СлТр', 'WEAKTREND': 'СлТр',
+            'STRONG_TREND': 'Тренд', 'VOLATILE': 'Вол', 'CHOPPY': 'Хаос'
+        }.get(regime, regime[:3])
+
+        lines.append(f'{direction} {sym:<5} {bar} {sc:+3d} ({conf}%) [{regime_short}] {trend}')
+
+# --- РЕШЕНИЯ ---
+decisions = []
+try:
+    with open(DECISIONS_FILE) as f:
+        all_lines = f.readlines()
+        for line in all_lines[-20:]:
+            try:
+                decisions.append(json.loads(line.strip()))
+            except:
+                pass
+except:
+    pass
+
+if decisions:
+    entries = [dd for dd in decisions if dd.get('action') in ('ENTER', 'EXECUTE')]
+    skips = [dd for dd in decisions if dd.get('action') not in ('ENTER', 'EXECUTE')]
+
+    lines.append('')
+    if entries:
+        lines.append('✅ Последние входы:')
+        for dd in entries[-3:]:
+            ts = dd.get('timestamp', '')[:16]
+            sym = dd.get('symbol', dd.get('pair', '?')).replace('USDT', '')
+            lines.append(f'  {ts} {sym}')
+    else:
+        skip_reasons = defaultdict(int)
+        for dd in skips:
+            skip_reasons[dd.get('action', '?')] += 1
+        top_reason = max(skip_reasons, key=skip_reasons.get) if skip_reasons else '?'
+        reason_map = {
+            'CONFLUENCEBELOWTHRESHOLD': 'сигналы слишком слабые',
+            'CONFLUENCE_BELOW_THRESHOLD': 'сигналы слишком слабые',
+            'SKIP': 'LLM пропустил',
+            'WAIT': 'LLM ждёт подтверждения',
+            'NOSLOTS': 'нет свободных слотов',
+            'NO_SLOTS': 'нет свободных слотов',
+        }
+        nice_reason = reason_map.get(top_reason, top_reason)
+        lines.append(f'⏸ Нет входов — {nice_reason}')
+
+print('\n'.join(lines))
+PYEOF

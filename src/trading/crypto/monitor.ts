@@ -26,12 +26,12 @@ const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
 
 // Fast-track: сигналы выше этих порогов исполняются немедленно без LLM
-const FAST_TRACK_CONFLUENCE = 65;
+const FAST_TRACK_CONFLUENCE = 45;
 const FAST_TRACK_CONFIDENCE = 75;
 
 // LLM trigger условия
-const LLM_COOLDOWN_MS = 30 * 60 * 1000; // 30 мин минимум между LLM вызовами
-const SKIP_DEDUP_HOURS = 2; // Не отправлять пару в LLM если она была SKIP < 2ч назад
+const LLM_COOLDOWN_MS = 10 * 60 * 1000; // 10 мин между LLM вызовами
+const SKIP_DEDUP_HOURS = 0.5; // 30 мин — не отправлять пару в LLM если она была SKIP недавно
 
 function checkStatus(): { ok: boolean; reason: string } {
   state.load();
@@ -179,10 +179,6 @@ async function main(): Promise<void> {
 
   if (fastTrack.length > 0 && !DRY_RUN && hasFreePositionSlots()) {
     for (const sig of fastTrack) {
-      logDecision(cycleId, 'entry', sig.pair, 'FAST_TRACK', [
-        `Confluence ${sig.confluence.total} >= ${FAST_TRACK_CONFLUENCE}, confidence ${sig.confidence}% >= ${FAST_TRACK_CONFIDENCE}%`,
-        `Bypass LLM — immediate execution`,
-      ]);
       removeFromWatchlist(sig.pair);
     }
 
@@ -220,7 +216,7 @@ async function main(): Promise<void> {
 
       const enterSignals = candidates.filter((sig) => {
         const dec = llmDecisions.find((d) => d.pair === sig.pair);
-        return !dec || dec.decision === 'ENTER';
+        return dec?.decision === 'ENTER';
       });
 
       for (const dec of llmDecisions) {

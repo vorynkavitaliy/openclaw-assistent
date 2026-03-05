@@ -10,12 +10,11 @@ if [[ -f "${PROJECT}/.env" ]]; then
   set -a; source "${PROJECT}/.env"; set +a
 fi
 
-echo "=== CRYPTO FULL REPORT $(date -u '+%Y-%m-%d %H:%M UTC') ==="
+# Добавляем node в PATH (для subprocess)
+export PATH="/root/.nvm/versions/node/v22.22.0/bin:$PATH"
 
-# 1. Report (баланс, позиции, P&L)
-echo ""
-echo "--- REPORT ---"
-npx tsx "${PROJECT}/src/trading/crypto/report.ts" --format text 2>/dev/null || echo "(report error)"
+# 1. Report (баланс, позиции, P&L) — без отправки в telegram (бот сам отправит)
+npx tsx "${PROJECT}/src/trading/crypto/report.ts" --format text --no-send 2>/dev/null || echo "(report error)"
 
 # 2. Market Summary (scores, decisions)
 echo ""

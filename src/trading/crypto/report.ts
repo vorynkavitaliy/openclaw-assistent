@@ -1,4 +1,4 @@
-import { getArgOrDefault } from '../../utils/args.js';
+import { getArgOrDefault, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
 import { fmt, fmtPrice, sendViaOpenClaw } from '../../utils/telegram.js';
@@ -301,7 +301,9 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(formatJsonReport(data), null, 2));
   } else {
     const text = formatTelegramReport(data);
-    await sendViaOpenClaw(text);
+    if (!hasFlag('no-send')) {
+      await sendViaOpenClaw(text);
+    }
     console.log(text);
   }
 }

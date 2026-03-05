@@ -41,8 +41,10 @@ async function getUpdates(): Promise<TelegramUpdate[]> {
 }
 
 // Убираем ANSI escape-коды из вывода скриптов
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /\x1B\[[0-9;]*m/g;
 function stripAnsi(str: string): string {
-  return str.replace(/\x1B\[[0-9;]*m/g, '');
+  return str.replace(ANSI_REGEX, '');
 }
 
 function runScript(script: string, args: string[] = []): string {

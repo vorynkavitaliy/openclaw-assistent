@@ -63,7 +63,11 @@ function getClient(): RestClientV5 {
 // Обёртка для auth API вызовов с rate limiting
 async function withRateLimit<T>(fn: (client: RestClientV5) => Promise<T>): Promise<T> {
   await limiter.acquire();
-  return fn(getClient());
+  try {
+    return await fn(getClient());
+  } finally {
+    limiter.release();
+  }
 }
 
 async function apiGet(
@@ -81,8 +85,8 @@ async function apiGet(
     url = `${url}?${query}`;
   }
 
+  await limiter.acquire();
   try {
-    await limiter.acquire();
     const resp = await retryAsync(
       () =>
         fetch(url, {
@@ -101,6 +105,8 @@ async function apiGet(
     return data.result ?? {};
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    limiter.release();
   }
 }
 
@@ -276,27 +282,36 @@ export interface OpenOrder {
 }
 
 export async function getOpenOrdersFull(symbol?: string): Promise<OpenOrder[]> {
-  const result = await apiGet('/v5/order/realtime', {
-    category: CATEGORY,
-    ...(symbol ? { symbol: symbol.toUpperCase() } : { settleCoin: 'USDT' }),
-  });
+  try {
+    const res = await withRateLimit((c) =>
+      c.getActiveOrders({
+        category: CATEGORY,
+        ...(symbol ? { symbol: symbol.toUpperCase() } : { settleCoin: 'USDT' }),
+      }),
+    );
 
-  if ('error' in result) {
-    log.warn('Failed to fetch open orders', { error: result.error as string });
+    if (res.retCode !== 0) {
+      log.warn('Failed to fetch open orders', { error: res.retMsg });
+      return [];
+    }
+
+    const list = ((res.result as { list?: unknown[] })?.list ?? []) as Array<
+      Record<string, string>
+    >;
+    return list
+      .filter((o) => o.symbol)
+      .map((o) => ({
+        orderId: o.orderId ?? '',
+        symbol: o.symbol ?? '',
+        side: o.side ?? '',
+        price: o.price ?? '0',
+        qty: o.qty ?? '0',
+        createdTime: o.createdTime ?? '0',
+      }));
+  } catch (err) {
+    log.warn('Failed to fetch open orders', { error: (err as Error).message });
     return [];
   }
-
-  const list = (result.list ?? []) as Array<Record<string, string>>;
-  return list
-    .filter((o) => o.symbol)
-    .map((o) => ({
-      orderId: o.orderId ?? '',
-      symbol: o.symbol ?? '',
-      side: o.side ?? '',
-      price: o.price ?? '0',
-      qty: o.qty ?? '0',
-      createdTime: o.createdTime ?? '0',
-    }));
 }
 
 export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
@@ -404,12 +419,8 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
 }
 
 export async function partialClosePosition(symbol: string, qty: string): Promise<OrderResult> {
-  const posRes = await retryAsync(
-    async () => {
-      await limiter.acquire();
-      return getClient().getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
-    },
-    { retries: 2, backoffMs: 500 },
+  const posRes = await withRateLimit((c) =>
+    c.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() }),
   );
 
   if (posRes.retCode !== 0) {

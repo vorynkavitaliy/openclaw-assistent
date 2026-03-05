@@ -2,6 +2,8 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('rate-limiter');
 
+const SAFETY_TIMEOUT_MS = 30_000;
+
 export interface RateLimiterStats {
   pending: number;
   completed: number;
@@ -11,6 +13,7 @@ export interface RateLimiterStats {
 
 export interface RateLimiter {
   acquire(): Promise<void>;
+  release(): void;
   getStats(): RateLimiterStats;
 }
 
@@ -20,10 +23,15 @@ export function createRateLimiter(options: {
 }): RateLimiter {
   const { maxPerSecond, maxConcurrent = maxPerSecond } = options;
 
+  // Sliding window: timestamps успешно выданных слотов
   const timestamps: number[] = [];
+
+  // Очередь ожидающих concurrent слота
+  const concurrentQueue: Array<() => void> = [];
+
+  let concurrentNow = 0;
   let pending = 0;
   let completed = 0;
-  let concurrentNow = 0;
 
   function cleanup(now: number): void {
     const cutoff = now - 1000;
@@ -32,31 +40,34 @@ export function createRateLimiter(options: {
     }
   }
 
-  async function acquire(): Promise<void> {
-    // Ожидаем пока concurrent слот освободится
-    while (concurrentNow >= maxConcurrent) {
-      await new Promise((r) => setTimeout(r, 50));
+  function release(): void {
+    concurrentNow = Math.max(0, concurrentNow - 1);
+
+    // Будим первого из очереди ожидающих concurrent слота
+    const next = concurrentQueue.shift();
+    if (next !== undefined) {
+      next();
+    }
+  }
+
+  async function waitForConcurrentSlot(): Promise<void> {
+    if (concurrentNow < maxConcurrent) {
+      return;
     }
 
-    pending++;
+    // Ждём пока release() разбудит нас
+    await new Promise<void>((resolve) => {
+      concurrentQueue.push(resolve);
+    });
+  }
 
-    // Ожидаем пока rate limit позволит запрос
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  async function waitForRateWindow(): Promise<void> {
     while (true) {
       const now = Date.now();
       cleanup(now);
 
       if (timestamps.length < maxPerSecond) {
         timestamps.push(now);
-        pending--;
-        concurrentNow++;
-
-        // Авто-декремент concurrent через timeout (запрос ~1-3с max)
-        setTimeout(() => {
-          concurrentNow = Math.max(0, concurrentNow - 1);
-        }, 5000);
-
-        completed++;
         return;
       }
 
@@ -65,11 +76,36 @@ export function createRateLimiter(options: {
       const waitMs = Math.max(10, oldestTs + 1000 - now + 1);
 
       if (waitMs > 500) {
-        log.debug('Rate limiter: waiting', { waitMs, queued: timestamps.length });
+        log.debug('Rate limiter: ожидание окна', { waitMs, queued: timestamps.length });
       }
 
-      await new Promise((r) => setTimeout(r, waitMs));
+      await new Promise<void>((r) => setTimeout(r, waitMs));
     }
+  }
+
+  async function acquire(): Promise<void> {
+    pending++;
+
+    // Ждём concurrent слот через очередь (не busy-wait)
+    await waitForConcurrentSlot();
+
+    concurrentNow++;
+
+    // Ждём rate window (sliding window по timestamps)
+    await waitForRateWindow();
+
+    pending--;
+    completed++;
+
+    // Safety timeout: если release() не был вызван за 30с — освобождаем автоматически
+    setTimeout(() => {
+      // Проверяем косвенно: если concurrentNow > 0, значит кто-то не вызвал release
+      // Нельзя знать точно какой именно слот — просто освобождаем один
+      if (concurrentNow > 0) {
+        log.warn('Rate limiter: safety timeout — release() не был вызван за 30с, освобождаем слот');
+        release();
+      }
+    }, SAFETY_TIMEOUT_MS);
   }
 
   function getStats(): RateLimiterStats {
@@ -83,5 +119,5 @@ export function createRateLimiter(options: {
     };
   }
 
-  return { acquire, getStats };
+  return { acquire, release, getStats };
 }

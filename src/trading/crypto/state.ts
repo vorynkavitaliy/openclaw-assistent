@@ -169,6 +169,7 @@ export function resetDaily(): void {
     stopDay: false,
     stopDayReason: null,
   };
+  save();
 }
 
 export function recordTrade(trade: TradeInput): void {

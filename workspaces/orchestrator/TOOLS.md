@@ -10,18 +10,18 @@ All commands MUST be executed via the `exec` tool. Do NOT write commands as text
 
 ```bash
 # Start SPECIFIC agent (creates 2h cron + runs FIRST cycle immediately)
-bash scripts/trading_control.sh start crypto-trader
-bash scripts/trading_control.sh start forex-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh start crypto-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh start forex-trader
 
 # Stop SPECIFIC agent (removes cron, clears sessions, $0 cost)
-bash scripts/trading_control.sh stop crypto-trader
-bash scripts/trading_control.sh stop forex-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh stop crypto-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh stop forex-trader
 
 # Status (shows crons, recent activity, sessions)
-bash scripts/trading_control.sh status
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh status
 
 # Trading summary
-bash scripts/trading_control.sh summary
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh summary
 ```
 
 **⛔ NEVER run `start` or `stop` without specifying agent name!**
@@ -66,13 +66,13 @@ openclaw agent --agent crypto-trader -m "URGENT: Открой LONG BTCUSDT qty=0
 
 ```bash
 # Create task for agent
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee crypto-trader --priority high
+cd /root/Projects/openclaw-assistent && bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee crypto-trader --priority high
 
 # List tasks
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list
+cd /root/Projects/openclaw-assistent && bash skills/taskboard/scripts/taskboard.sh --agent orchestrator list
 
 # Comment on task
-bash skills/taskboard/scripts/taskboard.sh --agent orchestrator comment TASK-XXX "text"
+cd /root/Projects/openclaw-assistent && bash skills/taskboard/scripts/taskboard.sh --agent orchestrator comment TASK-XXX "text"
 ```
 
 ---

@@ -26,7 +26,7 @@ ALL agents OFF by default. Idle cost = $0.
 ## Task Flow (ALWAYS follow this)
 
 ```
-1. Create task: bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee AGENT --priority high
+1. Create task: cd /root/Projects/openclaw-assistent && bash skills/taskboard/scripts/taskboard.sh --agent orchestrator create --title "..." --assignee AGENT --priority high
 2. IMMEDIATELY send: sessions_send target=AGENT message="TASK-XXX: Brief description."
 3. Wait for agent to complete. Report result to user.
 ```
@@ -38,24 +38,27 @@ ALL agents OFF by default. Idle cost = $0.
 ## Trading Control
 
 ```bash
-# Start (injects heartbeat 1h + enables)
-bash /root/Projects/openclaw-assistent/scripts/trading_control.sh start
+# Start SPECIFIC agent (creates 2h cron + runs FIRST cycle immediately)
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh start crypto-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh start forex-trader
 
-# Stop (removes configs + disables)
-bash /root/Projects/openclaw-assistent/scripts/trading_control.sh stop
+# Stop SPECIFIC agent (removes cron, clears sessions, $0 cost)
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh stop crypto-trader
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh stop forex-trader
 
 # Status
-bash /root/Projects/openclaw-assistent/scripts/trading_control.sh status
+cd /root/Projects/openclaw-assistent && bash scripts/trading_control.sh status
 ```
 
 Only enable heartbeat when user EXPLICITLY asks. "торгуй/мониторь/начни" → start. "стоп/останови" → stop.
+**⛔ ALWAYS specify agent name!**
 
 ## Trading Params
 
 ```bash
-bash /root/Projects/openclaw-assistent/scripts/trading_params.sh show
-bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set forex daily_target 200
-bash /root/Projects/openclaw-assistent/scripts/trading_params.sh set crypto max_sl_per_trade 500
+cd /root/Projects/openclaw-assistent && bash scripts/trading_params.sh show
+cd /root/Projects/openclaw-assistent && bash scripts/trading_params.sh set forex daily_target 200
+cd /root/Projects/openclaw-assistent && bash scripts/trading_params.sh set crypto max_sl_per_trade 500
 ```
 
 Param mapping: Цель→daily_target, Просадка→max_daily_loss, SL→max_sl_per_trade, Бюджет→budget, Плечо→max_leverage

@@ -3,5 +3,5 @@ openclaw status
 openclaw status --deep
 openclaw gateway restart
 openclaw logs --follow
-npx tsx src/trading/crypto/report.ts
-npx tsx src/market/digest.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/report.ts
+cd /root/Projects/openclaw-assistent && npx tsx src/market/digest.ts

@@ -5,7 +5,7 @@
 ## Стек и инструменты
 
 - **Runtime**: Node.js ≥22, TypeScript 5.x, ES Modules (`.js` в импортах!)
-- **Build**: `npm run build` → tsc компиляция
+- **Build**: `cd /root/Projects/openclaw-assistent && npm run build` → tsc компиляция
 - **Lint**: ESLint strict mode
 - **Formatters**: Prettier
 
@@ -35,10 +35,7 @@ log.error('Ошибка', error);
 ```typescript
 import { retryAsync } from '../../utils/retry.js';
 
-const result = await retryAsync(
-  () => apiCall(),
-  { retries: 3, backoffMs: 1000 }
-);
+const result = await retryAsync(() => apiCall(), { retries: 3, backoffMs: 1000 });
 ```
 
 ### Credentials (НИКОГДА не хардкодить)
@@ -94,7 +91,7 @@ if (!firstItem) return null;
 ## Pre-commit
 
 ```bash
-npm run lint && npm run build
+cd /root/Projects/openclaw-assistent && npm run lint && npm run build
 ```
 
 Формат: `feat(crypto):`, `fix(forex):`, `refactor(shared):`

@@ -6,19 +6,19 @@
 
 ```bash
 # TypeScript проверка типов
-npm run typecheck
+cd /root/Projects/openclaw-assistent && npm run typecheck
 
 # Полная сборка (финальная проверка)
-npm run build
+cd /root/Projects/openclaw-assistent && npm run build
 
 # ESLint
-npm run lint
+cd /root/Projects/openclaw-assistent && npm run lint
 
 # Vitest — все тесты
-npm run test:run
+cd /root/Projects/openclaw-assistent && npm run test:run
 
 # Vitest — watch mode
-npm run test
+cd /root/Projects/openclaw-assistent && npm run test
 ```
 
 ## Структура тестов
@@ -29,13 +29,13 @@ npm run test
 
 ## Ключевые модули для тестирования
 
-| Модуль | Путь | Критичность |
-|--------|------|-------------|
-| indicators | `src/trading/shared/indicators.ts` | ВЫСОКАЯ |
-| confluence | `src/trading/shared/confluence.ts` | ВЫСОКАЯ |
-| risk | `src/trading/shared/risk.ts` | ВЫСОКАЯ |
-| bybit-client | `src/trading/crypto/bybit-client.ts` | СРЕДНЯЯ |
-| state | `src/trading/crypto/state.ts` | СРЕДНЯЯ |
+| Модуль       | Путь                                 | Критичность |
+| ------------ | ------------------------------------ | ----------- |
+| indicators   | `src/trading/shared/indicators.ts`   | ВЫСОКАЯ     |
+| confluence   | `src/trading/shared/confluence.ts`   | ВЫСОКАЯ     |
+| risk         | `src/trading/shared/risk.ts`         | ВЫСОКАЯ     |
+| bybit-client | `src/trading/crypto/bybit-client.ts` | СРЕДНЯЯ     |
+| state        | `src/trading/crypto/state.ts`        | СРЕДНЯЯ     |
 
 ## Типичные ошибки которые ловим
 
@@ -47,9 +47,9 @@ npm run test
 
 ## Чеклист для review
 
-- [ ] `npm run typecheck` — 0 ошибок
-- [ ] `npm run lint` — 0 ошибок
-- [ ] `npm run build` — успешная сборка
+- [ ] `cd /root/Projects/openclaw-assistent && npm run typecheck` — 0 ошибок
+- [ ] `cd /root/Projects/openclaw-assistent && npm run lint` — 0 ошибок
+- [ ] `cd /root/Projects/openclaw-assistent && npm run build` — успешная сборка
 - [ ] Новые функции покрыты тестами
 - [ ] Нет `console.log` (только `createLogger`)
 - [ ] Нет хардкодированных credentials

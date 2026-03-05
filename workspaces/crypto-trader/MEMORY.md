@@ -21,7 +21,7 @@
 ## Торгуемые пары и спецификации Bybit
 
 | Пара      | qtyDec | priceDec |
-|-----------|--------|----------|
+| --------- | ------ | -------- |
 | BTCUSDT   | 3      | 1        |
 | ETHUSDT   | 2      | 2        |
 | SOLUSDT   | 1      | 2        |
@@ -60,14 +60,14 @@
 
 ## Confluence система (score -100..+100)
 
-| Компонент   | Вес  | Что даёт                              |
-|-------------|------|---------------------------------------|
-| Trend       | EMA alignment на 4h, 1h, 15m          |
-| Momentum    | RSI, MACD, StochRSI                    |
-| Volume      | Relative volume, VWAP, volume delta    |
-| Structure   | Pivot levels, S/R clusters             |
-| Orderflow   | Orderbook imbalance, bid/ask walls     |
-| Regime      | STRONG_TREND/WEAK_TREND/RANGING        |
+| Компонент | Вес                                 | Что даёт |
+| --------- | ----------------------------------- | -------- |
+| Trend     | EMA alignment на 4h, 1h, 15m        |
+| Momentum  | RSI, MACD, StochRSI                 |
+| Volume    | Relative volume, VWAP, volume delta |
+| Structure | Pivot levels, S/R clusters          |
+| Orderflow | Orderbook imbalance, bid/ask walls  |
+| Regime    | STRONG_TREND/WEAK_TREND/RANGING     |
 
 Порог входа: score ≥ 60 (execute mode). STRONG сигнал: ≥ 75.
 
@@ -81,13 +81,13 @@
 
 ```bash
 # Включить стоп (создаёт файл)
-npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --on --reason="manual stop"
 
 # Закрыть все позиции
-npx tsx src/trading/crypto/killswitch.ts --close-all
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --close-all
 
 # Выключить стоп (удаляет файл)
-npx tsx src/trading/crypto/killswitch.ts --off
+cd /root/Projects/openclaw-assistent && npx tsx src/trading/crypto/killswitch.ts --off
 ```
 
 ## Уроки и инсайты

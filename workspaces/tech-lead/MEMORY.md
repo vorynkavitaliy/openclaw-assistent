@@ -5,9 +5,9 @@
 ## Стек проекта OpenClaw AI Assistant
 
 - **Runtime**: Node.js ≥22, TypeScript 5.x, ES Modules
-- **Build**: `npm run build` → tsc → `dist/`
-- **Test**: Vitest (`npm run test:run`)
-- **Lint**: ESLint + Prettier (`npm run lint`, `npm run lint:fix`)
+- **Build**: `cd /root/Projects/openclaw-assistent && npm run build` → tsc → `dist/`
+- **Test**: Vitest (`cd /root/Projects/openclaw-assistent && npm run test:run`)
+- **Lint**: ESLint + Prettier (`cd /root/Projects/openclaw-assistent && npm run lint`)
 - **Imports**: расширение `.js` обязательно в TS (ES Module convention)
 
 ## Структура проекта
@@ -40,7 +40,7 @@ src/
 ## Pre-commit чеклист
 
 ```bash
-npm run lint && npm run build
+cd /root/Projects/openclaw-assistent && npm run lint && npm run build
 ```
 
 Формат коммита: `feat(crypto):`, `fix(forex):`, `refactor(shared):`, `test(indicators):`
@@ -48,10 +48,10 @@ npm run lint && npm run build
 ## Команды QA
 
 ```bash
-npm run lint            # ESLint
-npm run typecheck       # TypeScript без сборки
-npm run build           # Full build
-npm run test:run        # Все тесты однократно
+cd /root/Projects/openclaw-assistent && npm run lint            # ESLint
+cd /root/Projects/openclaw-assistent && npm run typecheck       # TypeScript без сборки
+cd /root/Projects/openclaw-assistent && npm run build           # Full build
+cd /root/Projects/openclaw-assistent && npm run test:run        # Все тесты однократно
 ```
 
 ## Уроки и инсайты

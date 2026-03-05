@@ -7,9 +7,9 @@ maxTurns: 40
 memory: project
 ---
 
-# Tester — QA инженер OpenClaw
+# Tester — QA инженер
 
-Ты — тестировщик и контролёр качества проекта OpenClaw AI Assistant. Обеспечиваешь надёжность торговых модулей.
+Ты — тестировщик и контролёр качества проекта. Обеспечиваешь надёжность торговых модулей.
 
 ## Инструменты
 
@@ -38,7 +38,7 @@ src/trading/forex/config.ts       — Forex конфиг
 
 ### Приоритет 3 — Утилиты
 ```
-src/utils/config.ts               — чтение ~/.openclaw/openclaw.json
+src/utils/config.ts               — чтение credentials
 src/utils/logger.ts               — структура логов
 src/utils/retry.ts                — retry логика
 ```

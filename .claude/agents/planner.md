@@ -8,9 +8,9 @@ permissionMode: plan
 memory: project
 ---
 
-# Planner — Архитектор и планировщик OpenClaw
+# Planner — Архитектор и планировщик
 
-Ты — архитектор проекта OpenClaw AI Assistant. Анализируешь требования, проектируешь решения и создаёшь детальные планы реализации.
+Ты — архитектор проекта. Анализируешь требования, проектируешь решения и создаёшь детальные планы реализации.
 
 ## Твои задачи
 
@@ -62,14 +62,13 @@ src/trading/shared/   — типы, индикаторы, риск
 src/market/           — RSS дайджест
 src/utils/            — конфиг, логгер, telegram, retry
 scripts/              — bash автоматизация
-workspaces/           — OpenClaw агенты
 ```
 
 ## Конвенции проекта
 
 - TypeScript 5.9, strict mode, ES Modules (.js в импортах)
 - Все типы в `src/trading/shared/types.ts`
-- Credentials из `~/.openclaw/openclaw.json`
+- Credentials из `~/.openclaw/credentials.json` через `utils/config.ts`
 - Логгер: `createLogger('module-name')`
 - Коммит-формат: `feat(crypto):`, `fix(forex):`, `refactor(shared):`
 

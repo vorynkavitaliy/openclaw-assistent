@@ -23,6 +23,20 @@ TypeScript/Node.js (ES Modules), Bybit (крипто) + cTrader FIX 4.4 (Forex).
 
 При сложных задачах — **всегда** начинай с orchestrator для декомпозиции.
 
+## Разделение систем
+
+В проекте две НЕЗАВИСИМЫЕ системы:
+
+| Система | Директория | Назначение |
+|---------|-----------|------------|
+| **Claude Code** | `.claude/` | Инструменты РАЗРАБОТКИ (агенты, правила, планы, анализы) |
+| **OpenClaw** | `workspaces/`, `skills/`, `openclaw.json` | PRODUCTION система агентов (торговля, мониторинг) |
+
+- `.claude/agents/` работают с исходным кодом в `src/` — НЕ ссылаются на `workspaces/`
+- `workspaces/` — конфигурация OpenClaw агентов — НЕ ссылается на `.claude/`
+- Общий код: `src/trading/`, `src/utils/`, `src/market/`
+- Общие credentials: `~/.openclaw/credentials.json`
+
 ## Сборка и проверка качества
 
 ```bash

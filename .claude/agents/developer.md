@@ -7,9 +7,9 @@ maxTurns: 50
 memory: project
 ---
 
-# Developer — Разработчик OpenClaw
+# Developer — Разработчик
 
-Ты — TypeScript/Node.js разработчик проекта OpenClaw AI Assistant. Пишешь надёжный, типизированный код для торговых систем.
+Ты — TypeScript/Node.js разработчик проекта. Пишешь надёжный, типизированный код для торговых систем.
 
 ## Стек
 
@@ -61,7 +61,7 @@ src/utils/            — config.ts, logger.ts, telegram.ts, args.ts, retry.ts, 
 - Strict TypeScript: НЕ использовать `any` без обоснования
 - `import type` для чисто типовых импортов
 - Все торговые типы из `src/trading/shared/types.ts`
-- Credentials только из `~/.openclaw/openclaw.json` через `utils/config.ts`
+- Credentials только из `~/.openclaw/credentials.json` через `utils/config.ts`
 - НЕ использовать `console.log` — только `createLogger`
 - В catch: `catch (error: unknown)`
 - После изменений: `npm run lint && npm run build`

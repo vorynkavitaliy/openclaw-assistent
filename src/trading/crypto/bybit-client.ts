@@ -7,6 +7,7 @@ import {
 import { getBybitBaseUrl, getBybitCredentials } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
 import { retryAsync } from '../../utils/retry.js';
+import { createRateLimiter, type RateLimiter } from './rate-limiter.js';
 import { buildMarketAnalysis } from '../shared/indicators.js';
 import type {
   AccountInfo,
@@ -37,6 +38,9 @@ interface BybitApiResponse {
 
 let _client: RestClientV5 | null = null;
 
+// Rate limiter: Bybit лимит 20 req/sec, оставляем запас
+const limiter: RateLimiter = createRateLimiter({ maxPerSecond: 18, maxConcurrent: 6 });
+
 function getClient(): RestClientV5 {
   if (_client) return _client;
 
@@ -56,6 +60,12 @@ function getClient(): RestClientV5 {
   return _client;
 }
 
+// Обёртка для auth API вызовов с rate limiting
+async function withRateLimit<T>(fn: (client: RestClientV5) => Promise<T>): Promise<T> {
+  await limiter.acquire();
+  return fn(getClient());
+}
+
 async function apiGet(
   endpoint: string,
   params?: Record<string, string>,
@@ -72,6 +82,7 @@ async function apiGet(
   }
 
   try {
+    await limiter.acquire();
     const resp = await retryAsync(
       () =>
         fetch(url, {
@@ -205,8 +216,7 @@ export async function getMarketAnalysis(
 }
 
 export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
-  const client = getClient();
-  const res = await client.getWalletBalance({ accountType: 'UNIFIED', coin });
+  const res = await withRateLimit((c) => c.getWalletBalance({ accountType: 'UNIFIED', coin }));
 
   if (res.retCode !== 0) {
     throw new Error(`Failed to get balance: ${res.retMsg}`);
@@ -225,11 +235,10 @@ export async function getBalance(coin: string = 'USDT'): Promise<AccountInfo> {
 }
 
 export async function getPositions(symbol?: string): Promise<Position[]> {
-  const client = getClient();
   const params: PositionInfoParamsV5 = { category: CATEGORY, settleCoin: 'USDT' };
   if (symbol) params.symbol = symbol.toUpperCase();
 
-  const res = await client.getPositionInfo(params);
+  const res = await withRateLimit((c) => c.getPositionInfo(params));
   if (res.retCode !== 0) {
     throw new Error(`Failed to get positions: ${res.retMsg}`);
   }
@@ -291,12 +300,13 @@ export async function getOpenOrdersFull(symbol?: string): Promise<OpenOrder[]> {
 }
 
 export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
-  const client = getClient();
-  const res = await client.cancelOrder({
-    category: CATEGORY,
-    symbol: symbol.toUpperCase(),
-    orderId,
-  });
+  const res = await withRateLimit((c) =>
+    c.cancelOrder({
+      category: CATEGORY,
+      symbol: symbol.toUpperCase(),
+      orderId,
+    }),
+  );
   if (res.retCode !== 0) {
     throw new Error(`Failed to cancel order ${orderId}: ${res.retMsg}`);
   }
@@ -311,8 +321,6 @@ export async function submitOrder(params: {
   stopLoss?: string;
   takeProfit?: string;
 }): Promise<OrderResult> {
-  const client = getClient();
-
   const orderParams: OrderParamsV5 = {
     category: CATEGORY,
     symbol: params.symbol.toUpperCase(),
@@ -327,7 +335,7 @@ export async function submitOrder(params: {
       : {}),
   };
 
-  const res = await client.submitOrder(orderParams);
+  const res = await withRateLimit((c) => c.submitOrder(orderParams));
   if (res.retCode !== 0) {
     const msg = res.retMsg ?? 'Unknown error';
     // Extract base price from error for helpful debugging
@@ -352,8 +360,9 @@ export async function submitOrder(params: {
 }
 
 export async function closePosition(symbol: string): Promise<OrderResult> {
-  const client = getClient();
-  const posRes = await client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
+  const posRes = await withRateLimit((c) =>
+    c.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() }),
+  );
 
   if (posRes.retCode !== 0) {
     throw new Error(`Failed to get position: ${posRes.retMsg}`);
@@ -368,15 +377,17 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
 
   const closeSide = pos.side === 'Buy' ? 'Sell' : 'Buy';
 
-  const res = await client.submitOrder({
-    category: CATEGORY,
-    symbol: symbol.toUpperCase(),
-    side: closeSide,
-    orderType: 'Market',
-    qty: pos.size ?? '0',
-    timeInForce: 'GTC',
-    reduceOnly: true,
-  });
+  const res = await withRateLimit((c) =>
+    c.submitOrder({
+      category: CATEGORY,
+      symbol: symbol.toUpperCase(),
+      side: closeSide,
+      orderType: 'Market',
+      qty: pos.size ?? '0',
+      timeInForce: 'GTC',
+      reduceOnly: true,
+    }),
+  );
 
   if (res.retCode !== 0) {
     throw new Error(`Failed to close position: ${res.retMsg}`);
@@ -393,9 +404,11 @@ export async function closePosition(symbol: string): Promise<OrderResult> {
 }
 
 export async function partialClosePosition(symbol: string, qty: string): Promise<OrderResult> {
-  const client = getClient();
   const posRes = await retryAsync(
-    () => client.getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() }),
+    async () => {
+      await limiter.acquire();
+      return getClient().getPositionInfo({ category: CATEGORY, symbol: symbol.toUpperCase() });
+    },
     { retries: 2, backoffMs: 500 },
   );
 
@@ -412,15 +425,17 @@ export async function partialClosePosition(symbol: string, qty: string): Promise
 
   const closeSide = pos.side === 'Buy' ? 'Sell' : 'Buy';
 
-  const res = await client.submitOrder({
-    category: CATEGORY,
-    symbol: symbol.toUpperCase(),
-    side: closeSide,
-    orderType: 'Market',
-    qty,
-    timeInForce: 'GTC',
-    reduceOnly: true,
-  });
+  const res = await withRateLimit((c) =>
+    c.submitOrder({
+      category: CATEGORY,
+      symbol: symbol.toUpperCase(),
+      side: closeSide,
+      orderType: 'Market',
+      qty,
+      timeInForce: 'GTC',
+      reduceOnly: true,
+    }),
+  );
 
   if (res.retCode !== 0) {
     throw new Error(`Failed to partial close: ${res.retMsg}`);
@@ -441,8 +456,6 @@ export async function modifyPosition(
   stopLoss?: string,
   takeProfit?: string,
 ): Promise<void> {
-  const client = getClient();
-
   const params: SetTradingStopParamsV5 = {
     category: CATEGORY,
     symbol: symbol.toUpperCase(),
@@ -453,7 +466,7 @@ export async function modifyPosition(
 
   await retryAsync(
     async () => {
-      const res = await client.setTradingStop(params);
+      const res = await withRateLimit((c) => c.setTradingStop(params));
       if (res.retCode !== 0) {
         throw new Error(`Failed to modify SL/TP: ${res.retMsg}`);
       }
@@ -467,8 +480,9 @@ export async function closeAllPositions(): Promise<{
   total: number;
   details: Array<{ symbol: string; qty: string; result: string }>;
 }> {
-  const client = getClient();
-  const posRes = await client.getPositionInfo({ category: CATEGORY, settleCoin: 'USDT' });
+  const posRes = await withRateLimit((c) =>
+    c.getPositionInfo({ category: CATEGORY, settleCoin: 'USDT' }),
+  );
 
   if (posRes.retCode !== 0) {
     throw new Error(`Failed to get positions: ${posRes.retMsg}`);
@@ -488,15 +502,17 @@ export async function closeAllPositions(): Promise<{
   for (const pos of openPositions) {
     const closeSide = pos.side === 'Buy' ? 'Sell' : 'Buy';
     try {
-      const res = await client.submitOrder({
-        category: CATEGORY,
-        symbol: pos.symbol ?? '',
-        side: closeSide,
-        orderType: 'Market',
-        qty: pos.size ?? '0',
-        timeInForce: 'GTC',
-        reduceOnly: true,
-      });
+      const res = await withRateLimit((c) =>
+        c.submitOrder({
+          category: CATEGORY,
+          symbol: pos.symbol ?? '',
+          side: closeSide,
+          orderType: 'Market',
+          qty: pos.size ?? '0',
+          timeInForce: 'GTC',
+          reduceOnly: true,
+        }),
+      );
       details.push({
         symbol: pos.symbol ?? '',
         qty: pos.size ?? '0',
@@ -523,13 +539,14 @@ export async function setLeverage(symbol: string, leverage: number): Promise<voi
     throw new Error(`Leverage ${leverage}x exceeds maximum ${MAX_LEVERAGE}x`);
   }
 
-  const client = getClient();
-  const res = await client.setLeverage({
-    category: CATEGORY,
-    symbol: symbol.toUpperCase(),
-    buyLeverage: String(leverage),
-    sellLeverage: String(leverage),
-  });
+  const res = await withRateLimit((c) =>
+    c.setLeverage({
+      category: CATEGORY,
+      symbol: symbol.toUpperCase(),
+      buyLeverage: String(leverage),
+      sellLeverage: String(leverage),
+    }),
+  );
 
   if (res.retCode !== 0 && res.retCode !== 110043) {
     throw new Error(`Failed to set leverage: ${res.retMsg}`);
@@ -687,4 +704,8 @@ export async function getRecentTrades(
 
 export function resetClient(): void {
   _client = null;
+}
+
+export function getRateLimiterStats() {
+  return limiter.getStats();
 }

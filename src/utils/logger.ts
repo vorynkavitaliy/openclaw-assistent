@@ -16,6 +16,8 @@ const LOG_COLORS: Record<LogLevel, string> = {
 
 const RESET = '\x1b[0m';
 
+const USE_COLOR = !process.env.NO_COLOR && process.stderr.isTTY;
+
 const VALID_LEVELS = new Set<string>(Object.keys(LOG_LEVELS));
 
 function resolveLogLevel(): LogLevel {
@@ -55,10 +57,15 @@ function log(
 ): void {
   if (!shouldLog(level)) return;
 
-  const color = LOG_COLORS[level];
   const timestamp = formatTimestamp();
   const levelStr = level.toUpperCase().padEnd(5);
-  let line = `${color}${timestamp} [${levelStr}]${RESET} [${module}] ${message}`;
+  let line: string;
+  if (USE_COLOR) {
+    const color = LOG_COLORS[level];
+    line = `${color}${timestamp} [${levelStr}]${RESET} [${module}] ${message}`;
+  } else {
+    line = `${timestamp} [${levelStr}] [${module}] ${message}`;
+  }
 
   if (data) {
     line += ` ${JSON.stringify(data)}`;

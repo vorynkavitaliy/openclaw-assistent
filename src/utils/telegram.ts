@@ -15,6 +15,7 @@ export async function sendViaOpenClaw(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agent: agentId, message, channel: 'telegram' }),
+          signal: AbortSignal.timeout(10_000),
         }),
       { retries: 2, backoffMs: 500 },
     );

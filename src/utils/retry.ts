@@ -28,7 +28,9 @@ export async function retryAsync<T>(fn: () => Promise<T>, options: RetryOptions 
 
       if (attempt > retries) break;
 
-      const delay = Math.min(backoffMs * Math.pow(2, attempt - 1), maxBackoffMs);
+      const baseDelay = Math.min(backoffMs * Math.pow(2, attempt - 1), maxBackoffMs);
+      const jitter = (Math.random() - 0.5) * 0.3 * baseDelay;
+      const delay = Math.max(0, Math.round(baseDelay + jitter));
       log.debug(`Attempt ${attempt}/${retries + 1} failed, retrying in ${delay}ms`, {
         error: lastError.message,
       });

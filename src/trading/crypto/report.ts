@@ -1,7 +1,7 @@
 import { getArgOrDefault, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
-import { fmt, fmtPrice, sendViaOpenClaw } from '../../utils/telegram.js';
+import { fmt, fmtPrice, sendTelegram } from '../../utils/telegram.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
 import config from './config.js';
 import { generateSummary } from './decision-journal.js';
@@ -11,6 +11,7 @@ import type { StoredEvent } from './state.js';
 const log = createLogger('crypto-report');
 
 const FORMAT = getArgOrDefault('format', 'text');
+const NO_SEND = hasFlag('no-send');
 
 interface MarketSnapshot {
   price: number;
@@ -82,9 +83,8 @@ async function collectData(): Promise<ReportData> {
   }
 
   const market: Record<string, MarketSnapshot> = {};
-  const topPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
-  for (const pair of topPairs) {
+  for (const pair of config.pairs) {
     try {
       const info = await getMarketInfo(pair);
       if (info) {
@@ -125,66 +125,78 @@ async function collectData(): Promise<ReportData> {
   };
 }
 
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function formatTelegramReport(data: ReportData): string {
   const now = new Date();
   const timeStr = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   const lines: string[] = [];
 
-  lines.push(`📊 *Часовой отчёт крипто-трейдера*`);
-  lines.push(`🕐 ${timeStr}`);
-  lines.push('');
+  lines.push(`<b>Крипто-трейдер</b>  ${timeStr}`);
 
   if (data.killSwitch) {
-    lines.push('🚨 *KILL SWITCH АКТИВЕН — торговля остановлена!*');
     lines.push('');
+    lines.push('🚨 <b>KILL SWITCH АКТИВЕН</b>');
   }
   if (data.daily.stopDay) {
-    lines.push(`⛔ *СТОП-ДЕНЬ: ${data.daily.stopDayReason}*`);
     lines.push('');
+    lines.push(`⛔ <b>СТОП-ДЕНЬ:</b> ${esc(data.daily.stopDayReason ?? '')}`);
   }
 
-  lines.push('💰 *Баланс*');
-  lines.push(`  Equity: $${fmt(data.balance.total)}`);
-  lines.push(`  Доступно: $${fmt(data.balance.available)}`);
-  lines.push(`  Unrealized P&L: $${fmt(data.balance.unrealizedPnl)}`);
+  // Баланс
   lines.push('');
+  lines.push(`💰 <b>Баланс</b>`);
+  lines.push(`Equity: <code>$${fmt(data.balance.total)}</code>`);
+  lines.push(`Доступно: <code>$${fmt(data.balance.available)}</code>`);
+  lines.push(`Unrealized: <code>$${fmt(data.balance.unrealizedPnl)}</code>`);
 
+  // Позиции
+  lines.push('');
   if (data.positions.length > 0) {
-    lines.push(`📈 *Открытые позиции (${data.positions.length})*`);
+    lines.push(`📈 <b>Позиции (${data.positions.length})</b>`);
     for (const p of data.positions) {
       const pnl = parseFloat(p.unrealisedPnl) || 0;
-      const pnlEmoji = pnl >= 0 ? '🟢' : '🔴';
-      lines.push(`  ${pnlEmoji} ${p.symbol} ${p.side} x${p.leverage}`);
-      lines.push(`     Размер: ${p.size} | Вход: ${p.entryPrice}`);
-      lines.push(`     P&L: $${fmt(pnl)} | SL: ${p.stopLoss ?? '—'} | TP: ${p.takeProfit ?? '—'}`);
-    }
-  } else {
-    lines.push('📈 *Позиции*: нет открытых');
-  }
-  lines.push('');
-
-  lines.push('📅 *Дневная статистика*');
-  lines.push(`  Сделок: ${data.daily.trades} (✅ ${data.daily.wins} / ❌ ${data.daily.losses})`);
-  lines.push(`  P&L: $${fmt(data.daily.totalPnl)}`);
-  lines.push(`  Стопов: ${data.daily.stops}/${config.maxStopsPerDay}`);
-  if (data.daily.trades > 0) {
-    const winRate = ((data.daily.wins / data.daily.trades) * 100).toFixed(0);
-    lines.push(`  Винрейт: ${winRate}%`);
-  }
-  lines.push('');
-
-  const marketEntries = Object.entries(data.market);
-  if (marketEntries.length > 0) {
-    lines.push('🌐 *Рынок*');
-    for (const [pair, m] of marketEntries) {
-      const sym = pair.replace('USDT', '');
-      const changeEmoji = m.change24h >= 0 ? '📈' : '📉';
-      const fundingSign = m.funding >= 0 ? '+' : '';
+      const icon = pnl >= 0 ? '🟢' : '🔴';
+      const sym = p.symbol.replace('USDT', '');
       lines.push(
-        `  ${changeEmoji} ${sym}: $${fmtPrice(m.price)} (${m.change24h >= 0 ? '+' : ''}${m.change24h.toFixed(2)}%) | FR: ${fundingSign}${(m.funding * 100).toFixed(4)}%`,
+        `${icon} <b>${sym}</b> ${p.side} x${p.leverage}  <code>${p.size} @ ${p.entryPrice}</code>`,
+      );
+      lines.push(
+        `    P&amp;L: <code>$${fmt(pnl)}</code>  SL: <code>${p.stopLoss ?? '—'}</code>  TP: <code>${p.takeProfit ?? '—'}</code>`,
       );
     }
+  } else {
+    lines.push('📈 <b>Позиции:</b> нет открытых');
+  }
+
+  // Дневная статистика
+  lines.push('');
+  lines.push(`📅 <b>День</b>`);
+  const statsLine = `Сделок: ${data.daily.trades} (✅${data.daily.wins} ❌${data.daily.losses})  Стопов: ${data.daily.stops}/${config.maxStopsPerDay}`;
+  lines.push(statsLine);
+  const pnlSign = data.daily.totalPnl >= 0 ? '+' : '';
+  lines.push(`P&amp;L: <code>${pnlSign}$${fmt(data.daily.totalPnl)}</code>`);
+  if (data.daily.trades > 0) {
+    const winRate = ((data.daily.wins / data.daily.trades) * 100).toFixed(0);
+    lines.push(`Винрейт: <code>${winRate}%</code>`);
+  }
+
+  // Рынок
+  const marketEntries = Object.entries(data.market);
+  if (marketEntries.length > 0) {
     lines.push('');
+    lines.push('🌐 <b>Рынок</b>');
+    for (const [pair, m] of marketEntries) {
+      const sym = pair.replace('USDT', '');
+      const icon = m.change24h >= 0 ? '📈' : '📉';
+      const chSign = m.change24h >= 0 ? '+' : '';
+      const frSign = m.funding >= 0 ? '+' : '';
+      lines.push(
+        `${icon} <b>${sym}</b> <code>$${fmtPrice(m.price)}</code> ${chSign}${m.change24h.toFixed(1)}%  FR: ${frSign}${(m.funding * 100).toFixed(3)}%`,
+      );
+    }
   }
 
   // Безопасное извлечение строкового значения из StoredEvent
@@ -203,66 +215,71 @@ function formatTelegramReport(data: ReportData): string {
   const trailingEvents = data.todayActivity.filter((e) => e.type === 'trailing_sl');
 
   if (data.todayActivity.length > 0) {
-    lines.push('📋 *История за сутки*');
+    lines.push('');
+    lines.push('📋 <b>История</b>');
     if (orderEvents.length > 0) {
-      lines.push(`  📥 Открыто ордеров: ${orderEvents.length}`);
+      lines.push(`📥 Ордеров: ${orderEvents.length}`);
       for (const e of orderEvents.slice(-3)) {
         const time = sv(e, 'ts', '').slice(11, 16);
         lines.push(
-          `     [${time}] ${sv(e, 'symbol', '')} ${sv(e, 'side', '')} @ ${sv(e, 'entry')} | SL: ${sv(e, 'sl', '—')} | score: ${sv(e, 'confluenceScore')}`,
+          `  <code>${time}</code> ${esc(sv(e, 'symbol', ''))} ${sv(e, 'side', '')} @ ${sv(e, 'entry')} score:${sv(e, 'confluenceScore')}`,
         );
       }
     }
-    if (partialEvents.length > 0) lines.push(`  📤 Частичных закрытий: ${partialEvents.length}`);
-    if (trailingEvents.length > 0)
-      lines.push(`  🔄 Trailing SL обновлений: ${trailingEvents.length}`);
+    if (partialEvents.length > 0) lines.push(`📤 Частичных закрытий: ${partialEvents.length}`);
+    if (trailingEvents.length > 0) lines.push(`🔄 Trailing SL: ${trailingEvents.length}`);
     if (slGuardEvents.length > 0) {
-      lines.push(`  🛡 SL-Guard сработал: ${slGuardEvents.length} раз`);
+      lines.push(`🛡 SL-Guard: ${slGuardEvents.length}`);
       for (const e of slGuardEvents) {
         const time = sv(e, 'ts', '').slice(11, 16);
-        lines.push(`     [${time}] ${sv(e, 'symbol', '')} — дефолтный SL: ${sv(e, 'defaultSl')}`);
+        lines.push(`  <code>${time}</code> ${esc(sv(e, 'symbol', ''))} SL: ${sv(e, 'defaultSl')}`);
       }
     }
-    lines.push('');
   }
 
   // Ошибки API
   if (data.apiErrors.length > 0) {
-    lines.push(`⚠️ *Ошибки API за сутки: ${data.apiErrors.length}*`);
+    lines.push('');
+    lines.push(`⚠️ <b>Ошибки API: ${data.apiErrors.length}</b>`);
     const byType: Record<string, number> = {};
     for (const e of data.apiErrors) {
       const t = sv(e, 'type', 'unknown');
       byType[t] = (byType[t] ?? 0) + 1;
     }
     for (const [t, cnt] of Object.entries(byType)) {
-      lines.push(`  ${t}: ${cnt}`);
+      lines.push(`${esc(t)}: ${cnt}`);
     }
     const last = data.apiErrors[data.apiErrors.length - 1];
     if (last) {
       const time = sv(last, 'ts', '').slice(11, 16);
-      lines.push(`  Последняя [${time}]: ${sv(last, 'error').slice(0, 60)}`);
+      lines.push(`Последняя <code>${time}</code>: ${esc(sv(last, 'error').slice(0, 60))}`);
     }
-    lines.push('');
   }
 
-  // Дневник решений за 24ч
+  // Дневник решений
   const dj = generateSummary(24);
   if (dj.totalDecisions > 0) {
-    lines.push('🧠 *Дневник решений (24ч)*');
-    lines.push(`  Решений: ${dj.totalDecisions} (входы: ${dj.entries}, пропуски: ${dj.skips})`);
+    lines.push('');
+    lines.push('🧠 <b>Решения 24ч</b>');
+    lines.push(`Всего: ${dj.totalDecisions} (входы: ${dj.entries}, пропуски: ${dj.skips})`);
     if (dj.topSkipReason !== 'none') {
-      lines.push(`  Топ причина пропуска: ${dj.topSkipReason}`);
+      lines.push(`Пропуск: ${esc(dj.topSkipReason)}`);
     }
     if (dj.entrySymbols.length > 0) {
-      lines.push(`  Входы: ${dj.entrySymbols.join(', ')}`);
+      lines.push(`Входы: ${dj.entrySymbols.join(', ')}`);
     }
-    lines.push('');
   }
 
-  lines.push(`⚙️ Режим: *${config.mode === 'execute' ? 'FULL-AUTO 🤖' : 'DRY-RUN 🔍'}*`);
+  // Режим и мониторинг
+  lines.push('');
+  const modeLabel = config.mode === 'execute' ? 'AUTO' : 'DRY-RUN';
+  const demoLabel = config.demoTrading ? ' DEMO' : '';
+  lines.push(
+    `⚙️ ${modeLabel}${demoLabel}  Пар: ${config.pairs.length}  Риск: ${(config.riskPerTrade * 100).toFixed(0)}%`,
+  );
   if (data.lastMonitor) {
     const ago = Math.round((Date.now() - new Date(data.lastMonitor).getTime()) / 60000);
-    lines.push(`🔄 Последний мониторинг: ${ago} мин назад`);
+    lines.push(`🔄 Мониторинг: ${ago} мин назад`);
   }
 
   return lines.join('\n');
@@ -301,10 +318,12 @@ async function main(): Promise<void> {
     log.info('Report (json)', { report: formatJsonReport(data) });
   } else {
     const text = formatTelegramReport(data);
-    if (!hasFlag('no-send')) {
-      await sendViaOpenClaw(text);
+    if (NO_SEND) {
+      process.stdout.write(text + '\n');
+    } else {
+      await sendTelegram(text, 'HTML');
+      log.info('Report sent to Telegram');
     }
-    log.info('Report (text)', { text });
   }
 }
 

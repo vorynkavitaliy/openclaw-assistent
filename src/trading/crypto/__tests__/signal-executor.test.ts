@@ -7,6 +7,7 @@ vi.mock('../bybit-client.js', () => ({
   cancelOrder: vi.fn(),
   setLeverage: vi.fn(),
   submitOrder: vi.fn(),
+  modifyPosition: vi.fn(),
 }));
 
 vi.mock('../state.js', () => ({
@@ -29,6 +30,7 @@ import {
   cancelOrder,
   getOpenOrders,
   getOpenOrdersFull,
+  modifyPosition,
   setLeverage,
   submitOrder,
 } from '../bybit-client.js';
@@ -91,6 +93,7 @@ const mockGetOpenOrdersFull = vi.mocked(getOpenOrdersFull);
 const mockCancelOrder = vi.mocked(cancelOrder);
 const mockSetLeverage = vi.mocked(setLeverage);
 const mockSubmitOrder = vi.mocked(submitOrder);
+const mockModifyPosition = vi.mocked(modifyPosition);
 const mockCanTrade = vi.mocked(state.canTrade);
 const mockGet = vi.mocked(state.get);
 const mockCalcPositionSize = vi.mocked(state.calcPositionSize);
@@ -105,6 +108,7 @@ beforeEach(() => {
   mockGetOpenOrders.mockResolvedValue([]);
   mockGetOpenOrdersFull.mockResolvedValue([]);
   mockSetLeverage.mockResolvedValue(undefined);
+  mockModifyPosition.mockResolvedValue(undefined);
   mockSubmitOrder.mockResolvedValue({
     orderId: 'order-123',
     symbol: 'BTCUSDT',
@@ -342,16 +346,16 @@ describe('executeSignals — успешное исполнение', () => {
     expect(mockSetLeverage).toHaveBeenCalledWith('BTCUSDT', 3);
     // Grid: 3 ордера (50%/30%/20% от totalQty)
     expect(mockSubmitOrder).toHaveBeenCalledTimes(3);
-    // Первый ордер с SL/TP
+    // Ордера без SL/TP — SL/TP ставится на позицию отдельно через modifyPosition
     expect(mockSubmitOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: 'BTCUSDT',
         side: 'Buy',
         orderType: 'Limit',
-        stopLoss: '49000',
-        takeProfit: '52000',
       }),
     );
+    // SL/TP на позицию через отдельный вызов
+    expect(mockModifyPosition).toHaveBeenCalledWith('BTCUSDT', '49000', '52000');
   });
 
   it('возвращает ERROR если submitOrder выбрасывает исключение', async () => {

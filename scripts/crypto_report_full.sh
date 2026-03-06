@@ -14,7 +14,7 @@ fi
 export PATH="/root/.nvm/versions/node/v22.22.0/bin:$PATH"
 
 # 1. Report (баланс, позиции, P&L) — без отправки в telegram (бот сам отправит)
-npx tsx "${PROJECT}/src/trading/crypto/report.ts" --format text --no-send 2>/dev/null || echo "(report error)"
+LOG_LEVEL=error npx tsx "${PROJECT}/src/trading/crypto/report.ts" --format text --no-send 2>/dev/null || echo "(report error)"
 
 # 2. Market Summary (scores, decisions)
 echo ""

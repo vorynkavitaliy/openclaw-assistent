@@ -125,12 +125,12 @@ function runScript(script: string, args: string[] = []): string {
   return stripAnsi((result.stdout ?? '').trim());
 }
 
-function runTsx(script: string, args: string[] = []): string {
+function runTsx(script: string, args: string[] = [], extraEnv?: Record<string, string>): string {
   const result = spawnSync('npx', ['tsx', `${PROJECT_ROOT}/src/${script}`, ...args], {
     timeout: 120_000,
     encoding: 'utf8',
     cwd: PROJECT_ROOT,
-    env: { ...process.env, PATH: process.env.PATH },
+    env: { ...process.env, PATH: process.env.PATH, ...extraEnv },
   });
   if (result.status !== 0) {
     const msg = (result.stderr ?? result.error?.message ?? 'Unknown error').slice(0, 500);
@@ -198,9 +198,11 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 
   if (cmd === '/status' || cmd === 'статус' || cmd === 'что с крипто') {
     await sendTelegram('⏳ Собираю статус...');
-    const result = runTsx('trading/crypto/report.ts', ['--format', 'text', '--no-send']);
+    const result = runTsx('trading/crypto/report.ts', ['--format', 'text', '--no-send'], {
+      LOG_LEVEL: 'error',
+    });
     const trimmed = result.length > 4000 ? result.slice(0, 4000) + '\n...(обрезано)' : result;
-    await sendTelegram(trimmed);
+    await sendTelegram(trimmed, 'HTML');
     return;
   }
 
@@ -208,7 +210,7 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     await sendTelegram('⏳ Формирую отчёт...', 'HTML');
     const result = runScript('crypto_report_full.sh');
     const trimmed = result.length > 4000 ? result.slice(0, 4000) + '\n...(обрезано)' : result;
-    await sendTelegram(trimmed);
+    await sendTelegram(trimmed, 'HTML');
     return;
   }
 

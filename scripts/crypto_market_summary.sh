@@ -1,47 +1,21 @@
 #!/usr/bin/env bash
-# Market Summary — читабельный формат для Telegram
+# Market Summary — HTML формат для Telegram
 set -euo pipefail
 
 PROJECT_DIR="/root/Projects/openclaw-assistent"
-STATE_FILE="${PROJECT_DIR}/data/state.json"
 SNAPSHOTS_FILE="${PROJECT_DIR}/data/market-snapshots.jsonl"
 DECISIONS_FILE="${PROJECT_DIR}/data/decisions.jsonl"
 
-python3 - "$STATE_FILE" "$SNAPSHOTS_FILE" "$DECISIONS_FILE" << 'PYEOF'
+# Торгуемые пары (должны совпадать с config.ts)
+PAIRS="ETHUSDT,SOLUSDT,ADAUSDT,DOGEUSDT"
+
+python3 - "$SNAPSHOTS_FILE" "$DECISIONS_FILE" "$PAIRS" << 'PYEOF'
 import json, sys
 from collections import defaultdict
-from datetime import datetime, timezone
 
-STATE_FILE = sys.argv[1]
-SNAPSHOTS_FILE = sys.argv[2]
-DECISIONS_FILE = sys.argv[3]
-
-state = {}
-try:
-    with open(STATE_FILE) as f:
-        state = json.load(f)
-except:
-    pass
-
-b = state.get('balance', {})
-d = state.get('daily', {})
-positions = state.get('positions', [])
-last_mon = state.get('lastMonitor', '')
-
-mon_ago = ''
-if last_mon:
-    try:
-        dt = datetime.fromisoformat(last_mon.replace('Z', '+00:00'))
-        mins = int((datetime.now(timezone.utc) - dt).total_seconds() / 60)
-        mon_ago = f'{mins} мин назад'
-    except:
-        mon_ago = last_mon[:16]
-
-lines = []
-lines.append(f'💰 ${b.get("total", 0):,.0f} | Позиций: {len(positions)} | Сделок: {d.get("trades", 0)} | P&L: ${d.get("totalPnl", 0):+.2f}')
-if mon_ago:
-    lines.append(f'🔄 Обновлено: {mon_ago}')
-lines.append('')
+SNAPSHOTS_FILE = sys.argv[1]
+DECISIONS_FILE = sys.argv[2]
+ALLOWED_PAIRS = set(sys.argv[3].split(','))
 
 # --- CONFLUENCE SCORES ---
 scores = defaultdict(list)
@@ -50,16 +24,19 @@ try:
         for line in f:
             try:
                 s = json.loads(line.strip())
-                scores[s['pair']].append(s)
+                if s['pair'] in ALLOWED_PAIRS:
+                    scores[s['pair']].append(s)
             except:
                 pass
 except:
     pass
 
+lines = []
+
 if scores:
     pairs_sorted = sorted(scores.keys(), key=lambda p: abs(scores[p][-1]['confluenceScore']), reverse=True)
 
-    lines.append('🎯 Сигналы (порог входа: 32-35)')
+    lines.append('<b>Сигналы</b>')
     lines.append('')
 
     for pair in pairs_sorted:
@@ -70,15 +47,15 @@ if scores:
         abs_sc = abs(sc)
 
         if abs_sc >= 50:
-            bar = '🟢🟢🟢🟢🟢'
+            bar = '█████'
         elif abs_sc >= 35:
-            bar = '🟡🟡🟡🟡⚪'
+            bar = '████░'
         elif abs_sc >= 20:
-            bar = '🟠🟠🟠⚪⚪'
+            bar = '███░░'
         elif abs_sc >= 10:
-            bar = '🔴🔴⚪⚪⚪'
+            bar = '██░░░'
         else:
-            bar = '⚫⚪⚪⚪⚪'
+            bar = '█░░░░'
 
         direction = '📉' if sc < -5 else ('📈' if sc > 5 else '➖')
         sym = pair.replace('USDT', '')
@@ -90,12 +67,13 @@ if scores:
         else:
             trend = ''
 
-        regime_short = {
+        regime_map = {
             'RANGING': 'Бок', 'WEAK_TREND': 'СлТр', 'WEAKTREND': 'СлТр',
             'STRONG_TREND': 'Тренд', 'VOLATILE': 'Вол', 'CHOPPY': 'Хаос'
-        }.get(regime, regime[:3])
+        }
+        regime_short = regime_map.get(regime, regime[:3])
 
-        lines.append(f'{direction} {sym:<5} {bar} {sc:+3d} ({conf}%) [{regime_short}] {trend}')
+        lines.append(f'{direction} <b>{sym:<5}</b> <code>{bar} {sc:+3d}</code> ({conf}%) [{regime_short}] {trend}')
 
 # --- РЕШЕНИЯ ---
 decisions = []
@@ -116,23 +94,23 @@ if decisions:
 
     lines.append('')
     if entries:
-        lines.append('✅ Последние входы:')
+        lines.append('<b>Последние входы:</b>')
         for dd in entries[-3:]:
             ts = dd.get('timestamp', '')[:16]
             sym = dd.get('symbol', dd.get('pair', '?')).replace('USDT', '')
-            lines.append(f'  {ts} {sym}')
+            lines.append(f'  <code>{ts}</code> {sym}')
     else:
         skip_reasons = defaultdict(int)
         for dd in skips:
             skip_reasons[dd.get('action', '?')] += 1
         top_reason = max(skip_reasons, key=skip_reasons.get) if skip_reasons else '?'
         reason_map = {
-            'CONFLUENCEBELOWTHRESHOLD': 'сигналы слишком слабые',
-            'CONFLUENCE_BELOW_THRESHOLD': 'сигналы слишком слабые',
+            'CONFLUENCEBELOWTHRESHOLD': 'сигналы слабые',
+            'CONFLUENCE_BELOW_THRESHOLD': 'сигналы слабые',
             'SKIP': 'LLM пропустил',
-            'WAIT': 'LLM ждёт подтверждения',
-            'NOSLOTS': 'нет свободных слотов',
-            'NO_SLOTS': 'нет свободных слотов',
+            'WAIT': 'LLM ждёт',
+            'NOSLOTS': 'нет слотов',
+            'NO_SLOTS': 'нет слотов',
         }
         nice_reason = reason_map.get(top_reason, top_reason)
         lines.append(f'⏸ Нет входов — {nice_reason}')

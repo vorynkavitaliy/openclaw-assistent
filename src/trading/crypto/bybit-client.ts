@@ -499,6 +499,7 @@ export async function modifyPosition(
     category: CATEGORY,
     symbol: symbol.toUpperCase(),
     positionIdx: 0,
+    tpslMode: 'Full' as const,
     ...(stopLoss ? { stopLoss, slTriggerBy: 'LastPrice' as const } : {}),
     ...(takeProfit ? { takeProfit, tpTriggerBy: 'LastPrice' as const } : {}),
   };
@@ -506,8 +507,9 @@ export async function modifyPosition(
   await retryAsync(
     async () => {
       const res = await withRateLimit((c) => c.setTradingStop(params));
-      if (res.retCode !== 0) {
-        throw new Error(`Failed to modify SL/TP: ${res.retMsg}`);
+      // 110043 / 34040 = "not modified" (значения уже установлены) — не ошибка
+      if (res.retCode !== 0 && res.retCode !== 110043 && res.retCode !== 34040) {
+        throw new Error(`Failed to modify SL/TP: ${res.retMsg} (code: ${res.retCode})`);
       }
     },
     { retries: 3, backoffMs: 1000 },

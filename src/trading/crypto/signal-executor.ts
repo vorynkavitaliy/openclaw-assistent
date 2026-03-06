@@ -3,6 +3,7 @@ import {
   cancelOrder,
   getOpenOrders,
   getOpenOrdersFull,
+  modifyPosition,
   setLeverage,
   submitOrder,
 } from './bybit-client.js';
@@ -244,16 +245,12 @@ export async function executeSignals(
         const qtyStr = formatQty(levelQty, sig.pair);
         if (parseFloat(qtyStr) <= 0) continue;
 
-        // SL/TP только на первом (основном) ордере — Bybit привяжет к позиции
-        const isFirst = orderIds.length === 0;
-
         const orderRes = await submitOrder({
           symbol: sig.pair,
           side: sig.side,
           orderType: 'Limit',
           qty: qtyStr,
           price: String(level.price),
-          ...(isFirst ? { stopLoss: String(sig.sl), takeProfit: String(sig.tp) } : {}),
         });
 
         orderIds.push(orderRes.orderId);
@@ -261,6 +258,19 @@ export async function executeSignals(
       }
 
       totalFilledQtyStr = qtyParts.join('+');
+
+      // Устанавливаем SL/TP на уровне ПОЗИЦИИ (покрывает весь объём, включая будущие grid fills)
+      try {
+        await modifyPosition(sig.pair, String(sig.sl), String(sig.tp));
+        log.info('Position SL/TP set', { symbol: sig.pair, sl: sig.sl, tp: sig.tp });
+      } catch (slErr) {
+        // Если позиция ещё не открыта (лимитки не заполнены), modifyPosition вернёт ошибку.
+        // Это нормально — position-manager проверит SL на следующем цикле через SL-Guard.
+        log.warn('Could not set position SL/TP (position may not be filled yet)', {
+          symbol: sig.pair,
+          error: (slErr as Error).message,
+        });
+      }
 
       state.logEvent('order_opened', {
         symbol: sig.pair,

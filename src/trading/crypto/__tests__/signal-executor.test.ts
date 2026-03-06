@@ -394,6 +394,7 @@ describe('cancelStaleOrders', () => {
         price: '49000',
         qty: '0.1',
         createdTime: String(oldOrderTime),
+        stopOrderType: '',
       },
     ]);
     mockCancelOrder.mockResolvedValue(undefined);
@@ -420,6 +421,7 @@ describe('cancelStaleOrders', () => {
         price: '3000',
         qty: '1',
         createdTime: String(freshOrderTime),
+        stopOrderType: '',
       },
     ]);
 
@@ -438,6 +440,7 @@ describe('cancelStaleOrders', () => {
         price: '100',
         qty: '1',
         createdTime: '0',
+        stopOrderType: '',
       },
     ]);
 
@@ -457,6 +460,7 @@ describe('cancelStaleOrders', () => {
         price: '48000',
         qty: '0.1',
         createdTime: String(oldTime),
+        stopOrderType: '',
       },
     ]);
     mockCancelOrder.mockRejectedValue(new Error('Cancel failed'));
@@ -477,5 +481,47 @@ describe('cancelStaleOrders', () => {
 
     // Ошибка логируется, возвращается пустой массив
     expect(actions).toHaveLength(0);
+  });
+
+  it('НЕ отменяет conditional ордера (SL/TP)', async () => {
+    const oldTime = Date.now() - 60 * 60 * 1000; // 1 час назад
+    mockGetOpenOrdersFull.mockResolvedValue([
+      {
+        orderId: 'sl-order',
+        symbol: 'SOLUSDT',
+        side: 'Sell',
+        price: '0',
+        qty: '94.5',
+        createdTime: String(oldTime),
+        stopOrderType: 'StopLoss',
+      },
+      {
+        orderId: 'tp-order',
+        symbol: 'SOLUSDT',
+        side: 'Sell',
+        price: '0',
+        qty: '94.5',
+        createdTime: String(oldTime),
+        stopOrderType: 'TakeProfit',
+      },
+      {
+        orderId: 'real-limit',
+        symbol: 'BTCUSDT',
+        side: 'Buy',
+        price: '49000',
+        qty: '0.1',
+        createdTime: String(oldTime),
+        stopOrderType: '',
+      },
+    ]);
+    mockCancelOrder.mockResolvedValue(undefined);
+
+    const actions = await cancelStaleOrders();
+
+    // Только real-limit отменён, SL/TP — нет
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ orderId: 'real-limit', result: 'OK' });
+    expect(mockCancelOrder).toHaveBeenCalledTimes(1);
+    expect(mockCancelOrder).toHaveBeenCalledWith('BTCUSDT', 'real-limit');
   });
 });

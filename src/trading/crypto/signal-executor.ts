@@ -365,6 +365,9 @@ export async function cancelStaleOrders(): Promise<Array<Record<string, unknown>
     const staleMs = config.staleOrderMinutes * 60 * 1000;
 
     for (const order of orders) {
+      // Пропускаем conditional ордера (SL/TP/Trailing) — это НЕ stale лимитки
+      if (order.stopOrderType) continue;
+
       const createdAt = parseInt(order.createdTime) || 0;
       if (createdAt === 0) continue;
       const ageMs = now - createdAt;

@@ -283,7 +283,11 @@ export async function getPositions(symbol?: string): Promise<Position[]> {
 
 export async function getOpenOrders(symbol?: string): Promise<string[]> {
   const orders = await getOpenOrdersFull(symbol);
-  return orders.map((o) => o.symbol).filter(Boolean);
+  // Только реальные лимитные ордера, не conditional (SL/TP/Trailing)
+  return orders
+    .filter((o) => !o.stopOrderType)
+    .map((o) => o.symbol)
+    .filter(Boolean);
 }
 
 export interface OpenOrder {
@@ -293,6 +297,7 @@ export interface OpenOrder {
   price: string;
   qty: string;
   createdTime: string; // ms timestamp string
+  stopOrderType: string; // '', 'StopLoss', 'TakeProfit', 'TrailingStop', etc.
 }
 
 export async function getOpenOrdersFull(symbol?: string): Promise<OpenOrder[]> {
@@ -321,6 +326,7 @@ export async function getOpenOrdersFull(symbol?: string): Promise<OpenOrder[]> {
         price: o.price ?? '0',
         qty: o.qty ?? '0',
         createdTime: o.createdTime ?? '0',
+        stopOrderType: o.stopOrderType ?? '',
       }));
   } catch (err) {
     log.warn('Failed to fetch open orders', { error: (err as Error).message });

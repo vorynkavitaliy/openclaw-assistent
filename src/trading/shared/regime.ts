@@ -176,14 +176,14 @@ function countRecentCrosses(
 export function getRegimeThreshold(regime: MarketRegime): number {
   switch (regime) {
     case 'STRONG_TREND':
-      return 22; // Тренд подтверждён — агрессивный вход, LLM решит остальное
+      return 20; // Тренд подтверждён — в бэктесте 3/6 модулей нейтральны
     case 'WEAK_TREND':
       return 25;
     case 'RANGING':
-      return 28; // В боковике — чуть строже, но LLM фильтрует дальше
+      return 30; // В боковике — строже
     case 'VOLATILE':
-      return 45; // Высокая волатильность — LLM оценит риски
+      return 40; // Высокая волатильность — жёсткий фильтр
     case 'CHOPPY':
-      return 60; // Чоппи — жёстче, но не полный блок
+      return 100; // Полный блок — не торгуем в чоппи
   }
 }

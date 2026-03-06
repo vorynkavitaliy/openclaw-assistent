@@ -22,6 +22,7 @@ vi.mock('../decision-journal.js', () => ({
 
 vi.mock('../symbol-specs.js', () => ({
   formatQty: vi.fn((qty: number) => qty.toFixed(3)),
+  roundPrice: vi.fn((val: number) => parseFloat(val.toFixed(2))),
 }));
 
 import {
@@ -202,27 +203,27 @@ describe('executeSignals — SKIP pending order', () => {
 });
 
 describe('executeSignals — SKIP ecosystem occupied', () => {
-  it('пропускает сигнал ETHUSDT если ARBUSDT уже в позиции (одна экосистема)', async () => {
-    // ETHUSDT и ARBUSDT — одна экосистема (Ethereum ecosystem)
+  it('пропускает сигнал SOLUSDT если ADAUSDT уже в позиции (одна экосистема)', async () => {
+    // ADAUSDT и SOLUSDT — одна экосистема (Alt L1)
     mockGet.mockReturnValue(
       makeState({
         positions: [
           {
-            symbol: 'ARBUSDT',
+            symbol: 'ADAUSDT',
             side: 'long',
-            size: '10',
-            entryPrice: '1.5',
-            markPrice: '1.6',
-            unrealisedPnl: '1',
+            size: '1000',
+            entryPrice: '0.5',
+            markPrice: '0.55',
+            unrealisedPnl: '50',
             leverage: '3',
-            stopLoss: '1.4',
-            takeProfit: '1.8',
+            stopLoss: '0.45',
+            takeProfit: '0.65',
           },
         ],
       }) as unknown as ReturnType<typeof state.get>,
     );
 
-    const signals = [makeSignal({ pair: 'ETHUSDT', entryPrice: 3000, sl: 2900, tp: 3200 })];
+    const signals = [makeSignal({ pair: 'SOLUSDT', entryPrice: 150, sl: 145, tp: 160 })];
     const results = await executeSignals(signals, 'cycle-1', false);
 
     expect(results[0]?.action).toContain('SKIP: ecosystem already has open position');
@@ -235,15 +236,15 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
       makeState({
         positions: [
           {
-            symbol: 'ARBUSDT',
+            symbol: 'ADAUSDT',
             side: 'long',
-            size: '10',
-            entryPrice: '1.5',
-            markPrice: '1.6',
-            unrealisedPnl: '1',
+            size: '1000',
+            entryPrice: '0.5',
+            markPrice: '0.55',
+            unrealisedPnl: '50',
             leverage: '3',
-            stopLoss: '1.4',
-            takeProfit: '1.8',
+            stopLoss: '0.45',
+            takeProfit: '0.65',
           },
         ],
       }) as unknown as ReturnType<typeof state.get>,
@@ -252,7 +253,7 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
     const signals = [makeSignal({ pair: 'BTCUSDT' })];
     const results = await executeSignals(signals, 'cycle-1', false);
 
-    // BTCUSDT не в экосистеме — дойдёт до submitOrder
+    // BTCUSDT не в экосистеме — дойдёт до submitOrder (grid = 3 ордера)
     expect(mockSubmitOrder).toHaveBeenCalled();
     expect(results[0]?.action).toBe('EXECUTED');
   });
@@ -260,13 +261,14 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
 
 describe('executeSignals — SKIP risk too high', () => {
   it('пропускает сигнал если риск превышает maxRiskPerTrade', async () => {
-    // qty = 1, slDist = 1000, risk = 1000 > maxRiskPerTrade(250)
-    mockCalcPositionSize.mockReturnValue(1);
+    // qty = 0.5, grid ×1.5 = 0.75, slDist = 1000, risk = 750 > maxRiskPerTrade(300)
+    // notional = 50000 * 0.75 = 37500 < maxNotional (10000*5=50000) — проходит
+    mockCalcPositionSize.mockReturnValue(0.5);
 
     const signals = [makeSignal({ entryPrice: 50000, sl: 49000 })];
     const results = await executeSignals(signals, 'cycle-1', false);
 
-    expect(results[0]?.action).toContain('SKIP: risk');
+    expect(results[0]?.action).toContain('SKIP:');
     expect(results[0]?.action).toContain('> max');
     expect(mockSubmitOrder).not.toHaveBeenCalled();
   });
@@ -329,20 +331,23 @@ describe('executeSignals — SKIP invalid SL/TP', () => {
 });
 
 describe('executeSignals — успешное исполнение', () => {
-  it('успешно исполняет ордер и возвращает EXECUTED с orderId', async () => {
+  it('успешно исполняет grid ордера и возвращает EXECUTED', async () => {
     const signals = [makeSignal()];
     const results = await executeSignals(signals, 'cycle-1', false);
 
     expect(results).toHaveLength(1);
     expect(results[0]?.action).toBe('EXECUTED');
     expect(results[0]?.orderId).toBe('order-123');
+    expect(results[0]?.orderIds).toHaveLength(3); // grid = 3 уровня
     expect(mockSetLeverage).toHaveBeenCalledWith('BTCUSDT', 3);
+    // Grid: 3 ордера (50%/30%/20% от totalQty)
+    expect(mockSubmitOrder).toHaveBeenCalledTimes(3);
+    // Первый ордер с SL/TP
     expect(mockSubmitOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: 'BTCUSDT',
         side: 'Buy',
         orderType: 'Limit',
-        price: '50000',
         stopLoss: '49000',
         takeProfit: '52000',
       }),
@@ -369,7 +374,8 @@ describe('executeSignals — успешное исполнение', () => {
     expect(results).toHaveLength(2);
     expect(results[0]?.action).toBe('EXECUTED');
     expect(results[1]?.action).toBe('EXECUTED');
-    expect(mockSubmitOrder).toHaveBeenCalledTimes(2);
+    // 2 сигнала × 3 grid уровня = 6 вызовов submitOrder
+    expect(mockSubmitOrder).toHaveBeenCalledTimes(6);
   });
 });
 

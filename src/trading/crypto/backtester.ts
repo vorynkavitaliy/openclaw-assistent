@@ -7,10 +7,25 @@ loadEnv();
 import { calculateConfluenceScore, type ConfluenceInput } from '../shared/confluence.js';
 import { buildMarketAnalysis } from '../shared/indicators.js';
 import { detectMarketRegime, getRegimeThreshold } from '../shared/regime.js';
-import type { ConfluenceScore, OHLC } from '../shared/types.js';
+import type { ConfluenceScore, MarketRegime, OHLC } from '../shared/types.js';
 import { getKlines } from './bybit-client.js';
 import config from './config.js';
 import { roundPrice } from './symbol-specs.js';
+
+function getRegimeRR(regime: string): number {
+  switch (regime as MarketRegime) {
+    case 'STRONG_TREND':
+      return 2.5;
+    case 'WEAK_TREND':
+      return 2.0;
+    case 'RANGING':
+      return 1.5;
+    case 'VOLATILE':
+      return 1.8;
+    case 'CHOPPY':
+      return 1.8;
+  }
+}
 
 /**
  * Загружает >1000 свечей пагинацией по endTime.
@@ -252,6 +267,10 @@ function buildInputFromCandles(
   };
 }
 
+/**
+ * Grid-симуляция: выставляем grid уровней, считаем сколько заполнились,
+ * вычисляем средний вход и симулируем выход по SL/TP от средней.
+ */
 function simulateTrade(
   pair: string,
   side: 'Buy' | 'Sell',
@@ -262,12 +281,40 @@ function simulateTrade(
   futureCandles: OHLC[],
   confluence: ConfluenceScore,
   regime: string,
+  atr: number,
 ): BacktestTrade {
+  // Grid уровни
+  const gridLevels = config.gridLevels;
+  const spacing = atr * config.gridSpacingAtr;
+  const fractions = gridLevels === 2 ? [0.6, 0.4] : gridLevels >= 3 ? [0.5, 0.3, 0.2] : [1.0];
+
+  const gridPrices: number[] = [];
+  for (let i = 0; i < Math.min(gridLevels, fractions.length); i++) {
+    const offset = spacing * i;
+    gridPrices.push(side === 'Buy' ? entry - offset : entry + offset);
+  }
+
+  // Симулируем заполнение grid + выход
+  const filled: { price: number; fraction: number }[] = [];
+  // Первый уровень (entry) считается заполненным сразу
+  filled.push({ price: gridPrices[0]!, fraction: fractions[0]! });
+
   let exitPrice = entry;
   let exitTime = entryTime;
   let result: 'WIN' | 'LOSS' | 'OPEN' = 'OPEN';
 
   for (const candle of futureCandles) {
+    // Проверяем заполнение оставшихся grid-уровней
+    for (let i = filled.length; i < gridPrices.length; i++) {
+      const gp = gridPrices[i]!;
+      if (side === 'Buy' && candle.low <= gp) {
+        filled.push({ price: gp, fraction: fractions[i]! });
+      } else if (side === 'Sell' && candle.high >= gp) {
+        filled.push({ price: gp, fraction: fractions[i]! });
+      }
+    }
+
+    // SL остаётся фиксированный (от первого уровня)
     if (side === 'Buy') {
       if (candle.low <= sl) {
         exitPrice = sl;
@@ -304,19 +351,24 @@ function simulateTrade(
     exitTime = lastCandle.time;
   }
 
-  const pnl = side === 'Buy' ? exitPrice - entry : entry - exitPrice;
-  const pnlPercent = (pnl / entry) * 100;
+  // P&L считаем от среднего входа с учётом grid multiplier
+  const totalFrac = filled.reduce((s, f) => s + f.fraction, 0);
+  const avgEntry = filled.reduce((s, f) => s + f.price * f.fraction, 0) / totalFrac;
+  const volumeMultiplier = totalFrac * config.gridVolumeMultiplier;
+
+  const rawPnl = side === 'Buy' ? exitPrice - avgEntry : avgEntry - exitPrice;
+  const pnlPercent = (rawPnl / avgEntry) * 100 * volumeMultiplier;
 
   return {
     pair,
     side,
-    entryPrice: entry,
+    entryPrice: roundPrice(avgEntry, pair),
     sl,
     tp,
     entryTime,
     exitTime,
     exitPrice,
-    pnl,
+    pnl: rawPnl,
     pnlPercent,
     result,
     confluence: confluence.total,
@@ -359,7 +411,7 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
   const startBar = 100; // минимум 100 баров истории для индикаторов
 
   let lastTradeBar = 0;
-  const minBarsBetweenTrades = 4; // минимум 1 час между входами
+  const minBarsBetweenTrades = Math.ceil(config.pairCooldownMin / 15); // cooldown в барах M15
 
   for (let i = startBar; i < m15Candles.length - 20; i += step) {
     // Не открываем если предыдущая сделка ещё не закрылась (simplification)
@@ -383,9 +435,20 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
 
     if (absScore < threshold) continue;
 
-    signalCount++;
+    // Confidence filter
+    if (confluence.confidence < config.minConfidence) continue;
 
     const side: 'Buy' | 'Sell' = confluence.total > 0 ? 'Buy' : 'Sell';
+
+    // Фильтр: не торгуем против старшего тренда
+    const trendBias = (input.trendTF ?? input.zonesTF)?.bias.emaTrend;
+    if (regime === 'STRONG_TREND' || regime === 'WEAK_TREND') {
+      if (trendBias === 'BULLISH' && side === 'Sell') continue;
+      if (trendBias === 'BEARISH' && side === 'Buy') continue;
+    }
+
+    signalCount++;
+
     const currentCandle = m15Candles[i]!;
     const price = currentCandle.close;
     const atr = input.entryTF.indicators.atr14;
@@ -395,10 +458,10 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
     const slDistance = atr * config.atrSlMultiplier;
     const entry = roundPrice(price, pair);
     const sl = roundPrice(side === 'Buy' ? entry - slDistance : entry + slDistance, pair);
-    const tp = roundPrice(
-      side === 'Buy' ? entry + slDistance * config.minRR : entry - slDistance * config.minRR,
-      pair,
-    );
+
+    // Динамический R:R по режиму
+    const rr = getRegimeRR(regime);
+    const tp = roundPrice(side === 'Buy' ? entry + slDistance * rr : entry - slDistance * rr, pair);
 
     // Simulate trade on future candles
     const futureCandles = m15Candles.slice(i + 1, i + 200); // max ~50 часов
@@ -412,6 +475,7 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
       futureCandles,
       confluence,
       regime,
+      atr,
     );
 
     trades.push(trade);

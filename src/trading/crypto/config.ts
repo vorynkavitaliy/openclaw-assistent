@@ -6,20 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const config: TradingConfig = {
-  pairs: [
-    'BTCUSDT',
-    'ETHUSDT',
-    'SOLUSDT',
-    'XRPUSDT',
-    'DOGEUSDT',
-    'AVAXUSDT',
-    'LINKUSDT',
-    'ADAUSDT',
-    'DOTUSDT',
-    'MATICUSDT',
-    'ARBUSDT',
-    'OPUSDT',
-  ],
+  pairs: ['ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT'],
 
   allowedOrderTypes: ['Market', 'Limit'],
 
@@ -27,14 +14,14 @@ const config: TradingConfig = {
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
-  riskPerTrade: 0.02,
-  maxDailyLoss: 500,
-  maxStopsPerDay: 4,
-  maxRiskPerTrade: 250,
+  riskPerTrade: 0.01,
+  maxDailyLoss: 400,
+  maxStopsPerDay: 3,
+  maxRiskPerTrade: 200,
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,
-  minRR: 2,
+  minRR: 1.5,
 
   partialCloseAtR: 1.0,
   partialClosePercent: 0.5,
@@ -44,14 +31,19 @@ const config: TradingConfig = {
   maxFundingRate: 0.005,
   minFundingRate: -0.005,
   maxSpreadPercent: 0.1,
-  atrSlMultiplier: 1.5,
+  atrSlMultiplier: 2.0,
   staleOrderMinutes: 30,
+  minConfidence: 30,
+  pairCooldownMin: 180, // 3 часа между сделками на одну пару
+
+  // Grid entry: 3 лимитных ордера, каждый на 0.3 ATR глубже, суммарно ×1.5 объём
+  gridLevels: 3,
+  gridSpacingAtr: 0.3,
+  gridVolumeMultiplier: 1.5,
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [
-    ['ETHUSDT', 'ARBUSDT', 'OPUSDT'], // Ethereum ecosystem
-    ['MATICUSDT', 'ADAUSDT', 'DOTUSDT'], // L1 altcoins
-    ['AVAXUSDT', 'SOLUSDT', 'LINKUSDT'], // Alt L1 / DeFi
+    ['ADAUSDT', 'SOLUSDT'], // Alt L1
   ],
 
   mode: 'execute',

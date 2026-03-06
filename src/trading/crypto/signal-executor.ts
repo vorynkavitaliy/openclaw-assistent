@@ -8,16 +8,53 @@ import {
 } from './bybit-client.js';
 import config from './config.js';
 import { logDecision } from './decision-journal.js';
-import type { TradeSignalInternal } from './market-analyzer.js';
+import { recordPairTrade, type TradeSignalInternal } from './market-analyzer.js';
 import * as state from './state.js';
-import { formatQty } from './symbol-specs.js';
+import { formatQty, roundPrice } from './symbol-specs.js';
 
 const log = createLogger('signal-executor');
 
 export interface SignalResult extends TradeSignalInternal {
   action: string;
-  orderId?: string;
+  orderId?: string | undefined;
+  orderIds?: string[];
   qty?: string;
+}
+
+/**
+ * Рассчитывает grid-уровни входа.
+ * Ордер 1 (50%): entry (bid1/ask1)
+ * Ордер 2 (30%): entry ± 0.3×ATR
+ * Ордер 3 (20%): entry ± 0.6×ATR
+ * Суммарный объём = baseQty × gridVolumeMultiplier
+ */
+interface GridLevel {
+  price: number;
+  qtyFraction: number; // доля от общего объёма (0.5, 0.3, 0.2)
+}
+
+function buildGridLevels(
+  entry: number,
+  side: 'Buy' | 'Sell',
+  atr: number,
+  pair: string,
+): GridLevel[] {
+  const levels = config.gridLevels;
+  if (levels <= 1) {
+    return [{ price: entry, qtyFraction: 1.0 }];
+  }
+
+  const spacing = atr * config.gridSpacingAtr;
+  // Распределение объёма: 50% / 30% / 20% для 3 уровней
+  const fractions = levels === 2 ? [0.6, 0.4] : [0.5, 0.3, 0.2];
+
+  return fractions.slice(0, levels).map((frac, i) => {
+    const offset = spacing * i;
+    // Buy: каждый следующий уровень ниже (лучшая цена)
+    // Sell: каждый следующий уровень выше (лучшая цена)
+    const price = side === 'Buy' ? entry - offset : entry + offset;
+    return { price: roundPrice(price, pair), qtyFraction: frac };
+  });
 }
 
 // Возвращает название группы экосистемы для символа (или null)
@@ -109,8 +146,9 @@ export async function executeSignals(
       continue;
     }
 
-    const qty = state.calcPositionSize(sig.entryPrice, sig.sl);
-    if (qty <= 0) {
+    // Базовый размер позиции (от riskPerTrade, до увеличения grid multiplier)
+    const baseQty = state.calcPositionSize(sig.entryPrice, sig.sl);
+    if (baseQty <= 0) {
       logDecision(cycleId, 'skip', sig.pair, 'QTY_CALCULATION_FAILED', [
         'Не удалось рассчитать размер позиции',
       ]);
@@ -118,8 +156,11 @@ export async function executeSignals(
       continue;
     }
 
+    // Grid: общий объём = baseQty × gridVolumeMultiplier
+    const totalQty = baseQty * config.gridVolumeMultiplier;
+
     // Проверка объёма позиции: notional value не должен превышать баланс * maxLeverage
-    const notionalValue = sig.entryPrice * qty;
+    const notionalValue = sig.entryPrice * totalQty;
     const maxNotional = s.balance.total * config.maxLeverage;
     if (maxNotional > 0 && notionalValue > maxNotional) {
       logDecision(
@@ -139,8 +180,9 @@ export async function executeSignals(
       continue;
     }
 
+    // Риск при полном заполнении grid (worst case — все ордера заполнены, SL от первого уровня)
     const slDist = Math.abs(sig.entryPrice - sig.sl);
-    const risk = slDist * qty;
+    const risk = slDist * totalQty;
     if (risk > config.maxRiskPerTrade) {
       logDecision(
         cycleId,
@@ -157,9 +199,9 @@ export async function executeSignals(
       continue;
     }
 
-    // Проверка доступной маржи перед ордером
+    // Проверка доступной маржи перед ордером (для полного grid)
     const balance = s.balance.available;
-    const requiredMargin = (sig.entryPrice * qty) / config.defaultLeverage;
+    const requiredMargin = (sig.entryPrice * totalQty) / config.defaultLeverage;
     if (balance > 0 && requiredMargin > balance) {
       logDecision(
         cycleId,
@@ -188,22 +230,44 @@ export async function executeSignals(
     try {
       await setLeverage(sig.pair, config.defaultLeverage);
 
-      const qtyStr = formatQty(qty, sig.pair);
+      // ATR для расчёта grid spacing
+      const atr = slDist / config.atrSlMultiplier;
 
-      const orderRes = await submitOrder({
-        symbol: sig.pair,
-        side: sig.side,
-        orderType: 'Limit',
-        qty: qtyStr,
-        price: String(sig.entryPrice),
-        stopLoss: String(sig.sl),
-        takeProfit: String(sig.tp),
-      });
+      // Grid уровни
+      const gridLevels = buildGridLevels(sig.entryPrice, sig.side, atr, sig.pair);
+      const orderIds: string[] = [];
+      const qtyParts: string[] = [];
+      let totalFilledQtyStr = '';
+
+      for (const level of gridLevels) {
+        const levelQty = totalQty * level.qtyFraction;
+        const qtyStr = formatQty(levelQty, sig.pair);
+        if (parseFloat(qtyStr) <= 0) continue;
+
+        // SL/TP только на первом (основном) ордере — Bybit привяжет к позиции
+        const isFirst = orderIds.length === 0;
+
+        const orderRes = await submitOrder({
+          symbol: sig.pair,
+          side: sig.side,
+          orderType: 'Limit',
+          qty: qtyStr,
+          price: String(level.price),
+          ...(isFirst ? { stopLoss: String(sig.sl), takeProfit: String(sig.tp) } : {}),
+        });
+
+        orderIds.push(orderRes.orderId);
+        qtyParts.push(qtyStr);
+      }
+
+      totalFilledQtyStr = qtyParts.join('+');
 
       state.logEvent('order_opened', {
         symbol: sig.pair,
         side: sig.side,
-        qty: qtyStr,
+        qty: totalFilledQtyStr,
+        gridLevels: gridLevels.length,
+        gridPrices: gridLevels.map((l) => l.price),
         entry: sig.entryPrice,
         sl: sig.sl,
         tp: sig.tp,
@@ -213,7 +277,7 @@ export async function executeSignals(
         confidence: sig.confidence,
         regime: sig.regime,
         reason: sig.reason,
-        orderId: orderRes.orderId,
+        orderIds,
       });
 
       logDecision(
@@ -223,8 +287,9 @@ export async function executeSignals(
         `OPEN_${sig.side.toUpperCase()}`,
         [
           sig.reason,
+          `Grid ${gridLevels.length} lvl: ${gridLevels.map((l) => l.price).join(' / ')}`,
           `Entry: ${sig.entryPrice}, SL: ${sig.sl}, TP: ${sig.tp}, R:R: ${sig.rr}`,
-          `Qty: ${qtyStr}, Risk: $${(Math.abs(sig.entryPrice - sig.sl) * parseFloat(qtyStr)).toFixed(2)}`,
+          `Qty: ${totalFilledQtyStr} (×${config.gridVolumeMultiplier})`,
         ],
         {
           confluenceScore: sig.confluence.total,
@@ -235,23 +300,32 @@ export async function executeSignals(
           entry: sig.entryPrice,
           sl: sig.sl,
           tp: sig.tp,
-          qty: qtyStr,
+          qty: totalFilledQtyStr,
+          gridLevels: gridLevels.length,
           rr: sig.rr,
-          orderId: orderRes.orderId,
+          orderIds,
         },
       );
 
-      log.info('Order executed', {
+      log.info('Grid orders executed', {
         symbol: sig.pair,
         side: sig.side,
-        qty: qtyStr,
-        orderId: orderRes.orderId,
+        gridLevels: gridLevels.length,
+        qty: totalFilledQtyStr,
+        orderIds,
       });
 
-      // Помечаем экосистему как занятую
+      // Помечаем экосистему как занятую и записываем cooldown
       if (ecosystem) openEcosystems.add(ecosystem);
+      recordPairTrade(sig.pair);
 
-      results.push({ ...sig, action: 'EXECUTED', orderId: orderRes.orderId, qty: qtyStr });
+      results.push({
+        ...sig,
+        action: 'EXECUTED',
+        orderId: orderIds[0],
+        orderIds,
+        qty: totalFilledQtyStr,
+      });
     } catch (err) {
       const errMsg = (err as Error).message;
       results.push({ ...sig, action: `ERROR: ${errMsg}` });

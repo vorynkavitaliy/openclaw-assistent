@@ -80,13 +80,13 @@ beforeEach(() => {
 describe('calcDefaultSl', () => {
   it('вычисляет SL ниже цены для long позиции', () => {
     const sl = calcDefaultSl(50000, 'long', 500);
-    // atrEstimate=500, atrSlMultiplier=1.5 → slDist=750 → SL = 50000 - 750 = 49250
-    expect(sl).toBe(49250);
+    // atrEstimate=500, atrSlMultiplier=2.0 → slDist=1000 → SL = 50000 - 1000 = 49000
+    expect(sl).toBe(49000);
   });
 
   it('вычисляет SL выше цены для short позиции', () => {
     const sl = calcDefaultSl(50000, 'short', 500);
-    expect(sl).toBe(50750);
+    expect(sl).toBe(51000);
   });
 
   it('использует fallback 2% если ATR не задан', () => {
@@ -99,14 +99,14 @@ describe('calcDefaultSl', () => {
 describe('calcDefaultTp', () => {
   it('вычисляет TP выше entry для long позиции', () => {
     const tp = calcDefaultTp(50000, 49000, 'long');
-    // slDist=1000, minRR=2 → TP = 50000 + 2000 = 52000
-    expect(tp).toBe(52000);
+    // slDist=1000, minRR=1.5 → TP = 50000 + 1500 = 51500
+    expect(tp).toBe(51500);
   });
 
   it('вычисляет TP ниже entry для short позиции', () => {
     const tp = calcDefaultTp(50000, 51000, 'short');
-    // slDist=1000, minRR=2 → TP = 50000 - 2000 = 48000
-    expect(tp).toBe(48000);
+    // slDist=1000, minRR=1.5 → TP = 50000 - 1500 = 48500
+    expect(tp).toBe(48500);
   });
 });
 

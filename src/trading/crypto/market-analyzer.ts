@@ -18,7 +18,45 @@ import { saveScore } from './market-snapshot.js';
 import * as state from './state.js';
 import { roundPrice } from './symbol-specs.js';
 
+import type { MarketRegime } from '../shared/types.js';
+
 const log = createLogger('market-analyzer');
+
+// Динамический R:R: в сильном тренде целим дальше, в боковике — быстрее забираем
+function getRegimeRR(regime: string): number {
+  switch (regime as MarketRegime) {
+    case 'STRONG_TREND':
+      return 2.5;
+    case 'WEAK_TREND':
+      return 2.0;
+    case 'RANGING':
+      return 1.5;
+    case 'VOLATILE':
+      return 1.8;
+    case 'CHOPPY':
+      return 1.8; // не должен дойти сюда (блок в threshold)
+  }
+}
+
+// Per-pair cooldown: не торгуем пару если недавно уже была сделка
+const lastTradeTime = new Map<string, number>();
+
+export function recordPairTrade(pair: string): void {
+  lastTradeTime.set(pair, Date.now());
+}
+
+function isPairOnCooldown(pair: string): boolean {
+  const last = lastTradeTime.get(pair);
+  if (!last) return false;
+  return Date.now() - last < config.pairCooldownMin * 60 * 1000;
+}
+
+function getPairCooldownRemaining(pair: string): number {
+  const last = lastTradeTime.get(pair);
+  if (!last) return 0;
+  const remaining = config.pairCooldownMin * 60 * 1000 - (Date.now() - last);
+  return Math.max(0, Math.ceil(remaining / 60_000));
+}
 
 export interface TradeSignalInternal {
   pair: string;
@@ -69,6 +107,15 @@ export async function analyzeMarket(
 }
 
 async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignalInternal | null> {
+  // Per-pair cooldown
+  if (isPairOnCooldown(pair)) {
+    const remaining = getPairCooldownRemaining(pair);
+    logDecision(cycleId, 'skip', pair, 'PAIR_COOLDOWN', [
+      `Cooldown: ещё ${remaining} мин до следующей сделки`,
+    ]);
+    return null;
+  }
+
   // Собираем все данные параллельно
   const [
     market,
@@ -220,12 +267,50 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
     return null;
   }
 
+  // Фильтр минимального confidence
+  if (confluence.confidence < config.minConfidence) {
+    logDecision(
+      cycleId,
+      'skip',
+      pair,
+      'LOW_CONFIDENCE',
+      [
+        `Confidence ${confluence.confidence}% < минимум ${config.minConfidence}%`,
+        `Score ${confluence.total}, regime ${regime}`,
+      ],
+      {
+        confluenceScore: confluence.total,
+        confidence: confluence.confidence,
+        regime,
+      },
+    );
+    return null;
+  }
+
   // Определяем сторону сделки
   const side: 'Buy' | 'Sell' = confluence.total > 0 ? 'Buy' : 'Sell';
   const atr = m15.indicators.atr14;
   const price = market.lastPrice;
 
   if (atr === 0 || price === 0) return null;
+
+  // Фильтр: не торгуем против старшего тренда в сильном/слабом тренде
+  // Если D1/H4 показывает BULLISH — не шортим, если BEARISH — не лонгим
+  const trendBias = (d1 ?? h4)?.bias.emaTrend;
+  if (regime === 'STRONG_TREND' || regime === 'WEAK_TREND') {
+    if (trendBias === 'BULLISH' && side === 'Sell') {
+      logDecision(cycleId, 'skip', pair, 'AGAINST_TREND', [
+        `Sell сигнал при BULLISH тренде (${regime}) — пропускаем`,
+      ]);
+      return null;
+    }
+    if (trendBias === 'BEARISH' && side === 'Buy') {
+      logDecision(cycleId, 'skip', pair, 'AGAINST_TREND', [
+        `Buy сигнал при BEARISH тренде (${regime}) — пропускаем`,
+      ]);
+      return null;
+    }
+  }
 
   // Direction-aware funding filter:
   // Extreme positive FR → блокируем LONG (лонги перегреты)
@@ -277,10 +362,11 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
 
   const sl = side === 'Buy' ? entry - slDistance : entry + slDistance;
 
-  // TP: используем minRR из конфига
-  const tp = side === 'Buy' ? entry + slDistance * config.minRR : entry - slDistance * config.minRR;
+  // Динамический R:R в зависимости от режима рынка
+  const rr = getRegimeRR(regime);
 
-  const rr = config.minRR;
+  // TP: используем динамический RR
+  const tp = side === 'Buy' ? entry + slDistance * rr : entry - slDistance * rr;
 
   return {
     pair,

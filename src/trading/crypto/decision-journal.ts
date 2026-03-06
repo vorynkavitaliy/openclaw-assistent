@@ -48,6 +48,8 @@ export interface Decision {
     qty?: string;
     rr?: number;
     orderId?: string;
+    orderIds?: string[];
+    gridLevels?: number;
   };
   outcome?: {
     pnl?: number;

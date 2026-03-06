@@ -271,9 +271,14 @@ export interface TradingConfig extends BaseTradingConfig {
   maxFundingRate: number;
   minFundingRate: number;
   maxSpreadPercent: number;
-  atrSlMultiplier: number; // ATR multiplier for SL distance (default 1.5)
+  atrSlMultiplier: number; // ATR multiplier for SL distance (default 2.0)
   staleOrderMinutes: number; // Cancel limit orders older than N minutes
   ecosystemGroups: string[][]; // Correlated pairs groups (max 1 position per group)
+  minConfidence: number; // Minimum confidence % to enter (default 50)
+  pairCooldownMin: number; // Cooldown between trades on same pair (minutes)
+  gridLevels: number; // Grid entry: количество лимитных ордеров (1 = обычный, 2-3 = grid)
+  gridSpacingAtr: number; // Расстояние между grid-уровнями в долях ATR (0.3 = 30% ATR)
+  gridVolumeMultiplier: number; // Множитель общего объёма при grid входе (1.5 = +50%)
   demoTrading: boolean;
   trendTF: string;
   zonesTF: string;

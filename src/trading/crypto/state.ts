@@ -144,7 +144,10 @@ export function save(): void {
   ensureDataDir();
   const state = get();
   state.lastUpdate = new Date().toISOString();
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  // Atomic write: write to tmp → rename (предотвращает корруптацию при crash)
+  const tmpFile = STATE_FILE + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2), 'utf-8');
+  fs.renameSync(tmpFile, STATE_FILE);
 }
 
 export function get(): CryptoState {

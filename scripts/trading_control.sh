@@ -27,6 +27,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 CRON_TAG_CRYPTO="# openclaw-crypto-monitor"
+CRON_TAG_SL_GUARD="# openclaw-sl-guard"
 CRON_TAG_FOREX="# openclaw-forex-monitor"
 
 send_telegram() {
@@ -75,6 +76,10 @@ has_cron() {
   crontab -l 2>/dev/null | grep -qF "$tag"
 }
 
+has_sl_guard_cron() {
+  crontab -l 2>/dev/null | grep -qF "$CRON_TAG_SL_GUARD"
+}
+
 create_cron() {
   local agent="$1"
 
@@ -90,6 +95,17 @@ create_cron() {
   if [[ "$agent" == "crypto-trader" ]]; then
     # Каждые 5 минут: monitor.ts анализирует рынок, триггерит LLM при необходимости
     cron_line="*/5 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/crypto/monitor.ts >> ${LOG_DIR}/monitor.log 2>&1 ${CRON_TAG_CRYPTO}"
+    # Каждую минуту: sl-guard проверяет SL/TP для всех открытых позиций
+    local sl_guard_line
+    sl_guard_line="* * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/crypto/sl-guard.ts >> ${LOG_DIR}/sl-guard.log 2>&1 ${CRON_TAG_SL_GUARD}"
+
+    if has_sl_guard_cron; then
+      echo -e "${YELLOW}SL-Guard cron already exists, skipping${NC}"
+    else
+      (crontab -l 2>/dev/null || true; echo "$cron_line"; echo "$sl_guard_line") | crontab -
+      echo -e "${GREEN}${agent}: cron created (monitor */5 min, sl-guard */1 min)${NC}"
+      return 0
+    fi
   elif [[ "$agent" == "forex-trader" ]]; then
     cron_line="*/10 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/forex/monitor.ts >> ${LOG_DIR}/forex-monitor.log 2>&1 ${CRON_TAG_FOREX}"
   else
@@ -112,8 +128,14 @@ remove_cron() {
     return 0
   fi
 
-  crontab -l 2>/dev/null | grep -vF "$tag" | crontab -
-  echo -e "${GREEN}${agent}: cron removed${NC}"
+  if [[ "$agent" == "crypto-trader" ]]; then
+    # Удаляем и monitor, и sl-guard
+    crontab -l 2>/dev/null | grep -vF "$tag" | grep -vF "$CRON_TAG_SL_GUARD" | crontab -
+    echo -e "${GREEN}${agent}: cron removed (monitor + sl-guard)${NC}"
+  else
+    crontab -l 2>/dev/null | grep -vF "$tag" | crontab -
+    echo -e "${GREEN}${agent}: cron removed${NC}"
+  fi
 }
 
 do_start() {

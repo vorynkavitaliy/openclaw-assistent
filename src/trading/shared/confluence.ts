@@ -5,7 +5,6 @@ import {
   calculateStochRSI,
 } from './indicators.js';
 import { analyzeOrderflow } from './orderflow.js';
-import { getRegimeThreshold } from './regime.js';
 import type {
   ConfluenceConfig,
   ConfluenceScore,
@@ -40,7 +39,7 @@ export interface ConfluenceInput {
   orderbook: OrderbookData;
   oiHistory: OIDataPoint[];
   fundingHistory: FundingDataPoint[];
-  volumeProfile: VolumeProfile;
+  volumeProfile: VolumeProfile | null;
   regime: MarketRegime;
   market: MarketInfo;
   config?: ConfluenceConfig;
@@ -60,8 +59,14 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
   const trendDirection: 'long' | 'short' | 'neutral' =
     trend > 0 ? 'long' : trend < 0 ? 'short' : 'neutral';
   const momentum = scoreMomentum(input.entryCandles, trendDirection, details);
-  const volume = scoreVolume(input.volumeProfile, details);
-  const structure = scoreStructure(input.entryTF, input.volumeProfile, input.market, details);
+  const volume = scoreVolume(input.volumeProfile, trendDirection, details);
+  const structure = scoreStructure(
+    input.entryTF,
+    input.volumeProfile,
+    input.market,
+    trendDirection,
+    details,
+  );
   const orderflow = scoreOrderflow(
     input.orderbook,
     input.oiHistory,
@@ -79,14 +84,14 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     orderflow * cfg.orderflowWeight +
     regime * cfg.regimeWeight;
 
-  // Conflict filter: тренд и моментум прямо противоположны — снижаем score
-  // Например: trend=+8 (bullish) но momentum=-7 (bearish momentum) — сигнал ненадёжен
+  // Conflict filter: тренд и моментум прямо противоположны — уменьшаем abs(score)
+  // Penalty всегда двигает score к нулю (снижает уверенность в направлении)
   let conflictPenalty = 0;
   if (trend > 5 && momentum < -5) {
-    conflictPenalty = -15;
+    conflictPenalty = -15; // bullish score → уменьшаем
     details.push('Conflict: тренд bullish, но momentum bearish — снижен score');
   } else if (trend < -5 && momentum > 5) {
-    conflictPenalty = 15;
+    conflictPenalty = +15; // bearish (negative) score → двигаем к нулю (увеличиваем)
     details.push('Conflict: тренд bearish, но momentum bullish — снижен score');
   }
 
@@ -95,8 +100,13 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
   const clamped = Math.max(-100, Math.min(100, total));
 
   const signal = getSignal(clamped);
-  const threshold = getRegimeThreshold(input.regime);
-  const confidence = Math.max(0, Math.min(100, Math.round((Math.abs(clamped) / threshold) * 100)));
+  // Confidence: абсолютный score нормализован к реалистичному максимуму (75)
+  // Score 75 → 100%, score 37 → 50%, score 22 → 29%
+  const REALISTIC_MAX_SCORE = 75;
+  const confidence = Math.max(
+    0,
+    Math.min(100, Math.round((Math.abs(clamped) / REALISTIC_MAX_SCORE) * 100)),
+  );
 
   return {
     total: clamped,
@@ -283,13 +293,22 @@ function detectRsiDivergence(
 
 // ─── Module 3: Volume Score (weight 15%) ─────────────────────────
 
-function scoreVolume(volumeProfile: VolumeProfile, details: string[]): number {
+function scoreVolume(
+  volumeProfile: VolumeProfile | null,
+  direction: 'long' | 'short' | 'neutral',
+  details: string[],
+): number {
+  if (!volumeProfile) {
+    details.push('Volume: нет данных (neutral)');
+    return 0;
+  }
+
   let score = 0;
 
   const rv = volumeProfile.relativeVolume;
   const delta = volumeProfile.volumeDelta;
 
-  // Relative volume
+  // Relative volume (direction-independent — высокий объём хорош для любого входа)
   if (rv > 2.0) {
     score += 5;
     details.push(`Volume: ${rv}x average (high activity)`);
@@ -304,15 +323,36 @@ function scoreVolume(volumeProfile: VolumeProfile, details: string[]): number {
     score -= 3;
   }
 
-  // Volume delta (buy vs sell pressure) — нормализован по среднему объёму пары
+  // Volume delta — оценка по направлению тренда
+  // Buy pressure (delta > 0) подтверждает LONG, sell pressure (delta < 0) подтверждает SHORT
   const avgVol = volumeProfile.avgCandleVolumeUsd;
   const deltaPct = avgVol > 0 ? (Math.abs(delta) / avgVol) * 100 : 0;
-  if (delta > 0) {
-    score += Math.min(5, Math.round(deltaPct / 5));
-    if (deltaPct > 30) details.push(`Volume: strong buy pressure (${deltaPct.toFixed(0)}% avg)`);
-  } else if (delta < 0) {
-    score -= Math.min(5, Math.round(deltaPct / 5));
-    if (deltaPct > 30) details.push(`Volume: strong sell pressure (${deltaPct.toFixed(0)}% avg)`);
+  const deltaPoints = Math.min(5, Math.round(deltaPct / 5));
+
+  if (direction === 'long') {
+    // Для LONG: buy pressure = подтверждение (+), sell pressure = против (-)
+    score += delta > 0 ? deltaPoints : -deltaPoints;
+    if (deltaPct > 30) {
+      details.push(
+        `Volume: ${delta > 0 ? 'buy' : 'sell'} pressure (${deltaPct.toFixed(0)}% avg) — ${delta > 0 ? 'confirms' : 'against'} long`,
+      );
+    }
+  } else if (direction === 'short') {
+    // Для SHORT: sell pressure = подтверждение (+), buy pressure = против (-)
+    // Score идёт в отрицательную сторону для SHORT (отрицательный = bearish)
+    score -= delta < 0 ? deltaPoints : -deltaPoints;
+    if (deltaPct > 30) {
+      details.push(
+        `Volume: ${delta < 0 ? 'sell' : 'buy'} pressure (${deltaPct.toFixed(0)}% avg) — ${delta < 0 ? 'confirms' : 'against'} short`,
+      );
+    }
+  } else {
+    // Neutral: старая логика
+    if (delta > 0) {
+      score += deltaPoints;
+    } else if (delta < 0) {
+      score -= deltaPoints;
+    }
   }
 
   return Math.max(-10, Math.min(10, score));
@@ -322,8 +362,9 @@ function scoreVolume(volumeProfile: VolumeProfile, details: string[]): number {
 
 function scoreStructure(
   entryTF: MarketAnalysis,
-  volumeProfile: VolumeProfile,
+  volumeProfile: VolumeProfile | null,
   market: MarketInfo,
+  direction: 'long' | 'short' | 'neutral',
   details: string[],
 ): number {
   let score = 0;
@@ -336,36 +377,54 @@ function scoreStructure(
   const distToSupport = ((price - support) / price) * 100;
   const distToResistance = ((resistance - price) / price) * 100;
 
-  // Near support (good for longs)
-  if (distToSupport < 1.0) {
-    score += 5;
-    details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%)`);
-  } else if (distToSupport < 2.0) {
-    score += 3;
+  if (direction === 'short') {
+    // SHORT: у resistance хорошо (точка входа), у support плохо (цель далеко)
+    if (distToResistance < 1.0) {
+      score -= 5; // bearish = negative score
+      details.push(
+        `Structure: цена у resistance (${distToResistance.toFixed(1)}%) — хорошо для short`,
+      );
+    } else if (distToResistance < 2.0) {
+      score -= 3;
+    }
+    if (distToSupport < 1.0) {
+      score += 5; // near support = плохо для short (цель рядом)
+      details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%) — плохо для short`);
+    } else if (distToSupport < 2.0) {
+      score += 3;
+    }
+  } else {
+    // LONG / NEUTRAL: у support хорошо, у resistance плохо
+    if (distToSupport < 1.0) {
+      score += 5;
+      details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%)`);
+    } else if (distToSupport < 2.0) {
+      score += 3;
+    }
+    if (distToResistance < 1.0) {
+      score -= 5;
+      details.push(`Structure: цена у resistance (${distToResistance.toFixed(1)}%)`);
+    } else if (distToResistance < 2.0) {
+      score -= 3;
+    }
   }
 
-  // Near resistance (bad for longs)
-  if (distToResistance < 1.0) {
-    score -= 5;
-    details.push(`Structure: цена у resistance (${distToResistance.toFixed(1)}%)`);
-  } else if (distToResistance < 2.0) {
-    score -= 3;
-  }
-
-  // VWAP confluence
-  const distToVwap = (Math.abs(price - volumeProfile.vwap) / price) * 100;
-  if (distToVwap < 0.3) {
-    score += 2;
-    details.push('Structure: цена у VWAP');
-  }
-
-  // High volume nodes nearby
-  for (const node of volumeProfile.highVolumeNodes) {
-    const dist = (Math.abs(price - node) / price) * 100;
-    if (dist < 0.5) {
+  // VWAP confluence (только если есть volume profile)
+  if (volumeProfile) {
+    const distToVwap = (Math.abs(price - volumeProfile.vwap) / price) * 100;
+    if (distToVwap < 0.3) {
       score += 2;
-      details.push(`Structure: high volume node at ${node}`);
-      break;
+      details.push('Structure: цена у VWAP');
+    }
+
+    // High volume nodes nearby
+    for (const node of volumeProfile.highVolumeNodes) {
+      const dist = (Math.abs(price - node) / price) * 100;
+      if (dist < 0.5) {
+        score += 2;
+        details.push(`Structure: high volume node at ${node}`);
+        break;
+      }
     }
   }
 

@@ -22,6 +22,7 @@
     "trade:crypto:journal": "tsx src/trading/crypto/journal-cli.ts",
     "trade:crypto:explain": "tsx src/trading/crypto/journal-cli.ts --last",
     "trade:crypto:diary": "tsx src/trading/crypto/journal-cli.ts --summary",
+    "trade:crypto:sl-guard": "npx tsx src/trading/crypto/sl-guard.ts",
     "market:digest": "tsx src/market/digest.ts",
     "bot": "node dist/bot.js",
     "bot:dev": "tsx src/bot.ts"

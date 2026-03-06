@@ -163,24 +163,24 @@ export async function managePositions(
         if (pos.side === 'long') {
           const newSl = mark - trailingDistance;
           if (newSl > sl) {
-            await modifyPosition(pos.symbol, newSl.toFixed(2));
+            await modifyPosition(pos.symbol, String(roundPrice(newSl, pos.symbol)));
             actions.push({
               type: 'trailing_sl',
               symbol: pos.symbol,
               oldSl: sl,
-              newSl: newSl.toFixed(2),
+              newSl: String(roundPrice(newSl, pos.symbol)),
               result: 'OK',
             });
           }
         } else {
           const newSl = mark + trailingDistance;
           if (newSl < sl) {
-            await modifyPosition(pos.symbol, newSl.toFixed(2));
+            await modifyPosition(pos.symbol, String(roundPrice(newSl, pos.symbol)));
             actions.push({
               type: 'trailing_sl',
               symbol: pos.symbol,
               oldSl: sl,
-              newSl: newSl.toFixed(2),
+              newSl: String(roundPrice(newSl, pos.symbol)),
               result: 'OK',
             });
           }

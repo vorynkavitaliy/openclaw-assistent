@@ -137,33 +137,17 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
     return null;
   }
 
-  // Funding rate фильтр — не входим против перегретого рынка
+  // Funding rate фильтр — контекстный по направлению
+  // Extreme positive funding → опасно для LONG (рынок перегрет лонгами)
+  // Extreme negative funding → опасно для SHORT (рынок перегрет шортами)
+  // Но НЕ блокируем противоположное направление: negative funding хорош для LONG
   const fr = market.fundingRate;
-  if (fr > config.maxFundingRate || fr < config.minFundingRate) {
-    log.debug('Funding rate filter: skip', { pair, fundingRate: fr });
-    logDecision(
-      cycleId,
-      'skip',
-      pair,
-      'FUNDING_RATE_EXTREME',
-      [`Funding rate ${fr} вне диапазона [${config.minFundingRate}, ${config.maxFundingRate}]`],
-      {
-        filters: {
-          fundingRate: {
-            passed: false,
-            value: String(fr),
-            threshold: `[${config.minFundingRate}, ${config.maxFundingRate}]`,
-          },
-        },
-        marketContext: { price: market.lastPrice, fundingRate: fr },
-      },
-    );
-    return null;
-  }
 
-  // Volume profile from M15 candles + recent trades
+  // Volume profile from M15 candles + recent trades (fallback при отсутствии данных)
   const volumeProfile = m15Candles.length > 0 ? buildVolumeProfile(m15Candles, recentTrades) : null;
-  if (!volumeProfile) return null;
+  if (!volumeProfile) {
+    log.debug('No volume profile data, using neutral fallback', { pair });
+  }
 
   // Market regime from H4 candles
   const regime = h4Candles.length >= 50 ? detectMarketRegime(h4Candles) : 'RANGING';
@@ -242,6 +226,23 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
   const price = market.lastPrice;
 
   if (atr === 0 || price === 0) return null;
+
+  // Direction-aware funding filter:
+  // Extreme positive FR → блокируем LONG (лонги перегреты)
+  // Extreme negative FR → блокируем SHORT (шорты перегреты)
+  const EXTREME_FR = 0.01; // 1% — действительно экстремальный
+  if (side === 'Buy' && fr > config.maxFundingRate) {
+    logDecision(cycleId, 'skip', pair, 'FUNDING_BLOCKS_LONG', [
+      `Funding rate ${(fr * 100).toFixed(3)}% слишком высокий для LONG (лимит ${(config.maxFundingRate * 100).toFixed(2)}%)`,
+    ]);
+    return null;
+  }
+  if (side === 'Sell' && fr < -EXTREME_FR) {
+    logDecision(cycleId, 'skip', pair, 'FUNDING_BLOCKS_SHORT', [
+      `Funding rate ${(fr * 100).toFixed(3)}% слишком отрицательный для SHORT (шорты перегреты)`,
+    ]);
+    return null;
+  }
 
   // Entry: Limit ордер (bid1 для Buy, ask1 для Sell)
   const entry =

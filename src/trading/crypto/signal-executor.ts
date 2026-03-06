@@ -110,6 +110,27 @@ export async function executeSignals(
       continue;
     }
 
+    // Проверка объёма позиции: notional value не должен превышать баланс * maxLeverage
+    const notionalValue = sig.entryPrice * qty;
+    const maxNotional = s.balance.total * config.maxLeverage;
+    if (maxNotional > 0 && notionalValue > maxNotional) {
+      logDecision(
+        cycleId,
+        'skip',
+        sig.pair,
+        'POSITION_SIZE_TOO_LARGE',
+        [
+          `Notional $${notionalValue.toFixed(0)} > макс $${maxNotional.toFixed(0)} (баланс × leverage)`,
+        ],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
+      results.push({
+        ...sig,
+        action: `SKIP: notional $${notionalValue.toFixed(0)} > max $${maxNotional.toFixed(0)}`,
+      });
+      continue;
+    }
+
     const slDist = Math.abs(sig.entryPrice - sig.sl);
     const risk = slDist * qty;
     if (risk > config.maxRiskPerTrade) {

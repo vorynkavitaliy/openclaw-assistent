@@ -118,6 +118,20 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     return;
   }
 
+  if (cmd.startsWith('/llm ') || cmd.startsWith('/llm\n')) {
+    const prompt = text.slice(4).trim();
+    if (!prompt) {
+      await sendTelegram('Использование: /llm {ваш вопрос}', 'HTML');
+      return;
+    }
+    await sendTelegram('🤔 Думаю...');
+    const { chatWithLLM } = await import('./trading/crypto/llm-chat.js');
+    const response = await chatWithLLM(prompt);
+    const trimmed = response.length > 4000 ? response.slice(0, 4000) + '\n...(обрезано)' : response;
+    await sendTelegram(trimmed);
+    return;
+  }
+
   if (cmd === '/kill' || cmd === 'аварийная остановка') {
     runTsx('trading/crypto/killswitch.ts', ['--on', '--reason=Manual kill via Telegram']);
     await sendTelegram('🚨 KILL SWITCH АКТИВИРОВАН!\nВсе позиции будут закрыты.', 'HTML');
@@ -132,6 +146,7 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 /status — текущий статус
 /report — полный отчёт
 /kill — аварийная остановка (kill switch)
+/llm {вопрос} — спросить AI с контекстом трейдера
 /help — эта справка`,
       'HTML',
     );
@@ -149,6 +164,7 @@ async function setMenuCommands(): Promise<void> {
     { command: 'status', description: 'Текущий статус и позиции' },
     { command: 'report', description: 'Полный отчёт по портфелю' },
     { command: 'kill', description: 'Аварийная остановка (kill switch)' },
+    { command: 'llm', description: 'Спросить AI (напр: /llm как рынок?)' },
     { command: 'help', description: 'Список команд' },
   ];
 

@@ -7,7 +7,7 @@ SNAPSHOTS_FILE="${PROJECT_DIR}/data/market-snapshots.jsonl"
 DECISIONS_FILE="${PROJECT_DIR}/data/decisions.jsonl"
 
 # Торгуемые пары (должны совпадать с config.ts)
-PAIRS="ETHUSDT,SOLUSDT,ADAUSDT,DOGEUSDT"
+PAIRS="BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,LINKUSDT,AVAXUSDT,SUIUSDT"
 
 python3 - "$SNAPSHOTS_FILE" "$DECISIONS_FILE" "$PAIRS" << 'PYEOF'
 import json, sys

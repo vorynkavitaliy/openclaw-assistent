@@ -9,6 +9,8 @@ const SYMBOL_SPECS: Record<string, { qtyDec: number; priceDec: number }> = {
   AVAXUSDT: { qtyDec: 1, priceDec: 2 }, // step=0.1,   tick=0.01
   LINKUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
   ADAUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
+  BNBUSDT: { qtyDec: 2, priceDec: 2 }, // step=0.01,  tick=0.01
+  SUIUSDT: { qtyDec: 1, priceDec: 4 }, // step=0.1,   tick=0.0001
   DOTUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
   MATICUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
   ARBUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001

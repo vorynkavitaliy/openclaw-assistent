@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const config: TradingConfig = {
-  pairs: ['ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT'],
+  pairs: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'LINKUSDT', 'AVAXUSDT', 'SUIUSDT'],
 
   allowedOrderTypes: ['Market', 'Limit'],
 
@@ -43,7 +43,8 @@ const config: TradingConfig = {
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [
-    ['ADAUSDT', 'SOLUSDT'], // Alt L1
+    ['SOLUSDT', 'AVAXUSDT', 'SUIUSDT'], // Alt L1
+    ['ETHUSDT', 'LINKUSDT'], // ETH-экосистема
   ],
 
   mode: 'execute',

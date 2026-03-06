@@ -207,21 +207,21 @@ describe('executeSignals — SKIP pending order', () => {
 });
 
 describe('executeSignals — SKIP ecosystem occupied', () => {
-  it('пропускает сигнал SOLUSDT если ADAUSDT уже в позиции (одна экосистема)', async () => {
-    // ADAUSDT и SOLUSDT — одна экосистема (Alt L1)
+  it('пропускает сигнал SOLUSDT если AVAXUSDT уже в позиции (одна экосистема Alt L1)', async () => {
+    // AVAXUSDT и SOLUSDT — одна экосистема (Alt L1)
     mockGet.mockReturnValue(
       makeState({
         positions: [
           {
-            symbol: 'ADAUSDT',
+            symbol: 'AVAXUSDT',
             side: 'long',
-            size: '1000',
-            entryPrice: '0.5',
-            markPrice: '0.55',
-            unrealisedPnl: '50',
+            size: '10',
+            entryPrice: '20',
+            markPrice: '22',
+            unrealisedPnl: '20',
             leverage: '3',
-            stopLoss: '0.45',
-            takeProfit: '0.65',
+            stopLoss: '18',
+            takeProfit: '25',
           },
         ],
       }) as unknown as ReturnType<typeof state.get>,
@@ -240,15 +240,15 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
       makeState({
         positions: [
           {
-            symbol: 'ADAUSDT',
+            symbol: 'AVAXUSDT',
             side: 'long',
-            size: '1000',
-            entryPrice: '0.5',
-            markPrice: '0.55',
-            unrealisedPnl: '50',
+            size: '10',
+            entryPrice: '20',
+            markPrice: '22',
+            unrealisedPnl: '20',
             leverage: '3',
-            stopLoss: '0.45',
-            takeProfit: '0.65',
+            stopLoss: '18',
+            takeProfit: '25',
           },
         ],
       }) as unknown as ReturnType<typeof state.get>,

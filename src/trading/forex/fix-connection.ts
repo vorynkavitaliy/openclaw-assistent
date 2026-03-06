@@ -42,6 +42,7 @@ export const Tag = {
 
   Account: 1,
   AvgPx: 6,
+  LastPx: 31,
   ClOrdID: 11,
   CumQty: 14,
   ExecID: 17,

@@ -244,6 +244,7 @@ export async function getBalance(): Promise<AccountInfo> {
 
 export async function getPositions(): Promise<PositionWithId[]> {
   const session = await getTradeSession();
+  await loadSymbols();
   const reqId = nextReqId('pos');
 
   const reports = await session.requestMulti(
@@ -323,7 +324,6 @@ export async function submitOrder(params: {
   const fixSide = params.side === 'Buy' ? '1' : '2';
   const symbolId = await resolveSymbolId(params.symbol);
 
-  // Use absolute prices if provided
   const slPrice = params.sl?.price;
   const tpPrice = params.tp?.price;
 
@@ -337,21 +337,11 @@ export async function submitOrder(params: {
     [Tag.TransactTime, fixTransactTime()],
   ];
 
-  if (slPrice) fields.push([Tag.StopLossPrice, slPrice]);
-  if (tpPrice) fields.push([Tag.TakeProfitPrice, tpPrice]);
-
   log.info(
     `Submitting order: ${params.side} ${params.symbol} ${params.lots} lots (${units} units)` +
       (slPrice ? ` SL=${slPrice}` : '') +
       (tpPrice ? ` TP=${tpPrice}` : ''),
   );
-
-  if (!slPrice && !tpPrice && (params.sl?.pips || params.tp?.pips)) {
-    log.warn(
-      `SL/TP provided as pips only. Will attempt to set after fill. ` +
-        `For reliability, use absolute prices (--sl, --tp) instead of --sl-pips, --tp-pips.`,
-    );
-  }
 
   const execReport = await session.request(
     MsgType.NewOrderSingle,
@@ -364,70 +354,55 @@ export async function submitOrder(params: {
   const execType = execReport.getString(Tag.ExecType);
   const ordStatus = execReport.getString(Tag.OrdStatus);
   const orderId = execReport.getString(Tag.OrderID);
-  const avgPx = execReport.getFloat(Tag.AvgPx);
+  const avgPx = execReport.getFloat(Tag.AvgPx) || execReport.getFloat(Tag.LastPx);
   const rejectReason = execReport.getString(Tag.Text);
 
   if (execType === '8' || ordStatus === '8') {
     throw new Error(`Order rejected: ${rejectReason}`);
   }
 
-  log.info(`Order filled: ${orderId} ${params.side} ${params.symbol} @ ${avgPx}`, {
+  const posId = execReport.getString(Tag.PosMaintRptID) || orderId;
+
+  log.info(`Order accepted: ${orderId} ${params.side} ${params.symbol} pos=${posId} @ ${avgPx}`, {
     execType,
     ordStatus,
     clOrdId,
   });
 
-  // ── ALWAYS set SL/TP via OrderCancelReplaceRequest (35=G) after fill ──
-  // cTrader may silently ignore tags 9025/9026 in NewOrderSingle (35=D).
-  // The only RELIABLE way is amendment after fill. This runs for ALL orders.
-  let confirmedSl: number | undefined;
-  let confirmedTp: number | undefined;
+  // ── Set SL/TP as separate Stop/Limit orders linked via PosMaintRptID ──
+  // cTrader FIX doesn't support custom tags 9025/9026 or OrderCancelReplaceRequest
+  // for position-level SL/TP. Instead, we place separate protective orders.
+  const entryPx = avgPx > 0 ? avgPx : slPrice ? slPrice + 0.01 : 0;
+  const confirmedSl = slPrice ?? pipsToPrice(params.side, entryPx, params.sl, true, params.symbol);
+  const confirmedTp = tpPrice ?? pipsToPrice(params.side, entryPx, params.tp, false, params.symbol);
 
-  if (avgPx > 0) {
-    // Resolve final SL/TP prices (absolute or computed from pips)
-    confirmedSl = slPrice ?? pipsToPrice(params.side, avgPx, params.sl, true, params.symbol);
-    confirmedTp = tpPrice ?? pipsToPrice(params.side, avgPx, params.tp, false, params.symbol);
-
-    if (confirmedSl || confirmedTp) {
-      const posId = execReport.getString(Tag.PosMaintRptID) || execReport.getString(Tag.OrderID);
-
-      if (posId) {
-        try {
-          await amendPositionSlTp(
-            session,
-            posId,
-            symbolId,
-            fixSide,
-            units,
-            confirmedSl,
-            confirmedTp,
-          );
-          log.info(
-            `SL/TP CONFIRMED via amendment: SL=${confirmedSl ?? 'N/A'} TP=${confirmedTp ?? 'N/A'}`,
-          );
-        } catch (err) {
-          // SL/TP amendment failed — this is CRITICAL, position is unprotected
-          log.error(
-            `CRITICAL: SL/TP amendment FAILED for ${params.symbol} pos=${posId}: ${(err as Error).message}. ` +
-              `Position is UNPROTECTED. Closing position immediately.`,
-          );
-          // Try to close the unprotected position
-          try {
-            await closePosition(posId);
-            log.warn(`Unprotected position ${posId} closed as safety measure.`);
-          } catch (closeErr) {
-            log.error(
-              `Failed to close unprotected position ${posId}: ${(closeErr as Error).message}`,
-            );
-          }
-          throw new Error(
-            `Order filled but SL/TP amendment failed — position closed for safety. ${(err as Error).message}`,
-            { cause: err },
-          );
-        }
-      } else {
-        log.warn(`No position ID in ExecutionReport — cannot set SL/TP via amendment`);
+  if ((confirmedSl || confirmedTp) && posId) {
+    try {
+      await placeProtectiveOrders(
+        session,
+        posId,
+        symbolId,
+        fixSide,
+        units,
+        confirmedSl,
+        confirmedTp,
+      );
+      log.info(`SL/TP set: SL=${confirmedSl ?? 'N/A'} TP=${confirmedTp ?? 'N/A'}`);
+    } catch (err) {
+      log.error(
+        `CRITICAL: SL/TP placement FAILED for ${params.symbol} pos=${posId}: ${(err as Error).message}. ` +
+          `Position is UNPROTECTED. Closing position immediately.`,
+      );
+      try {
+        await closePosition(posId);
+        log.warn(`Unprotected position ${posId} closed as safety measure.`);
+      } catch (closeErr) {
+        log.error(`Failed to close unprotected position ${posId}: ${(closeErr as Error).message}`);
       }
+      throw new Error(
+        `Order filled but SL/TP failed — position closed for safety. ${(err as Error).message}`,
+        { cause: err },
+      );
     }
   }
 
@@ -470,6 +445,7 @@ export async function closePosition(
     [Tag.OrdType, '1'],
     [Tag.TimeInForce, '3'],
     [Tag.TransactTime, fixTransactTime()],
+    [Tag.PosMaintRptID, String(positionId)], // Close specific position in hedging mode
   ];
 
   log.info(`Closing position ${positionId}: ${pos.symbol} ${lots} lots`);
@@ -490,48 +466,80 @@ export async function closePosition(
   log.info(`Position ${positionId} closed`, { partial: partialLots });
 }
 
-async function amendPositionSlTp(
+/**
+ * Place protective Stop (SL) and Limit (TP) orders linked to a position.
+ * cTrader FIX doesn't support custom SL/TP tags (9025/9026) or
+ * OrderCancelReplaceRequest for positions. Instead, we place separate
+ * NewOrderSingle orders with PosMaintRptID to link them.
+ */
+async function placeProtectiveOrders(
   session: FixSession,
   posId: string,
   symbolId: string,
-  fixSide: string,
+  positionSide: string, // '1'=Buy, '2'=Sell — the POSITION side
   units: number,
   slPrice: number | undefined,
   tpPrice: number | undefined,
 ): Promise<void> {
-  const clOrdId = nextReqId('amend');
+  const closeSide = positionSide === '1' ? '2' : '1'; // opposite
 
-  const fields: [number, string | number][] = [
-    [Tag.ClOrdID, clOrdId],
-    [Tag.OrigClOrdID, posId],
-    [Tag.Symbol, symbolId],
-    [Tag.Side, fixSide],
-    [Tag.OrderQty, units],
-    [Tag.OrdType, '1'],
-    [Tag.TransactTime, fixTransactTime()],
-  ];
+  if (slPrice) {
+    const slClOrdId = nextReqId('sl');
+    const slFields: [number, string | number][] = [
+      [Tag.ClOrdID, slClOrdId],
+      [Tag.Symbol, symbolId],
+      [Tag.Side, closeSide],
+      [Tag.OrderQty, units],
+      [Tag.OrdType, '3'], // Stop order
+      [Tag.StopPx, slPrice],
+      [Tag.TimeInForce, '1'], // GTC
+      [Tag.TransactTime, fixTransactTime()],
+      [Tag.PosMaintRptID, posId],
+    ];
 
-  if (slPrice) fields.push([Tag.StopLossPrice, slPrice]);
-  if (tpPrice) fields.push([Tag.TakeProfitPrice, tpPrice]);
-
-  log.info(`Amending position ${posId}: SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'}`);
-
-  const response = await session.request(
-    MsgType.OrderCancelReplaceRequest,
-    fields,
-    MsgType.ExecutionReport,
-    clOrdId,
-    REQUEST_TIMEOUT_MS,
-  );
-
-  const execType = response.getString(Tag.ExecType);
-  const rejectReason = response.getString(Tag.Text);
-
-  if (execType === '8') {
-    throw new Error(`Amendment rejected: ${rejectReason}`);
+    log.info(`Placing SL Stop order: pos=${posId} StopPx=${slPrice}`);
+    const resp = await session.request(
+      MsgType.NewOrderSingle,
+      slFields,
+      MsgType.ExecutionReport,
+      slClOrdId,
+      REQUEST_TIMEOUT_MS,
+    );
+    const et = resp.getString(Tag.ExecType);
+    if (et === '8') {
+      throw new Error(`SL order rejected: ${resp.getString(Tag.Text)}`);
+    }
+    log.info(`SL order placed: ${resp.getString(Tag.OrderID)}`);
   }
 
-  log.info(`Position ${posId} amended: SL=${slPrice ?? 'N/A'} TP=${tpPrice ?? 'N/A'}`);
+  if (tpPrice) {
+    const tpClOrdId = nextReqId('tp');
+    const tpFields: [number, string | number][] = [
+      [Tag.ClOrdID, tpClOrdId],
+      [Tag.Symbol, symbolId],
+      [Tag.Side, closeSide],
+      [Tag.OrderQty, units],
+      [Tag.OrdType, '2'], // Limit order
+      [Tag.Price, tpPrice],
+      [Tag.TimeInForce, '1'], // GTC
+      [Tag.TransactTime, fixTransactTime()],
+      [Tag.PosMaintRptID, posId],
+    ];
+
+    log.info(`Placing TP Limit order: pos=${posId} Price=${tpPrice}`);
+    const resp = await session.request(
+      MsgType.NewOrderSingle,
+      tpFields,
+      MsgType.ExecutionReport,
+      tpClOrdId,
+      REQUEST_TIMEOUT_MS,
+    );
+    const et = resp.getString(Tag.ExecType);
+    if (et === '8') {
+      throw new Error(`TP order rejected: ${resp.getString(Tag.Text)}`);
+    }
+    log.info(`TP order placed: ${resp.getString(Tag.OrderID)}`);
+  }
 }
 
 export async function modifyPosition(
@@ -561,7 +569,7 @@ export async function modifyPosition(
   const fixSide = pos.side === 'long' ? '1' : '2';
   const units = lotsToUnits(pos.symbol, parseFloat(pos.size));
 
-  await amendPositionSlTp(
+  await placeProtectiveOrders(
     session,
     String(positionId),
     symbolId,
@@ -608,4 +616,21 @@ export async function closeSymbol(symbol: string): Promise<void> {
 export function getDeals(_maxRows: number = 50): Promise<unknown[]> {
   log.debug('getDeals: FIX API does not support trade history');
   return Promise.resolve([]);
+}
+
+/** Raw FIX request — for testing/debugging only */
+export async function rawRequest(
+  msgType: string,
+  fields: [number, string | number][],
+  responseMsgType: string,
+  correlationId: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Record<string, string>> {
+  const session = await getTradeSession();
+  const resp = await session.request(msgType, fields, responseMsgType, correlationId, timeoutMs);
+  const result: Record<string, string> = {};
+  for (const [tag, val] of resp.entries()) {
+    result[String(tag)] = val;
+  }
+  return result;
 }

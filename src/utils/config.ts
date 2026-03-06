@@ -158,6 +158,30 @@ export function getCTraderCredentials(): CTraderCredentials {
   };
 }
 
+/**
+ * Проверяет наличие критических переменных окружения.
+ * Вызывать при старте скриптов для раннего обнаружения проблем.
+ */
+export function validateRequiredEnv(scope: 'crypto' | 'forex' | 'bot'): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+
+  if (scope === 'bot' || scope === 'crypto') {
+    if (!process.env.TELEGRAM_BOT_TOKEN) errors.push('TELEGRAM_BOT_TOKEN not set');
+    if (!process.env.TELEGRAM_CHAT_ID) errors.push('TELEGRAM_CHAT_ID not set');
+  }
+
+  if (scope === 'crypto') {
+    const creds = getBybitCredentials();
+    if (!creds.apiKey) errors.push('BYBIT_API_KEY not set (env or credentials.json)');
+    if (!creds.apiSecret) errors.push('BYBIT_API_SECRET not set (env or credentials.json)');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 export function getBybitBaseUrl(): string {
   const creds = getBybitCredentials();
   return creds.testnet ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';

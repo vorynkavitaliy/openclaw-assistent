@@ -1,72 +1,85 @@
+import path from 'node:path';
 import { loadEnv } from '../../utils/env.js';
 loadEnv();
 
 import { createLogger } from '../../utils/logger.js';
+import { acquireLock, releaseLock } from '../../utils/lockfile.js';
 import { sendTelegram } from '../../utils/telegram.js';
 import { runMain } from '../../utils/process.js';
 import { getPositions, modifyPosition } from './bybit-client.js';
 import { calcDefaultSl, calcDefaultTp } from './position-manager.js';
 import { roundPrice } from './symbol-specs.js';
+import config from './config.js';
 
 const log = createLogger('sl-guard');
 
 async function main(): Promise<void> {
-  const positions = await getPositions();
+  const LOCK_FILE = path.join(path.dirname(config.stateFile), 'sl-guard.lock');
+  if (!acquireLock(LOCK_FILE, 60_000)) {
+    log.warn('SL-Guard cycle skipped — previous still running');
+    return;
+  }
 
-  if (positions.length === 0) return;
+  try {
+    const positions = await getPositions();
 
-  for (const pos of positions) {
-    const entry = parseFloat(pos.entryPrice) || 0;
-    const sl = parseFloat(pos.stopLoss ?? '0') || 0;
-    const tp = parseFloat(pos.takeProfit ?? '0') || 0;
-    const size = parseFloat(pos.size) || 0;
+    if (positions.length === 0) return;
 
-    if (entry === 0 || size === 0) continue;
+    for (const pos of positions) {
+      const entry = parseFloat(pos.entryPrice) || 0;
+      const sl = parseFloat(pos.stopLoss ?? '0') || 0;
+      const tp = parseFloat(pos.takeProfit ?? '0') || 0;
+      const size = parseFloat(pos.size) || 0;
 
-    const needsSl = sl === 0;
-    const needsTp = tp === 0;
+      if (entry === 0 || size === 0) continue;
 
-    if (!needsSl && !needsTp) continue;
+      const needsSl = sl === 0;
+      const needsTp = tp === 0;
 
-    // pos.side уже нормализован: 'long' | 'short' (bybit-client)
-    const side = pos.side;
+      if (!needsSl && !needsTp) continue;
 
-    const newSl = needsSl ? roundPrice(calcDefaultSl(entry, side), pos.symbol) : sl;
-    const newTp = needsTp ? roundPrice(calcDefaultTp(entry, newSl, side), pos.symbol) : tp;
+      // pos.side уже нормализован: 'long' | 'short' (bybit-client)
+      const side = pos.side;
 
-    try {
-      await modifyPosition(
-        pos.symbol,
-        needsSl ? String(newSl) : undefined,
-        needsTp ? String(newTp) : undefined,
-      );
+      const newSl = needsSl ? roundPrice(calcDefaultSl(entry, side), pos.symbol) : sl;
+      const newTp = needsTp ? roundPrice(calcDefaultTp(entry, newSl, side), pos.symbol) : tp;
 
-      const missing = needsSl && needsTp ? 'SL и TP' : needsSl ? 'SL' : 'TP';
-      const applied: string[] = [];
-      if (needsSl) applied.push(`SL=${newSl}`);
-      if (needsTp) applied.push(`TP=${newTp}`);
+      try {
+        await modifyPosition(
+          pos.symbol,
+          needsSl ? String(newSl) : undefined,
+          needsTp ? String(newTp) : undefined,
+        );
 
-      const msg =
-        `⚠️ SL-Guard: ${pos.symbol} ${pos.side.toUpperCase()}\n` +
-        `Позиция без ${missing}!\n` +
-        `Установлено: ${applied.join(', ')}\n` +
-        `Entry: ${entry}, Size: ${size}`;
+        const missing = needsSl && needsTp ? 'SL и TP' : needsSl ? 'SL' : 'TP';
+        const applied: string[] = [];
+        if (needsSl) applied.push(`SL=${newSl}`);
+        if (needsTp) applied.push(`TP=${newTp}`);
 
-      log.warn('SL-Guard: применены дефолтные значения', {
-        symbol: pos.symbol,
-        side: pos.side,
-        entry,
-        newSl: needsSl ? newSl : 'без изменений',
-        newTp: needsTp ? newTp : 'без изменений',
-      });
+        const msg =
+          `⚠️ SL-Guard: ${pos.symbol} ${pos.side.toUpperCase()}\n` +
+          `Позиция без ${missing}!\n` +
+          `Установлено: ${applied.join(', ')}\n` +
+          `Entry: ${entry}, Size: ${size}`;
 
-      await sendTelegram(msg);
-    } catch (error: unknown) {
-      log.error('SL-Guard: ошибка установки SL/TP', {
-        symbol: pos.symbol,
-        error: error instanceof Error ? error.message : String(error),
-      });
+        log.warn('SL-Guard: применены дефолтные значения', {
+          symbol: pos.symbol,
+          side: pos.side,
+          entry,
+          newSl: needsSl ? newSl : 'без изменений',
+          newTp: needsTp ? newTp : 'без изменений',
+        });
+
+        await sendTelegram(msg);
+      } catch (error: unknown) {
+        log.error('SL-Guard: ошибка установки SL/TP', {
+          symbol: pos.symbol,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
+  } finally {
+    releaseLock(LOCK_FILE);
   }
 }
 

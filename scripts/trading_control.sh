@@ -30,6 +30,19 @@ CRON_TAG_CRYPTO="# openclaw-crypto-monitor"
 CRON_TAG_SL_GUARD="# openclaw-sl-guard"
 CRON_TAG_FOREX="# openclaw-forex-monitor"
 
+rotate_logs() {
+  local max_size=10485760  # 10 MB
+  for logfile in "${LOG_DIR}/monitor.log" "${LOG_DIR}/sl-guard.log"; do
+    if [[ -f "$logfile" ]] && [[ $(stat -c%s "$logfile" 2>/dev/null || echo 0) -gt $max_size ]]; then
+      mv "$logfile" "${logfile}.$(date +%Y%m%d-%H%M%S)"
+      gzip -q "${logfile}".2* 2>/dev/null || true
+      # Удаляем архивы старше 7 дней
+      find "${LOG_DIR}" -name "$(basename "$logfile").*" -mtime +7 -delete 2>/dev/null || true
+      echo "Rotated: $(basename "$logfile")"
+    fi
+  done
+}
+
 send_telegram() {
   # Пропускаем отправку если вызвано из бота (бот сам отправляет сообщения)
   if [[ "${NO_TELEGRAM:-}" == "1" ]]; then
@@ -172,6 +185,10 @@ do_start() {
 
   echo -e "${GREEN}Starting trading bots...${NC}"
 
+  # Ротация логов при старте
+  mkdir -p "$LOG_DIR"
+  rotate_logs
+
   if [[ "$target" == "all" || "$target" == "crypto-trader" ]]; then
     create_cron "crypto-trader"
   fi
@@ -293,6 +310,7 @@ case "${1:-}" in
   start)           do_start "${2:-}" ;;
   stop)            do_stop "${2:-}" ;;
   status)          do_status ;;
+  rotate-logs)     rotate_logs ;;
   -h|--help|"")    usage ;;
   *)
     echo "Unknown command: $1"

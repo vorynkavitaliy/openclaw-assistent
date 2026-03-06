@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -138,6 +139,28 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     return;
   }
 
+  if (cmd === '/health') {
+    const healthFile = path.join(PROJECT_ROOT, 'data', 'health.json');
+    try {
+      const health = JSON.parse(fs.readFileSync(healthFile, 'utf8')) as {
+        timestamp: string;
+        cycleId: string;
+        positions: number;
+        balance: number;
+        elapsed: string;
+      };
+      const ageMs = Date.now() - new Date(health.timestamp).getTime();
+      const ageSec = Math.round(ageMs / 1000);
+      const status = ageSec < 600 ? '✅ Работает' : '⚠️ Возможные проблемы';
+      await sendTelegram(
+        `${status}\nПоследний цикл: ${ageSec}с назад\nID: ${health.cycleId}\nПозиции: ${health.positions}\nБаланс: $${health.balance}\nВремя цикла: ${health.elapsed}`,
+      );
+    } catch {
+      await sendTelegram('❌ Healthcheck файл не найден. Монитор не запущен?');
+    }
+    return;
+  }
+
   if (cmd === '/help' || cmd === 'помощь') {
     await sendTelegram(
       `📋 <b>Команды:</b>
@@ -145,6 +168,7 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 /stop — остановить
 /status — текущий статус
 /report — полный отчёт
+/health — состояние монитора (последний цикл)
 /kill — аварийная остановка (kill switch)
 /llm {вопрос} — спросить AI с контекстом трейдера
 /help — эта справка`,
@@ -163,6 +187,7 @@ async function setMenuCommands(): Promise<void> {
     { command: 'stop', description: 'Остановить крипто-трейдер' },
     { command: 'status', description: 'Текущий статус и позиции' },
     { command: 'report', description: 'Полный отчёт по портфелю' },
+    { command: 'health', description: 'Состояние монитора (последний цикл)' },
     { command: 'kill', description: 'Аварийная остановка (kill switch)' },
     { command: 'llm', description: 'Спросить AI (напр: /llm как рынок?)' },
     { command: 'help', description: 'Список команд' },
@@ -244,6 +269,14 @@ if (!ALLOWED_CHAT) {
   log.error('TELEGRAM_CHAT_ID not set. Export it before running.');
   process.exit(1);
 }
+
+// Graceful shutdown
+const shutdown = (signal: string) => {
+  log.info(`Bot received ${signal}, shutting down...`);
+  process.exit(0);
+};
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 pollLoop().catch((err) => {
   log.error('Bot crashed', { error: (err as Error).message });

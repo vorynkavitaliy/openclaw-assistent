@@ -43,7 +43,15 @@ export async function executeSignals(
   }
 
   const results: SignalResult[] = [];
-  const openOrderSymbols = await getOpenOrders();
+  let openOrderSymbols: string[];
+  try {
+    openOrderSymbols = await getOpenOrders();
+  } catch (err) {
+    log.error('Failed to fetch open orders — blocking all signals', {
+      error: (err as Error).message,
+    });
+    return signals.map((s) => ({ ...s, action: 'BLOCKED: failed to check open orders' }));
+  }
 
   // Собираем экосистемы уже открытых позиций
   const s0 = state.get();

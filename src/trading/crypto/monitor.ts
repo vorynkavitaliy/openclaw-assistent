@@ -1,8 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { getArg, hasFlag } from '../../utils/args.js';
 import { loadEnv } from '../../utils/env.js';
 import { createLogger } from '../../utils/logger.js';
+import { acquireLock, releaseLock } from '../../utils/lockfile.js';
 
 loadEnv();
+import { validateRequiredEnv } from '../../utils/config.js';
 import { runMain } from '../../utils/process.js';
 import { getBalance, getPositions } from './bybit-client.js';
 import config from './config.js';
@@ -140,158 +144,191 @@ async function main(): Promise<void> {
   const cycleId = generateCycleId();
   rotateIfNeeded();
 
-  const status = checkStatus();
-  if (!status.ok) {
-    log.warn('Monitor stopped', { reason: status.reason });
+  // Проверяем конфигурацию при первом запуске
+  const envCheck = validateRequiredEnv('crypto');
+  if (!envCheck.valid) {
+    log.error('Configuration invalid — aborting', { errors: envCheck.errors });
     return;
   }
 
-  await refreshAccount();
-
-  // Position management — каждый цикл (5 мин)
-  await managePositions(cycleId, DRY_RUN);
-  if (!DRY_RUN) await cancelStaleOrders();
-
-  // Market analysis — каждый цикл (бесплатно, только Bybit API)
-  const signals = await analyzeMarket(cycleId, SINGLE_PAIR ?? undefined);
-  saveSnapshots(cycleId, signals);
-
-  const s = state.get();
-
-  if (signals.length === 0) {
-    log.info('No signals this cycle', { cycleId });
-    s.lastMonitor = new Date().toISOString();
-    state.save();
+  const LOCK_FILE = path.join(path.dirname(config.stateFile), 'monitor.lock');
+  if (!acquireLock(LOCK_FILE)) {
+    log.warn('Monitor cycle skipped — previous still running', { cycleId });
     return;
   }
 
-  // === FAST-TRACK: сильные сигналы исполняются сразу без LLM ===
-  const fastTrack = signals.filter(
-    (sig) =>
-      Math.abs(sig.confluence.total) >= FAST_TRACK_CONFLUENCE &&
-      sig.confidence >= FAST_TRACK_CONFIDENCE,
-  );
-  const normalSignals = signals.filter(
-    (sig) =>
-      Math.abs(sig.confluence.total) < FAST_TRACK_CONFLUENCE ||
-      sig.confidence < FAST_TRACK_CONFIDENCE,
-  );
-
-  if (fastTrack.length > 0 && !DRY_RUN && hasFreePositionSlots()) {
-    for (const sig of fastTrack) {
-      removeFromWatchlist(sig.pair);
+  try {
+    const status = checkStatus();
+    if (!status.ok) {
+      log.warn('Monitor stopped', { reason: status.reason });
+      return;
     }
 
-    const fastResults = await executeSignals(fastTrack, cycleId, DRY_RUN);
-    const executed = fastResults.filter((r) => r.action === 'EXECUTED').length;
+    await refreshAccount();
 
-    if (executed > 0) {
-      log.info('Fast-track executed', {
-        cycleId,
-        candidates: fastTrack.length,
-        executed,
-        pairs: fastTrack.map((s) => s.pair).join(', '),
-      });
-    }
-  }
+    // Position management — каждый цикл (5 мин)
+    await managePositions(cycleId, DRY_RUN);
+    if (!DRY_RUN) await cancelStaleOrders();
 
-  // === EVENT-DRIVEN LLM TRIGGER ===
-  // LLM вызывается ТОЛЬКО когда ВСЕ условия выполнены:
-  // 1. Есть кандидаты (normal signals)
-  // 2. Прошёл cooldown (30 мин)
-  // 3. Есть свободные слоты для позиций
-  // 4. Кандидаты не дублируют недавние SKIP
+    // Market analysis — каждый цикл (бесплатно, только Bybit API)
+    const signals = await analyzeMarket(cycleId, SINGLE_PAIR ?? undefined);
+    saveSnapshots(cycleId, signals);
 
-  if (normalSignals.length > 0) {
-    const cooldownOk = isLLMCooldownPassed();
-    const slotsAvailable = hasFreePositionSlots();
-    const candidates = deduplicateSkippedPairs(normalSignals);
+    const s = state.get();
 
-    if (candidates.length > 0 && cooldownOk && slotsAvailable) {
-      // Триггер LLM
-      const expired = cleanExpired();
-      if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
+    if (signals.length === 0) {
+      log.info('No signals this cycle', { cycleId });
+      s.lastMonitor = new Date().toISOString();
+      state.save();
+    } else {
+      // === FAST-TRACK: сильные сигналы исполняются сразу без LLM ===
+      const fastTrack = signals.filter(
+        (sig) =>
+          Math.abs(sig.confluence.total) >= FAST_TRACK_CONFLUENCE &&
+          sig.confidence >= FAST_TRACK_CONFIDENCE,
+      );
+      const normalSignals = signals.filter(
+        (sig) =>
+          Math.abs(sig.confluence.total) < FAST_TRACK_CONFLUENCE ||
+          sig.confidence < FAST_TRACK_CONFIDENCE,
+      );
 
-      const llmDecisions = await runLLMAdvisorCycle(cycleId, candidates);
-
-      const enterSignals = candidates.filter((sig) => {
-        const dec = llmDecisions.find((d) => d.pair === sig.pair);
-        return dec?.decision === 'ENTER';
-      });
-
-      for (const dec of llmDecisions) {
-        if (dec.decision === 'WAIT') {
-          const sig = candidates.find((si) => si.pair === dec.pair);
-          if (sig) addToWatchlist(sig.pair, sig, dec.reason);
+      if (fastTrack.length > 0 && !DRY_RUN && hasFreePositionSlots()) {
+        for (const sig of fastTrack) {
+          removeFromWatchlist(sig.pair);
         }
-        if (dec.decision === 'SKIP') {
-          // Записываем LLM_SKIP для дедупликации
-          const sig = candidates.find((si) => si.pair === dec.pair);
-          logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
-            ...(sig
-              ? {
-                  confluenceScore: sig.confluence.total,
-                  confluenceSignal: sig.confluence.signal,
-                  confidence: sig.confidence,
-                  regime: sig.regime,
-                }
-              : {}),
+
+        const fastResults = await executeSignals(fastTrack, cycleId, DRY_RUN);
+        const executed = fastResults.filter((r) => r.action === 'EXECUTED').length;
+
+        if (executed > 0) {
+          log.info('Fast-track executed', {
+            cycleId,
+            candidates: fastTrack.length,
+            executed,
+            pairs: fastTrack.map((sg) => sg.pair).join(', '),
           });
         }
       }
 
-      const execResults = await executeSignals(enterSignals, cycleId, DRY_RUN);
+      // === EVENT-DRIVEN LLM TRIGGER ===
+      // LLM вызывается ТОЛЬКО когда ВСЕ условия выполнены:
+      // 1. Есть кандидаты (normal signals)
+      // 2. Прошёл cooldown (30 мин)
+      // 3. Есть свободные слоты для позиций
+      // 4. Кандидаты не дублируют недавние SKIP
 
-      s.lastLLMCycleAt = new Date().toISOString();
+      if (normalSignals.length > 0) {
+        const cooldownOk = isLLMCooldownPassed();
+        const slotsAvailable = hasFreePositionSlots();
+        const candidates = deduplicateSkippedPairs(normalSignals);
 
-      state.logEvent('llm_cycle', {
-        cycleId,
-        candidates: candidates.length,
-        fastTrack: fastTrack.length,
-        enter: enterSignals.length,
-        executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-        skip: llmDecisions.filter((d) => d.decision === 'SKIP').length,
-        wait: llmDecisions.filter((d) => d.decision === 'WAIT').length,
-        elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
-      });
+        if (candidates.length > 0 && cooldownOk && slotsAvailable) {
+          // Триггер LLM
+          const expired = cleanExpired();
+          if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
 
-      log.info('LLM cycle triggered', {
-        cycleId,
-        candidates: candidates.length,
-        enter: enterSignals.length,
-        executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-      });
-    } else {
-      // Логируем почему LLM не был вызван
-      const reasons: string[] = [];
-      if (candidates.length === 0) reasons.push('all candidates deduped (recently SKIP)');
-      if (!cooldownOk) {
-        const elapsed = s.lastLLMCycleAt
-          ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
-          : 0;
-        reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+          const llmDecisions = await runLLMAdvisorCycle(cycleId, candidates);
+
+          const enterSignals = candidates.filter((sig) => {
+            const dec = llmDecisions.find((d) => d.pair === sig.pair);
+            return dec?.decision === 'ENTER';
+          });
+
+          for (const dec of llmDecisions) {
+            if (dec.decision === 'WAIT') {
+              const sig = candidates.find((si) => si.pair === dec.pair);
+              if (sig) addToWatchlist(sig.pair, sig, dec.reason);
+            }
+            if (dec.decision === 'SKIP') {
+              // Записываем LLM_SKIP для дедупликации
+              const sig = candidates.find((si) => si.pair === dec.pair);
+              logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
+                ...(sig
+                  ? {
+                      confluenceScore: sig.confluence.total,
+                      confluenceSignal: sig.confluence.signal,
+                      confidence: sig.confidence,
+                      regime: sig.regime,
+                    }
+                  : {}),
+              });
+            }
+          }
+
+          const execResults = await executeSignals(enterSignals, cycleId, DRY_RUN);
+
+          s.lastLLMCycleAt = new Date().toISOString();
+
+          state.logEvent('llm_cycle', {
+            cycleId,
+            candidates: candidates.length,
+            fastTrack: fastTrack.length,
+            enter: enterSignals.length,
+            executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+            skip: llmDecisions.filter((d) => d.decision === 'SKIP').length,
+            wait: llmDecisions.filter((d) => d.decision === 'WAIT').length,
+            elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+          });
+
+          log.info('LLM cycle triggered', {
+            cycleId,
+            candidates: candidates.length,
+            enter: enterSignals.length,
+            executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+          });
+        } else {
+          // Логируем почему LLM не был вызван
+          const reasons: string[] = [];
+          if (candidates.length === 0) reasons.push('all candidates deduped (recently SKIP)');
+          if (!cooldownOk) {
+            const elapsed = s.lastLLMCycleAt
+              ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
+              : 0;
+            reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+          }
+          if (!slotsAvailable)
+            reasons.push(`no free slots (${s.positions.length}/${config.maxOpenPositions})`);
+
+          log.info('Signals present, LLM not triggered', {
+            cycleId,
+            normalSignals: normalSignals.length,
+            deduped: candidates.length,
+            fastTrack: fastTrack.length,
+            reasons: reasons.join('; '),
+          });
+        }
+      } else {
+        log.info('Analysis complete — fast-track only', {
+          cycleId,
+          totalSignals: signals.length,
+          fastTrack: fastTrack.length,
+        });
       }
-      if (!slotsAvailable)
-        reasons.push(`no free slots (${s.positions.length}/${config.maxOpenPositions})`);
 
-      log.info('Signals present, LLM not triggered', {
-        cycleId,
-        normalSignals: normalSignals.length,
-        deduped: candidates.length,
-        fastTrack: fastTrack.length,
-        reasons: reasons.join('; '),
-      });
+      s.lastMonitor = new Date().toISOString();
+      state.save();
     }
-  } else {
-    log.info('Analysis complete — fast-track only', {
-      cycleId,
-      totalSignals: signals.length,
-      fastTrack: fastTrack.length,
-    });
-  }
 
-  s.lastMonitor = new Date().toISOString();
-  state.save();
+    // Пишем healthcheck для внешнего мониторинга
+    const healthFile = path.join(path.dirname(config.stateFile), 'health.json');
+    try {
+      const healthData = {
+        timestamp: new Date().toISOString(),
+        cycleId,
+        positions: state.get().positions.length,
+        balance: state.get().balance.total,
+        elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      };
+      const tmpHealth = healthFile + '.tmp';
+      fs.writeFileSync(tmpHealth, JSON.stringify(healthData), 'utf8');
+      fs.renameSync(tmpHealth, healthFile);
+    } catch {
+      // best effort
+    }
+  } finally {
+    releaseLock(LOCK_FILE);
+  }
 }
 
 runMain(main, () => state.save());

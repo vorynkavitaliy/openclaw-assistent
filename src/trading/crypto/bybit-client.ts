@@ -341,6 +341,20 @@ export async function cancelOrder(symbol: string, orderId: string): Promise<void
   }
 }
 
+export async function cancelAllOrders(): Promise<number> {
+  const res = await withRateLimit((c) =>
+    c.cancelAllOrders({
+      category: CATEGORY,
+      settleCoin: 'USDT',
+    }),
+  );
+  if (res.retCode !== 0) {
+    throw new Error(`Failed to cancel all orders: ${res.retMsg}`);
+  }
+  const list = (res.result as { list?: unknown[] })?.list;
+  return list?.length ?? 0;
+}
+
 export async function submitOrder(params: {
   symbol: string;
   side: 'Buy' | 'Sell';

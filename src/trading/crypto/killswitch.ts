@@ -1,7 +1,7 @@
 import { getArg, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
-import { closeAllPositions, getBalance, getPositions } from './bybit-client.js';
+import { cancelAllOrders, closeAllPositions, getBalance, getPositions } from './bybit-client.js';
 import config from './config.js';
 import * as state from './state.js';
 
@@ -57,6 +57,15 @@ async function main(): Promise<void> {
     log.info(`Kill Switch ACTIVATED: ${reason}`);
 
     if (hasFlag('close-all')) {
+      // Сначала отменяем ВСЕ pending ордера (включая grid-уровни)
+      try {
+        const cancelled = await cancelAllOrders();
+        log.info(`Pending orders cancelled: ${cancelled}`);
+      } catch (err) {
+        log.error(`Error cancelling orders: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // Затем закрываем позиции
       log.info('Closing all positions...');
       try {
         const result = await closeAllPositions();

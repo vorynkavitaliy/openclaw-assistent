@@ -19,6 +19,70 @@ const POLL_INTERVAL_MS = 2000;
 
 let lastUpdateId = 0;
 
+// --- Rate Limiting ---
+const commandCooldowns = new Map<string, number>(); // command → lastUsedTimestamp (ms)
+const llmUsageTimestamps: number[] = []; // timestamps вызовов /llm за последний час
+
+const COOLDOWNS_MS: Record<string, number> = {
+  '/start': 30_000,
+  '/stop': 30_000,
+  '/status': 15_000,
+  '/report': 15_000,
+  '/health': 15_000,
+  '/help': 5_000,
+};
+const LLM_MAX_PER_HOUR = 5;
+const LLM_WINDOW_MS = 60 * 60 * 1000; // 1 час
+
+function checkRateLimit(cmd: string): string | null {
+  const now = Date.now();
+
+  // /kill — без ограничений
+  if (cmd === '/kill') return null;
+
+  // /llm — лимит 5 вызовов в час
+  if (cmd === '/llm') {
+    // Удаляем записи старше 1 часа
+    const cutoff = now - LLM_WINDOW_MS;
+    while (llmUsageTimestamps.length > 0 && llmUsageTimestamps[0]! < cutoff) {
+      llmUsageTimestamps.shift();
+    }
+    const used = llmUsageTimestamps.length;
+    const remaining = LLM_MAX_PER_HOUR - used;
+    if (remaining <= 0) {
+      const oldestMs = llmUsageTimestamps[0]!;
+      const nextAvailableMs = oldestMs + LLM_WINDOW_MS - now;
+      const nextMinutes = Math.ceil(nextAvailableMs / 60_000);
+      return `⏳ Лимит: 5 вызовов/час. Осталось 0. Следующий доступен через ${nextMinutes} мин.`;
+    }
+    return null;
+  }
+
+  // Стандартный cooldown для остальных команд
+  const cooldownMs = COOLDOWNS_MS[cmd];
+  if (cooldownMs === undefined) return null;
+
+  const lastUsed = commandCooldowns.get(cmd);
+  if (lastUsed !== undefined) {
+    const elapsed = now - lastUsed;
+    if (elapsed < cooldownMs) {
+      const waitSec = Math.ceil((cooldownMs - elapsed) / 1000);
+      return `⏳ Подожди ${waitSec} сек перед повторным использованием команды.`;
+    }
+  }
+
+  return null;
+}
+
+function recordCommandUsage(cmd: string): void {
+  const now = Date.now();
+  if (cmd === '/llm') {
+    llmUsageTimestamps.push(now);
+  } else if (cmd !== '/kill') {
+    commandCooldowns.set(cmd, now);
+  }
+}
+
 interface TelegramUpdate {
   update_id: number;
   message?: {
@@ -75,8 +139,37 @@ function runTsx(script: string, args: string[] = []): string {
   return (result.stdout ?? '').trim();
 }
 
+// Нормализует входной текст к базовой команде для rate limiting
+function normalizeToRateLimitKey(raw: string): string {
+  if (raw.startsWith('/llm')) return '/llm';
+  if (raw === 'запусти крипто' || raw === 'старт') return '/start';
+  if (raw === 'стоп крипто' || raw === 'стоп') return '/stop';
+  if (raw === 'статус' || raw === 'что с крипто') return '/status';
+  if (raw === 'отчёт' || raw === 'отчет') return '/report';
+  if (raw === 'аварийная остановка') return '/kill';
+  if (raw === 'помощь') return '/help';
+  return raw.split(' ')[0] ?? raw;
+}
+
 async function handleCommand(_chatId: string, text: string): Promise<void> {
   const cmd = text.toLowerCase().trim();
+  const baseCmd = normalizeToRateLimitKey(cmd);
+
+  // Для /llm проверяем rate limit только если есть промпт (иначе вернём подсказку без блокировки)
+  const skipRateLimitCheck =
+    baseCmd === '/llm' && !cmd.startsWith('/llm ') && !cmd.startsWith('/llm\n');
+  if (!skipRateLimitCheck) {
+    const rateLimitMsg = checkRateLimit(baseCmd);
+    if (rateLimitMsg !== null) {
+      log.info('Rate limited', { cmd: baseCmd, message: rateLimitMsg });
+      await sendTelegram(rateLimitMsg);
+      return;
+    }
+    // Для /llm запись делается внутри блока (после валидации промпта)
+    if (baseCmd !== '/llm') {
+      recordCommandUsage(baseCmd);
+    }
+  }
 
   if (cmd === '/start' || cmd === 'запусти крипто' || cmd === 'старт') {
     const result = runScript('trading_control.sh', ['start', 'crypto-trader']);
@@ -125,7 +218,10 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
       await sendTelegram('Использование: /llm {ваш вопрос}', 'HTML');
       return;
     }
-    await sendTelegram('🤔 Думаю...');
+    // Записываем использование /llm только здесь (промпт валидирован)
+    recordCommandUsage('/llm');
+    const remainingLlm = LLM_MAX_PER_HOUR - llmUsageTimestamps.length;
+    await sendTelegram(`🤔 Думаю... (осталось вызовов в час: ${remainingLlm}/${LLM_MAX_PER_HOUR})`);
     const { chatWithLLM } = await import('./trading/crypto/llm-chat.js');
     const response = await chatWithLLM(prompt);
     const trimmed = response.length > 4000 ? response.slice(0, 4000) + '\n...(обрезано)' : response;
@@ -161,6 +257,13 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     return;
   }
 
+  if (cmd === '/costs') {
+    const { formatCostReport } = await import('./trading/crypto/llm-cost-tracker.js');
+    const report = formatCostReport();
+    await sendTelegram(report);
+    return;
+  }
+
   if (cmd === '/help' || cmd === 'помощь') {
     await sendTelegram(
       `📋 <b>Команды:</b>
@@ -169,6 +272,7 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 /status — текущий статус
 /report — полный отчёт
 /health — состояние монитора (последний цикл)
+/costs — расходы на LLM (дневные/месячные)
 /kill — аварийная остановка (kill switch)
 /llm {вопрос} — спросить AI с контекстом трейдера
 /help — эта справка`,
@@ -189,6 +293,7 @@ async function setMenuCommands(): Promise<void> {
     { command: 'report', description: 'Полный отчёт по портфелю' },
     { command: 'health', description: 'Состояние монитора (последний цикл)' },
     { command: 'kill', description: 'Аварийная остановка (kill switch)' },
+    { command: 'costs', description: 'Расходы на LLM (дневные/месячные)' },
     { command: 'llm', description: 'Спросить AI (напр: /llm как рынок?)' },
     { command: 'help', description: 'Список команд' },
   ];
@@ -228,7 +333,6 @@ async function pollLoop(): Promise<void> {
   await flushOldUpdates();
   log.info('Bot started, polling for updates...', { chatId: ALLOWED_CHAT });
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const updates = await getUpdates();

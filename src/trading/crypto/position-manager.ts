@@ -35,34 +35,38 @@ export async function managePositions(
 
     if (entry === 0 || size === 0) continue;
 
-    const slDistance = Math.abs(entry - sl);
+    // SL-Guard: позиция без стоп-лосса или тейк-профита
+    // Биржа возвращает '0' или '' для отсутствующих SL/TP
+    const needsSl = sl === 0 || sl === entry;
+    const needsTp = tp === 0 || tp === entry;
 
-    // SL-Guard: позиция без стоп-лосса — установить дефолтный SL/TP
-    if (slDistance === 0) {
-      const defaultSl = roundPrice(calcDefaultSl(entry, pos.side), pos.symbol);
-      const defaultTp =
-        tp === 0 ? roundPrice(calcDefaultTp(entry, defaultSl, pos.side), pos.symbol) : undefined;
+    if (needsSl || needsTp) {
+      const defaultSl = needsSl ? roundPrice(calcDefaultSl(entry, pos.side), pos.symbol) : sl;
+      const defaultTp = needsTp
+        ? roundPrice(calcDefaultTp(entry, defaultSl, pos.side), pos.symbol)
+        : undefined;
 
       if (!dryRun) {
         try {
           await modifyPosition(
             pos.symbol,
-            String(defaultSl),
+            needsSl ? String(defaultSl) : undefined,
             defaultTp ? String(defaultTp) : undefined,
           );
+          const missing = needsSl && needsTp ? 'SL и TP' : needsSl ? 'SL' : 'TP';
           actions.push({
             type: 'sl_guard_applied',
             symbol: pos.symbol,
-            defaultSl,
+            defaultSl: needsSl ? defaultSl : 'unchanged',
             defaultTp: defaultTp ?? 'unchanged',
             result: 'OK',
           });
           state.logEvent('sl_guard', {
             symbol: pos.symbol,
             entry,
-            defaultSl,
+            defaultSl: needsSl ? defaultSl : undefined,
             defaultTp,
-            reason: 'Position found without SL — default SL/TP applied',
+            reason: `Позиция без ${missing} — дефолтные значения установлены`,
           });
           logDecision(
             cycleId,
@@ -70,12 +74,21 @@ export async function managePositions(
             pos.symbol,
             'SL_GUARD',
             [
-              'Позиция без стоп-лосса — установлен дефолтный SL/TP',
-              `SL: ${defaultSl}, TP: ${defaultTp ?? 'без изменений'}`,
+              `Позиция без ${missing} — установлены дефолтные значения`,
+              `SL: ${needsSl ? defaultSl : 'без изменений'}, TP: ${defaultTp ?? 'без изменений'}`,
             ],
-            { entry, sl: defaultSl, ...(defaultTp !== undefined ? { tp: defaultTp } : {}) },
+            {
+              entry,
+              ...(needsSl ? { sl: defaultSl } : {}),
+              ...(defaultTp !== undefined ? { tp: defaultTp } : {}),
+            },
           );
-          log.warn('SL-Guard: applied default SL/TP', { symbol: pos.symbol, defaultSl, defaultTp });
+          log.warn('SL-Guard: applied defaults', {
+            symbol: pos.symbol,
+            missing,
+            defaultSl: needsSl ? defaultSl : undefined,
+            defaultTp,
+          });
         } catch (err) {
           actions.push({
             type: 'sl_guard_failed',
@@ -97,13 +110,17 @@ export async function managePositions(
         actions.push({
           type: 'sl_guard_applied',
           symbol: pos.symbol,
-          defaultSl,
+          defaultSl: needsSl ? defaultSl : 'unchanged',
           defaultTp: defaultTp ?? 'unchanged',
           result: 'DRY_RUN',
         });
       }
       continue; // Пропускаем trailing/partial для этой позиции до следующего цикла
     }
+
+    // Если дошли сюда — SL валиден, считаем slDistance для trailing/partial
+    const slDistance = Math.abs(entry - sl);
+    if (slDistance === 0) continue; // safety: не должно случиться после guard
 
     const oneR = slDistance * size;
     const currentR = uPnl / oneR;

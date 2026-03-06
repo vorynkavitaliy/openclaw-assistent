@@ -1,4 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
+import { recordLLMCall } from './llm-cost-tracker.js';
 import * as state from './state.js';
 
 const log = createLogger('llm-chat');
@@ -67,15 +68,25 @@ export async function chatWithLLM(userPrompt: string): Promise<string> {
 
     const data = (await res.json()) as OpenRouterResponse;
     const content = data.choices[0]?.message?.content ?? '';
-    const cost = data.usage
-      ? ((data.usage.prompt_tokens * 3 + data.usage.completion_tokens * 15) / 1_000_000).toFixed(4)
-      : '?';
 
-    log.info('LLM chat response', {
-      promptLen: userPrompt.length,
-      responseLen: content.length,
-      cost: `$${cost}`,
-    });
+    if (data.usage) {
+      const costEntry = recordLLMCall(
+        'chat',
+        data.usage.prompt_tokens,
+        data.usage.completion_tokens,
+        'chat',
+      );
+      log.info('LLM chat response', {
+        promptLen: userPrompt.length,
+        responseLen: content.length,
+        costUSD: costEntry.costUSD,
+      });
+    } else {
+      log.info('LLM chat response', {
+        promptLen: userPrompt.length,
+        responseLen: content.length,
+      });
+    }
 
     return content || 'LLM вернул пустой ответ';
   } catch (err: unknown) {

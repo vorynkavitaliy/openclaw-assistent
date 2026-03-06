@@ -1,7 +1,10 @@
 import Parser from 'rss-parser';
 import { getNumArgOrDefault } from '../utils/args.js';
+import { createLogger } from '../utils/logger.js';
 import { runMain } from '../utils/process.js';
 import { retryAsync } from '../utils/retry.js';
+
+const log = createLogger('market-digest');
 
 const FF_XML_URLS = [
   'https://nfs.faireconomy.media/ff_calendar_thisweek.xml',
@@ -189,7 +192,7 @@ async function main(): Promise<void> {
     news: { recent: recentNews, errors: newsErrors },
   };
 
-  console.log(JSON.stringify(output, null, 2));
+  log.info('Market digest', { output });
 }
 
 runMain(main);

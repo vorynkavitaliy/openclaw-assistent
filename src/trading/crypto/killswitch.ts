@@ -32,24 +32,20 @@ async function showStatus(): Promise<void> {
     posInfo = '  Failed to fetch';
   }
 
-  console.log(`
-╔════════════════════════════════════╗
-║      CRYPTO TRADING STATUS        ║
-╠════════════════════════════════════╣
-║ Kill Switch: ${killActive ? '🔴 ACTIVE' : '🟢 Off'}
-║ Stop-Day:    ${s.daily.stopDay ? `🔴 ${s.daily.stopDayReason}` : '🟢 No'}
-║ Mode:        ${config.mode}
-║ Demo:        ${config.demoTrading ? 'Yes' : 'No'}
-╠════════════════════════════════════╣
-║ Trades:      ${s.daily.trades} (${s.daily.wins}W/${s.daily.losses}L)
-║ Stops:       ${s.daily.stops}/${config.maxStopsPerDay}
-║ P&L today:   $${s.daily.totalPnl.toFixed(2)}
-║ Balance:     ${balanceInfo}
-╠════════════════════════════════════╣
-║ Positions:
-${posInfo}
-╚════════════════════════════════════╝
-`);
+  log.info('Trading status', {
+    killSwitch: killActive,
+    stopDay: s.daily.stopDay,
+    stopDayReason: s.daily.stopDayReason,
+    mode: config.mode,
+    demo: config.demoTrading,
+    trades: s.daily.trades,
+    wins: s.daily.wins,
+    losses: s.daily.losses,
+    stops: `${s.daily.stops}/${config.maxStopsPerDay}`,
+    pnlToday: s.daily.totalPnl,
+    balance: balanceInfo,
+    positions: posInfo,
+  });
 }
 
 async function main(): Promise<void> {

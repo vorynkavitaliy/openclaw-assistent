@@ -1,4 +1,5 @@
 import { getArg, getNumArg, getRequiredArg } from '../../utils/args.js';
+import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
 import {
   closeAllPositions,
@@ -9,6 +10,8 @@ import {
   setLeverage,
   submitOrder,
 } from './bybit-client.js';
+
+const log = createLogger('crypto-trade');
 
 function validateRisk(qty: string, sl?: string, tp?: string): { ok: boolean; error?: string } {
   const qtyNum = parseFloat(qty);
@@ -33,7 +36,7 @@ async function actionOpen(): Promise<void> {
 
   const validation = validateRisk(qty, sl, tp);
   if (!validation.ok) {
-    console.log(JSON.stringify({ error: validation.error, action: 'REJECTED' }));
+    log.warn('Order rejected', { error: validation.error, action: 'REJECTED' });
     return;
   }
 
@@ -51,18 +54,18 @@ async function actionOpen(): Promise<void> {
     ...(tp ? { takeProfit: tp } : {}),
   });
 
-  console.log(JSON.stringify({ ...result, timestamp: new Date().toISOString() }, null, 2));
+  log.info('Order opened', { ...result, timestamp: new Date().toISOString() });
 }
 
 async function actionClose(): Promise<void> {
   const pair = getRequiredArg('pair').toUpperCase();
   const result = await closePosition(pair);
-  console.log(JSON.stringify({ ...result, timestamp: new Date().toISOString() }, null, 2));
+  log.info('Position closed', { ...result, timestamp: new Date().toISOString() });
 }
 
 async function actionCloseAll(): Promise<void> {
   const result = await closeAllPositions();
-  console.log(JSON.stringify({ ...result, timestamp: new Date().toISOString() }, null, 2));
+  log.info('All positions closed', { ...result, timestamp: new Date().toISOString() });
 }
 
 async function actionModify(): Promise<void> {
@@ -72,31 +75,25 @@ async function actionModify(): Promise<void> {
 
   await modifyPosition(pair, sl, tp);
 
-  console.log(
-    JSON.stringify(
-      { status: 'MODIFIED', symbol: pair, sl, tp, timestamp: new Date().toISOString() },
-      null,
-      2,
-    ),
-  );
+  log.info('Position modified', {
+    status: 'MODIFIED',
+    symbol: pair,
+    sl,
+    tp,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 async function actionStatus(): Promise<void> {
   const [account, positions] = await Promise.all([getBalance(), getPositions()]);
 
-  console.log(
-    JSON.stringify(
-      {
-        account,
-        positions,
-        positionsCount: positions.length,
-        totalUnrealisedPnl: positions.reduce((s, p) => s + parseFloat(p.unrealisedPnl ?? '0'), 0),
-        timestamp: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
+  log.info('Account status', {
+    account,
+    positions,
+    positionsCount: positions.length,
+    totalUnrealisedPnl: positions.reduce((s, p) => s + parseFloat(p.unrealisedPnl ?? '0'), 0),
+    timestamp: new Date().toISOString(),
+  });
 }
 
 async function main(): Promise<void> {

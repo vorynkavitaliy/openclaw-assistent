@@ -33,8 +33,9 @@ async function main(): Promise<void> {
 
       if (entry === 0 || size === 0) continue;
 
-      const needsSl = sl === 0;
-      const needsTp = tp === 0;
+      // SL/TP отсутствует если биржа вернула '0', '' или равен entry (невалидный)
+      const needsSl = sl === 0 || sl === entry;
+      const needsTp = tp === 0 || tp === entry;
 
       if (!needsSl && !needsTp) continue;
 

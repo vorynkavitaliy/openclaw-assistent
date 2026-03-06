@@ -11,7 +11,10 @@
  */
 
 import { getArg } from '../../utils/args.js';
+import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
+
+const log = createLogger('forex-snapshot');
 import type { AccountInfo, MarketAnalysis } from '../shared/types.js';
 import {
   disconnect,
@@ -113,7 +116,7 @@ async function main(): Promise<void> {
     },
   };
 
-  console.log(JSON.stringify(snapshot, null, 2));
+  log.info('Forex snapshot', { snapshot });
 }
 
 runMain(async () => {

@@ -298,13 +298,13 @@ async function main(): Promise<void> {
   });
 
   if (FORMAT === 'json') {
-    console.log(JSON.stringify(formatJsonReport(data), null, 2));
+    log.info('Report (json)', { report: formatJsonReport(data) });
   } else {
     const text = formatTelegramReport(data);
     if (!hasFlag('no-send')) {
       await sendViaOpenClaw(text);
     }
-    console.log(text);
+    log.info('Report (text)', { text });
   }
 }
 

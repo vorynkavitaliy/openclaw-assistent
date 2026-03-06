@@ -1,4 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
+import { checkLLMBudget, recordLLMCall } from './llm-cost-tracker.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
 import * as state from './state.js';
@@ -179,6 +180,18 @@ export async function runLLMAdvisorCycle(
     }));
   }
 
+  // Проверка бюджета LLM
+  const budget = await checkLLMBudget();
+  if (!budget.allowed) {
+    log.warn('LLM budget exceeded — auto-entering all signals', { reason: budget.reason });
+    return signals.map((s) => ({
+      pair: s.pair,
+      decision: 'ENTER' as LLMDecisionType,
+      reason: `LLM budget exceeded — auto-enter: ${budget.reason}`,
+      confidence: 50,
+    }));
+  }
+
   const allSnapshots = loadAllRecentSnapshots(2);
   const dailyContext = buildDailyContext();
 
@@ -203,12 +216,12 @@ Respond with ONLY a JSON array:
       { role: 'user', content: userPrompt },
     ]);
 
-    const estimatedCostUSD = ((promptTokens * 3 + completionTokens * 15) / 1_000_000).toFixed(4);
+    const costEntry = recordLLMCall(cycleId, promptTokens, completionTokens, 'advisor');
     log.info('LLM advisor response', {
       cycleId,
       promptTokens,
       completionTokens,
-      estimatedCostUSD,
+      costUSD: costEntry.costUSD,
     });
 
     const decisions = parseDecisions(

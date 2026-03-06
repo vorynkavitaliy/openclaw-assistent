@@ -7,6 +7,7 @@ import {
 import { getBybitBaseUrl, getBybitCredentials } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
 import { retryAsync } from '../../utils/retry.js';
+import { createCircuitBreaker, type CircuitBreaker } from '../../utils/circuit-breaker.js';
 import { createRateLimiter, type RateLimiter } from './rate-limiter.js';
 import { buildMarketAnalysis } from '../shared/indicators.js';
 import type {
@@ -41,6 +42,13 @@ let _client: RestClientV5 | null = null;
 // Rate limiter: Bybit лимит 20 req/sec, оставляем запас
 const limiter: RateLimiter = createRateLimiter({ maxPerSecond: 18, maxConcurrent: 6 });
 
+// Circuit breaker: OPEN после 3 подряд 5xx/network ошибок, сброс через 5 мин
+const circuitBreaker: CircuitBreaker = createCircuitBreaker({
+  failureThreshold: 3,
+  resetTimeoutMs: 5 * 60 * 1000,
+  name: 'bybit-api',
+});
+
 function getClient(): RestClientV5 {
   if (_client) return _client;
 
@@ -60,14 +68,16 @@ function getClient(): RestClientV5 {
   return _client;
 }
 
-// Обёртка для auth API вызовов с rate limiting
+// Обёртка для auth API вызовов с rate limiting и circuit breaker
 async function withRateLimit<T>(fn: (client: RestClientV5) => Promise<T>): Promise<T> {
-  await limiter.acquire();
-  try {
-    return await fn(getClient());
-  } finally {
-    limiter.release();
-  }
+  return circuitBreaker.execute(async () => {
+    await limiter.acquire();
+    try {
+      return await fn(getClient());
+    } finally {
+      limiter.release();
+    }
+  });
 }
 
 async function apiGet(
@@ -85,28 +95,32 @@ async function apiGet(
     url = `${url}?${query}`;
   }
 
-  await limiter.acquire();
   try {
-    const resp = await retryAsync(
-      () =>
-        fetch(url, {
-          headers: { 'User-Agent': 'OpenClaw/1.0' },
-          signal: AbortSignal.timeout(API_TIMEOUT_MS),
-        }),
-      { retries: 2, backoffMs: 500 },
-    );
+    return await circuitBreaker.execute(async () => {
+      await limiter.acquire();
+      try {
+        const resp = await retryAsync(
+          () =>
+            fetch(url, {
+              headers: { 'User-Agent': 'OpenClaw/1.0' },
+              signal: AbortSignal.timeout(API_TIMEOUT_MS),
+            }),
+          { retries: 2, backoffMs: 500 },
+        );
 
-    const data = (await resp.json()) as BybitApiResponse;
+        const data = (await resp.json()) as BybitApiResponse;
 
-    if (data.retCode !== 0) {
-      return { error: data.retMsg ?? 'Unknown API error', retCode: data.retCode };
-    }
+        if (data.retCode !== 0) {
+          return { error: data.retMsg ?? 'Unknown API error', retCode: data.retCode };
+        }
 
-    return data.result ?? {};
+        return data.result ?? {};
+      } finally {
+        limiter.release();
+      }
+    });
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
-  } finally {
-    limiter.release();
   }
 }
 
@@ -719,4 +733,8 @@ export function resetClient(): void {
 
 export function getRateLimiterStats() {
   return limiter.getStats();
+}
+
+export function getCircuitBreakerStats() {
+  return circuitBreaker.getStats();
 }

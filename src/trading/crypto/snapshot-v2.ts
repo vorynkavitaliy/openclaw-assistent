@@ -289,8 +289,7 @@ async function main(): Promise<void> {
     },
   };
 
-  // Output clean JSON to stdout
-  console.log(JSON.stringify(snapshot, null, 2));
+  log.info('Snapshot V2 collected', { snapshot });
 }
 
 runMain(main);

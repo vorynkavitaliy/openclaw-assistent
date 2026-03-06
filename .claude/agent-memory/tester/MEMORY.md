@@ -1,8 +1,8 @@
 # Tester Agent Memory — openclaw-assistent
 
-## Статус тестов (последний аудит: 2026-03-05)
+## Статус тестов (последний аудит: 2026-03-06)
 
-- 150 тестов в 18 файлах (9 src + 9 dist-дубли), все зелёные
+- 264 теста в 24 файлах (12 src + 12 dist-дубли), все зелёные
 - `npm run build` — без ошибок TypeScript
 - `npm run lint` — 0 errors, 33 warnings (console.log в Forex/CLI файлах)
 - `npm run test:run` — все проходят
@@ -19,14 +19,14 @@
 | src/trading/shared/volume-analysis.ts | __tests__/volume-analysis.test.ts (6 тестов) |
 | src/trading/crypto/rate-limiter.ts | __tests__/rate-limiter.test.ts (5 тестов) |
 | src/trading/crypto/symbol-specs.ts | __tests__/symbol-specs.test.ts (9 тестов) |
+| src/trading/crypto/signal-executor.ts | __tests__/signal-executor.test.ts (22 теста) |
+| src/trading/crypto/position-manager.ts | __tests__/position-manager.test.ts (22 теста) |
 | src/utils/retry.ts | __tests__/retry.test.ts (5 тестов) |
 
 ## КРИТИЧЕСКИ НЕ ПОКРЫТЫ (приоритет 1)
 
 - `src/trading/shared/risk.ts` — calculatePositionSize, canTrade, isValidRiskReward
 - `src/trading/crypto/state.ts` — recordTrade, checkDayLimits, canTrade, calcPositionSize
-- `src/trading/crypto/signal-executor.ts` — executeSignals (фильтры: ecosystem, SL/TP, margin)
-- `src/trading/crypto/position-manager.ts` — calcDefaultSl, calcDefaultTp, managePositions
 
 ## НЕ ПОКРЫТЫ (приоритет 2-3)
 
@@ -45,6 +45,10 @@
 - risk.ts — чистые функции, моки не нужны
 - Vitest в проекте настроен для ES Modules, импорты с `.js`
 - dist/ тесты — дубли src/ тестов (артефакты build), не добавлять новые там
+- SL-Guard в position-manager срабатывает при `slDistance === 0`, т.е. `sl === entry` — НЕ при `sl='0'`
+- При `sl=0` в signal-executor risk-check срабатывает РАНЬШЕ INVALID_SL_TP (slDist = |entry - 0| огромный)
+- Тип ConfluenceSignal: использовать строку `'STRONG_LONG'` (не `'STRONG_BUY'`)
+- `makeState()` нужен `as unknown as ReturnType<typeof state.get>` для совместимости типов
 
 ## Lint замечания
 

@@ -291,33 +291,27 @@ async function manageOpenPositions(): Promise<void> {
 async function main(): Promise<void> {
   if (hasFlag('heartbeat')) {
     const report = await heartbeat();
-    console.log(JSON.stringify(report, null, 2));
+    log.info('Heartbeat report', { report });
   } else if (hasFlag('positions')) {
     const positions = await getPositions();
-    console.log(JSON.stringify({ positions, count: positions.length }, null, 2));
+    log.info('Positions', { positions, count: positions.length });
   } else if (hasFlag('account')) {
     const account = await getBalance();
-    console.log(JSON.stringify(account, null, 2));
+    log.info('Account', { account });
   } else if (hasFlag('risk-check')) {
     const report = await heartbeat();
-    console.log(
-      JSON.stringify(
-        {
-          alerts: report.alerts,
-          riskStatus: report.riskStatus,
-          tradingAllowed: report.tradingAllowed,
-          drawdownPct: report.drawdownPct,
-        },
-        null,
-        2,
-      ),
-    );
+    log.info('Risk check', {
+      alerts: report.alerts,
+      riskStatus: report.riskStatus,
+      tradingAllowed: report.tradingAllowed,
+      drawdownPct: report.drawdownPct,
+    });
   } else if (hasFlag('trade')) {
     await manageOpenPositions();
     await executeTrades();
   } else {
     const report = await heartbeat();
-    console.log(JSON.stringify(report, null, 2));
+    log.info('Heartbeat report', { report });
   }
 }
 

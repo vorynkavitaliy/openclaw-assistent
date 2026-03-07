@@ -22,6 +22,8 @@
     "trade:forex:journal": "tsx src/trading/forex/journal-cli.ts",
     "trade:forex:explain": "tsx src/trading/forex/journal-cli.ts --last",
     "trade:forex:diary": "tsx src/trading/forex/journal-cli.ts --summary",
+    "trade:forex:seed": "tsx src/trading/forex/candle-seeder.ts",
+    "trade:forex:backtest": "tsx src/trading/forex/backtester.ts",
     "trade:crypto:monitor": "tsx src/trading/crypto/monitor.ts",
     "trade:crypto:kill": "tsx src/trading/crypto/killswitch.ts",
     "trade:crypto:report": "tsx src/trading/crypto/report.ts",

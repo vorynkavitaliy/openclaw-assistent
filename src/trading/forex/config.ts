@@ -27,11 +27,11 @@ export interface ForexConfig extends BaseTradingConfig {
 const config: ForexConfig = {
   mode: (process.env.FOREX_MODE as 'execute' | 'dry-run') ?? 'dry-run',
 
-  pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURGBP', 'XAUUSD'],
+  pairs: ['EURUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'XAUUSD', 'EURJPY', 'GBPJPY', 'USDCHF'],
 
   defaultLeverage: 30,
 
-  maxRiskPerTradePct: 1.0,
+  maxRiskPerTradePct: 3.0,
   maxOpenPositions: 3,
   maxTradesPerDay: 5,
   maxStopsPerDay: 3,

@@ -21,9 +21,6 @@ const ATR_SL_MULTIPLIER = 2.0;
 // Минимальный SL в pips (защита от слишком тесных стопов)
 const MIN_SL_PIPS = 10;
 
-// Pip value для стандартного лота XXX/USD пар ($10 за pip)
-const PIP_VALUE_USD_PER_LOT = 10;
-
 // Размер пипа в единицах цены
 const PIP_SIZE_DEFAULT = 0.0001;
 const PIP_SIZE_JPY = 0.01;
@@ -31,6 +28,38 @@ const PIP_SIZE_JPY = 0.01;
 // Минимальный и максимальный объём в лотах
 const MIN_LOTS = 0.01;
 const MAX_LOTS = 1.0;
+
+/**
+ * Pip value в USD для 1 стандартного лота (100,000 единиц базовой валюты).
+ * - XXX/USD пары (EURUSD, AUDUSD): $10 за pip
+ * - USD/JPY: $1000 / currentPrice (при USDJPY=150 → ~$6.67)
+ * - Cross JPY (EURJPY, GBPJPY): $1000 / currentPrice
+ * - USD/XXX (USDCAD, USDCHF): $10 / currentPrice * basePrice ≈ $10
+ * - XAUUSD: $1 за pip (pip = 0.01, lot = 100 oz)
+ */
+function pipValueUsd(pair: string, currentPrice: number): number {
+  const p = pair.toUpperCase();
+
+  // XAUUSD: 100 oz × $0.01 = $1 за pip
+  if (p === 'XAUUSD') return 1;
+
+  // XXX/USD пары — pip = $10
+  if (p.endsWith('USD') && !p.includes('JPY')) return 10;
+
+  // JPY пары (USDJPY, EURJPY, GBPJPY)
+  if (p.includes('JPY')) {
+    // pip = 0.01, lot = 100,000 units → 100,000 × 0.01 / price
+    return currentPrice > 0 ? 1000 / currentPrice : 10;
+  }
+
+  // USD/XXX (USDCAD, USDCHF) — pip value зависит от курса котируемой валюты
+  if (p.startsWith('USD')) {
+    return currentPrice > 0 ? 10 / currentPrice : 10;
+  }
+
+  // Fallback
+  return 10;
+}
 
 export interface ForexDecision {
   timestamp: string;
@@ -53,11 +82,12 @@ function getPipSize(pair: string): number {
 
 /**
  * Рассчитывает размер лота на основе риска.
- * Формула: (balance * riskPct / 100) / (slPips * pipValueUsd)
+ * Формула: riskUsd / (slPips × pipValue)
  */
-function calcLots(balance: number, slPips: number): number {
+function calcLots(balance: number, slPips: number, pair: string, currentPrice: number): number {
   const riskUsd = (balance * config.maxRiskPerTradePct) / 100;
-  const slValueUsd = slPips * PIP_VALUE_USD_PER_LOT;
+  const pipVal = pipValueUsd(pair, currentPrice);
+  const slValueUsd = slPips * pipVal;
 
   if (slValueUsd <= 0) return MIN_LOTS;
 
@@ -202,7 +232,7 @@ export async function executeSignals(
         ? entryPrice + slDistance * config.minRR
         : entryPrice - slDistance * config.minRR;
 
-    const lots = calcLots(balance, slPips);
+    const lots = calcLots(balance, slPips, signal.pair, entryPrice);
 
     log.info(
       `${signal.pair}: сигнал ${side} score=${signal.confluenceScore} confidence=${signal.confidence}% ` +

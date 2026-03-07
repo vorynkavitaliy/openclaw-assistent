@@ -9,7 +9,7 @@ const JOURNAL_FILE = path.join(path.dirname(config.stateFile), 'decisions.jsonl'
 
 // ─── Типы ────────────────────────────────────────────────────────
 
-export type DecisionType = 'entry' | 'skip' | 'manage' | 'exit';
+export type DecisionType = 'entry' | 'skip' | 'manage' | 'exit' | 'outcome';
 
 export interface FilterResult {
   passed: boolean;
@@ -258,6 +258,113 @@ export function formatSummary(summary: DecisionSummary): string {
 
   if (summary.entrySymbols.length > 0) {
     lines.push(`Входы: ${summary.entrySymbols.join(', ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+// ─── Outcome tracking ────────────────────────────────────────────
+
+export function logTradeOutcome(
+  symbol: string,
+  pnl: number,
+  side: string,
+  entryPrice?: number,
+  exitPrice?: number,
+  isStop?: boolean,
+): void {
+  const result: 'win' | 'loss' | 'breakeven' = pnl > 0 ? 'win' : pnl < 0 ? 'loss' : 'breakeven';
+
+  logDecision(
+    'outcome',
+    'exit',
+    symbol,
+    isStop ? 'STOPPED_OUT' : 'CLOSED',
+    [
+      `PnL: $${pnl.toFixed(2)} (${result})`,
+      `Side: ${side}`,
+      ...(entryPrice ? [`Entry: ${entryPrice}`] : []),
+      ...(exitPrice ? [`Exit: ${exitPrice}`] : []),
+    ],
+    {
+      side,
+      ...(entryPrice !== undefined ? { entry: entryPrice } : {}),
+    },
+  );
+
+  // Обновляем outcome в последнем entry решении по этому символу
+  try {
+    if (!fs.existsSync(JOURNAL_FILE)) return;
+    const lines = fs.readFileSync(JOURNAL_FILE, 'utf-8').trim().split('\n').filter(Boolean);
+    let updated = false;
+
+    // Ищем с конца — последний entry для этого символа
+    for (let i = lines.length - 1; i >= 0 && !updated; i--) {
+      try {
+        const d = JSON.parse(lines[i]!) as Decision;
+        if (d.type === 'entry' && d.symbol === symbol && !d.outcome) {
+          d.outcome = { pnl, result };
+          lines[i] = JSON.stringify(d);
+          updated = true;
+        }
+      } catch {
+        /* skip bad lines */
+      }
+    }
+
+    if (updated) {
+      fs.writeFileSync(JOURNAL_FILE, lines.join('\n') + '\n', 'utf-8');
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+/**
+ * Возвращает историю последних сделок (entry + outcome) для LLM промпта.
+ */
+export function getTradeHistory(count: number = 20): string {
+  const decisions = readAllDecisions(500);
+
+  // Собираем entry с outcome
+  const entries = decisions.filter((d) => d.type === 'entry' && d.outcome);
+  const recent = entries.slice(-count);
+
+  if (recent.length === 0) return 'Нет истории сделок.';
+
+  const wins = recent.filter((d) => d.outcome?.result === 'win').length;
+  const losses = recent.filter((d) => d.outcome?.result === 'loss').length;
+  const totalPnl = recent.reduce((sum, d) => sum + (d.outcome?.pnl ?? 0), 0);
+
+  const lines: string[] = [
+    `Win/Loss: ${wins}/${losses} (${recent.length} сделок), PnL: $${totalPnl.toFixed(2)}`,
+    '',
+  ];
+
+  // Последние 10 для деталей
+  for (const d of recent.slice(-10)) {
+    const pnl = d.outcome?.pnl ?? 0;
+    const icon = pnl > 0 ? '+' : '';
+    lines.push(
+      `${d.symbol} ${d.data.side ?? '?'} | ${d.outcome?.result} ${icon}$${pnl.toFixed(2)} | score=${d.data.confluenceScore ?? '?'} conf=${d.data.confidence ?? '?'}% | ${d.reasoning[0] ?? ''}`,
+    );
+  }
+
+  // Анализ паттернов
+  const skipDecisions = decisions.filter((d) => d.type === 'skip').slice(-100);
+  const skipReasons: Record<string, number> = {};
+  for (const d of skipDecisions) {
+    skipReasons[d.action] = (skipReasons[d.action] ?? 0) + 1;
+  }
+  const topSkips = Object.entries(skipReasons)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([reason, cnt]) => `${reason}: ${cnt}`)
+    .join(', ');
+
+  if (topSkips) {
+    lines.push('');
+    lines.push(`Частые причины SKIP: ${topSkips}`);
   }
 
   return lines.join('\n');

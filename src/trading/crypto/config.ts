@@ -33,7 +33,7 @@ const config: TradingConfig = {
   maxSpreadPercent: 0.1,
   atrSlMultiplier: 2.0,
   staleOrderMinutes: 30,
-  minConfidence: 30,
+  minConfidence: 15, // Снижено: Claude Code сам решает, алгоритм только фильтрует мусор
   pairCooldownMin: 180, // 3 часа между сделками на одну пару
 
   // Grid entry: 3 лимитных ордера, каждый на 0.3 ATR глубже, суммарно ×1.5 объём

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createLogger } from '../../utils/logger.js';
 import type { PositionSide } from '../shared/types.js';
 import config from './config.js';
+import { logTradeOutcome } from './decision-journal.js';
 
 const log = createLogger('crypto-state');
 
@@ -199,6 +200,17 @@ export function recordTrade(trade: TradeInput): void {
   }
 
   logEvent('trade', trade as unknown as EventData);
+
+  // Записываем outcome в дневник трейдера для обучения LLM
+  logTradeOutcome(
+    trade.symbol,
+    pnl,
+    trade.side,
+    trade.entryPrice ? parseFloat(String(trade.entryPrice)) : undefined,
+    trade.exitPrice ? parseFloat(String(trade.exitPrice)) : undefined,
+    trade.isStop,
+  );
+
   checkDayLimits();
   save();
 }

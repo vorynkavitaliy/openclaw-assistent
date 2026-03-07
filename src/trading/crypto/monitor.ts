@@ -22,20 +22,17 @@ import { saveSnapshots } from './market-snapshot.js';
 import { managePositions } from './position-manager.js';
 import { cancelStaleOrders, executeSignals } from './signal-executor.js';
 import * as state from './state.js';
-import { addToWatchlist, cleanExpired, removeFromWatchlist } from './watchlist.js';
+import { addToWatchlist, cleanExpired } from './watchlist.js';
 
 const log = createLogger('crypto-monitor');
 
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
 
-// Fast-track: сигналы выше этих порогов исполняются немедленно без LLM
-const FAST_TRACK_CONFLUENCE = 55;
-const FAST_TRACK_CONFIDENCE = 80;
-
-// LLM trigger условия (гибрид: чаще вызываем, ниже пороги)
-const LLM_COOLDOWN_MS = 5 * 60 * 1000; // 5 мин между LLM вызовами
-const SKIP_DEDUP_HOURS = 0.25; // 15 мин — не отправлять пару в LLM если она была SKIP недавно
+// Claude Code архитектура: все сигналы идут через Claude Code (Opus)
+// Fast-track отключён — Claude принимает все решения
+const LLM_COOLDOWN_MS = 5 * 60 * 1000; // 5 мин между вызовами Claude
+const SKIP_DEDUP_HOURS = 0.25; // 15 мин — не отправлять пару если Claude уже SKIP-нул
 
 function checkStatus(): { ok: boolean; reason: string } {
   state.load();
@@ -181,128 +178,80 @@ async function main(): Promise<void> {
       s.lastMonitor = new Date().toISOString();
       state.save();
     } else {
-      // === FAST-TRACK: сильные сигналы исполняются сразу без LLM ===
-      const fastTrack = signals.filter(
-        (sig) =>
-          Math.abs(sig.confluence.total) >= FAST_TRACK_CONFLUENCE &&
-          sig.confidence >= FAST_TRACK_CONFIDENCE,
-      );
-      const normalSignals = signals.filter(
-        (sig) =>
-          Math.abs(sig.confluence.total) < FAST_TRACK_CONFLUENCE ||
-          sig.confidence < FAST_TRACK_CONFIDENCE,
-      );
+      // === ВСЕ СИГНАЛЫ → Claude Code (Opus) ===
+      // Claude получает полный контекст и принимает решения
+      const cooldownOk = isLLMCooldownPassed();
+      const slotsAvailable = hasFreePositionSlots();
+      const candidates = deduplicateSkippedPairs(signals);
 
-      if (fastTrack.length > 0 && !DRY_RUN && hasFreePositionSlots()) {
-        for (const sig of fastTrack) {
-          removeFromWatchlist(sig.pair);
-        }
+      if (candidates.length > 0 && cooldownOk && slotsAvailable) {
+        const expired = cleanExpired();
+        if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
 
-        const fastResults = await executeSignals(fastTrack, cycleId, DRY_RUN);
-        const executed = fastResults.filter((r) => r.action === 'EXECUTED').length;
+        const llmDecisions = await runLLMAdvisorCycle(cycleId, candidates);
 
-        if (executed > 0) {
-          log.info('Fast-track executed', {
-            cycleId,
-            candidates: fastTrack.length,
-            executed,
-            pairs: fastTrack.map((sg) => sg.pair).join(', '),
-          });
-        }
-      }
+        const enterSignals = candidates.filter((sig) => {
+          const dec = llmDecisions.find((d) => d.pair === sig.pair);
+          return dec?.decision === 'ENTER';
+        });
 
-      // === EVENT-DRIVEN LLM TRIGGER (гибрид) ===
-      // LLM вызывается когда ВСЕ условия выполнены:
-      // 1. Есть кандидаты (normal signals — прошли regime threshold)
-      // 2. Прошёл cooldown (5 мин)
-      // 3. Есть свободные слоты для позиций
-      // 4. Кандидаты не дублируют недавние SKIP (15 мин dedup)
-
-      if (normalSignals.length > 0) {
-        const cooldownOk = isLLMCooldownPassed();
-        const slotsAvailable = hasFreePositionSlots();
-        const candidates = deduplicateSkippedPairs(normalSignals);
-
-        if (candidates.length > 0 && cooldownOk && slotsAvailable) {
-          // Триггер LLM
-          const expired = cleanExpired();
-          if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
-
-          const llmDecisions = await runLLMAdvisorCycle(cycleId, candidates);
-
-          const enterSignals = candidates.filter((sig) => {
-            const dec = llmDecisions.find((d) => d.pair === sig.pair);
-            return dec?.decision === 'ENTER';
-          });
-
-          for (const dec of llmDecisions) {
-            if (dec.decision === 'WAIT') {
-              const sig = candidates.find((si) => si.pair === dec.pair);
-              if (sig) addToWatchlist(sig.pair, sig, dec.reason);
-            }
-            if (dec.decision === 'SKIP') {
-              // Записываем LLM_SKIP для дедупликации
-              const sig = candidates.find((si) => si.pair === dec.pair);
-              logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
-                ...(sig
-                  ? {
-                      confluenceScore: sig.confluence.total,
-                      confluenceSignal: sig.confluence.signal,
-                      confidence: sig.confidence,
-                      regime: sig.regime,
-                    }
-                  : {}),
-              });
-            }
+        for (const dec of llmDecisions) {
+          if (dec.decision === 'WAIT') {
+            const sig = candidates.find((si) => si.pair === dec.pair);
+            if (sig) addToWatchlist(sig.pair, sig, dec.reason);
           }
-
-          const execResults = await executeSignals(enterSignals, cycleId, DRY_RUN);
-
-          s.lastLLMCycleAt = new Date().toISOString();
-
-          state.logEvent('llm_cycle', {
-            cycleId,
-            candidates: candidates.length,
-            fastTrack: fastTrack.length,
-            enter: enterSignals.length,
-            executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-            skip: llmDecisions.filter((d) => d.decision === 'SKIP').length,
-            wait: llmDecisions.filter((d) => d.decision === 'WAIT').length,
-            elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
-          });
-
-          log.info('LLM cycle triggered', {
-            cycleId,
-            candidates: candidates.length,
-            enter: enterSignals.length,
-            executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-          });
-        } else {
-          // Логируем почему LLM не был вызван
-          const reasons: string[] = [];
-          if (candidates.length === 0) reasons.push('all candidates deduped (recently SKIP)');
-          if (!cooldownOk) {
-            const elapsed = s.lastLLMCycleAt
-              ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
-              : 0;
-            reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+          if (dec.decision === 'SKIP') {
+            const sig = candidates.find((si) => si.pair === dec.pair);
+            logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
+              ...(sig
+                ? {
+                    confluenceScore: sig.confluence.total,
+                    confluenceSignal: sig.confluence.signal,
+                    confidence: sig.confidence,
+                    regime: sig.regime,
+                  }
+                : {}),
+            });
           }
-          if (!slotsAvailable)
-            reasons.push(`no free slots (${s.positions.length}/${config.maxOpenPositions})`);
-
-          log.info('Signals present, LLM not triggered', {
-            cycleId,
-            normalSignals: normalSignals.length,
-            deduped: candidates.length,
-            fastTrack: fastTrack.length,
-            reasons: reasons.join('; '),
-          });
         }
-      } else {
-        log.info('Analysis complete — fast-track only', {
+
+        const execResults = await executeSignals(enterSignals, cycleId, DRY_RUN);
+
+        s.lastLLMCycleAt = new Date().toISOString();
+
+        state.logEvent('llm_cycle', {
           cycleId,
-          totalSignals: signals.length,
-          fastTrack: fastTrack.length,
+          candidates: candidates.length,
+          enter: enterSignals.length,
+          executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+          skip: llmDecisions.filter((d) => d.decision === 'SKIP').length,
+          wait: llmDecisions.filter((d) => d.decision === 'WAIT').length,
+          elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+        });
+
+        log.info('Claude Code cycle', {
+          cycleId,
+          candidates: candidates.length,
+          enter: enterSignals.length,
+          executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+        });
+      } else {
+        const reasons: string[] = [];
+        if (candidates.length === 0) reasons.push('all candidates deduped (recently SKIP)');
+        if (!cooldownOk) {
+          const elapsed = s.lastLLMCycleAt
+            ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
+            : 0;
+          reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+        }
+        if (!slotsAvailable)
+          reasons.push(`no free slots (${s.positions.length}/${config.maxOpenPositions})`);
+
+        log.info('Signals present, Claude not triggered', {
+          cycleId,
+          signals: signals.length,
+          deduped: candidates.length,
+          reasons: reasons.join('; '),
         });
       }
 

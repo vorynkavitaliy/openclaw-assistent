@@ -1,14 +1,22 @@
+/**
+ * LLM Advisor — использует Claude Code CLI (Opus) для торговых решений.
+ *
+ * Получает полный контекст: все пары, индикаторы, позиции, историю.
+ * Claude Code сам анализирует данные и принимает решения ENTER/SKIP/WAIT.
+ */
+
 import { createLogger } from '../../utils/logger.js';
-import { estimateTokens, runClaudeCli } from '../../utils/claude-cli.js';
-import { checkLLMBudget, recordLLMCall } from './llm-cost-tracker.js';
+import { runClaudeCli } from '../../utils/claude-cli.js';
+import { checkLLMBudget } from './llm-cost-tracker.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
 import * as state from './state.js';
+import { getTradeHistory } from './decision-journal.js';
 import { isWatched } from './watchlist.js';
 
 const log = createLogger('llm-advisor');
 
-const DAILY_TRADE_TARGET = 3; // Целевое количество сделок в день
+const DAILY_TRADE_TARGET = 3;
 
 export type LLMDecisionType = 'ENTER' | 'SKIP' | 'WAIT';
 
@@ -35,11 +43,11 @@ function formatSignal(
   const scoreHistory =
     recent.map((s) => `${s.confluenceScore}@${s.timestamp.slice(11, 16)}`).join(', ') || 'none';
 
-  return `**${sig.pair}**${watched ? ' [WATCHED — re-evaluating]' : ''}
-Direction: ${sig.side} @ ${sig.entryPrice} | SL=${sig.sl} | TP=${sig.tp} | R:R ${sig.rr}
+  return `**${sig.pair}**${watched ? ' [WATCHED]' : ''}
+Side: ${sig.side} @ ${sig.entryPrice} | SL=${sig.sl} | TP=${sig.tp} | R:R=${sig.rr}
 Confluence: ${sig.confluence.total} (${sig.confluence.signal}) | Confidence: ${sig.confidence}% | Regime: ${sig.regime}
-Score history (last 4 cycles): ${scoreHistory} — ${trend}
-Key factors: ${sig.confluence.details.slice(0, 4).join(' | ')}`;
+Score trend (4 cycles): ${scoreHistory} — ${trend}
+Details: ${sig.confluence.details.join(' | ')}`;
 }
 
 function buildDailyContext(): string {
@@ -48,36 +56,37 @@ function buildDailyContext(): string {
   const hour = new Date().getUTCHours();
   const hoursLeft = 24 - hour;
   const tradesNeeded = Math.max(0, DAILY_TRADE_TARGET - d.trades);
-  // Активные торговые сессии: 08-22 UTC (Европа + Америка)
   const isActiveSession = hour >= 8 && hour < 22;
-  const urgency =
-    tradesNeeded > 0 && hoursLeft <= 8 && isActiveSession
-      ? 'HIGH — few trades today, time running out, prefer ENTER over SKIP'
-      : tradesNeeded > 0 && hoursLeft <= 16 && isActiveSession
-        ? 'MODERATE — still need trades, lean towards ENTER for decent signals'
-        : !isActiveSession
-          ? 'LOW — Asian session (00-08 UTC), lower liquidity, be more selective'
-          : 'NORMAL';
 
-  return `Daily context:
-- Trades today: ${d.trades} (target: ${DAILY_TRADE_TARGET}, need ${tradesNeeded} more)
-- Day P&L: $${d.totalPnl.toFixed(2)} (wins: ${d.wins}, losses: ${d.losses}, stops: ${d.stops})
-- Open positions: ${s.positions.length} / ${3}
-- Balance: $${s.balance.total.toFixed(0)} (available: $${s.balance.available.toFixed(0)})
-- Hours left in day (UTC): ${hoursLeft}
-- Urgency: ${urgency}`;
+  let positions = 'Нет';
+  if (s.positions.length > 0) {
+    positions = s.positions
+      .map(
+        (p) =>
+          `${p.symbol} ${p.side} size=${p.size} entry=${p.entryPrice} mark=${p.markPrice} PnL=${p.unrealisedPnl} SL=${p.stopLoss ?? 'нет'} TP=${p.takeProfit ?? 'нет'}`,
+      )
+      .join('\n  ');
+  }
+
+  return `ТЕКУЩЕЕ СОСТОЯНИЕ:
+- Баланс: $${s.balance.total.toFixed(0)} (доступно: $${s.balance.available.toFixed(0)})
+- Позиции (${s.positions.length}/3): ${positions}
+- Сегодня: ${d.trades} сделок (цель: ${DAILY_TRADE_TARGET}, нужно ещё: ${tradesNeeded})
+- P&L за день: $${d.totalPnl.toFixed(2)} (win=${d.wins}, loss=${d.losses}, stops=${d.stops})
+- Время UTC: ${hour}:00, осталось ${hoursLeft}ч
+- Сессия: ${isActiveSession ? 'активная (Европа/Америка)' : 'азиатская (низкая ликвидность)'}`;
 }
 
 function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
   const match = content.match(/\[[\s\S]*?\]/);
   if (!match) {
-    log.warn('LLM response missing JSON array — defaulting to SKIP', {
+    log.warn('Claude response missing JSON array — defaulting to SKIP', {
       preview: content.slice(0, 300),
     });
     return pairs.map((pair) => ({
       pair,
       decision: 'SKIP' as LLMDecisionType,
-      reason: 'LLM parse error — defaulting to SKIP',
+      reason: 'Parse error — defaulting to SKIP',
       confidence: 0,
     }));
   }
@@ -93,30 +102,49 @@ function parseDecisions(content: string, pairs: string[]): LLMDecision[] {
       confidence: Math.max(0, Math.min(100, Number(d.confidence ?? 50))),
     }));
   } catch {
-    log.warn('LLM JSON parse failed — defaulting to SKIP', {
+    log.warn('Claude JSON parse failed — defaulting to SKIP', {
       preview: content.slice(0, 300),
     });
     return pairs.map((pair) => ({
       pair,
       decision: 'SKIP' as LLMDecisionType,
-      reason: 'LLM JSON parse error — defaulting to SKIP',
+      reason: 'JSON parse error — defaulting to SKIP',
       confidence: 0,
     }));
   }
 }
 
-const SYSTEM_PROMPT = `You are a professional crypto futures trading assistant. You review pre-screened signals and make final ENTER/SKIP/WAIT decisions.
+const TRADING_RULES = `Ты — агрессивный крипто-трейдер с опытом. Твоя задача — ЗАРАБАТЫВАТЬ, а не сидеть в стороне.
 
-Each signal already passed technical filters (confluence scoring, spread/funding, regime detection). Your role: add judgment based on overall context.
+ПРАВИЛА:
+1. Риск: 1% баланса на сделку, макс 3 позиции одновременно
+2. SL обязателен. R:R минимум 1.5
+3. Не торгуй против СИЛЬНОГО тренда D1/H4 (но контр-тренд на коррекциях — ОК)
+4. CHOPPY — можно торговать если есть чёткий уровень
+5. Макс 3 стопа в день — после этого стоп-дей
+6. Коррелированные пары: SOL+AVAX+SUI = одна группа, ETH+LINK = другая
+7. Цель: 2-3 сделки в день. Если 0 сделок за день — ты проигрываешь
 
-Decision rules:
-- ENTER: Execute now. Default choice for signals with confluence > 40 and confidence > 60%.
-- SKIP: Too weak or risky. Use only when signal clearly deteriorating, regime hostile, or R:R poor.
-- WAIT: Needs more data. Adds to 4h watchlist. Max 2 per cycle.
+КРИТЕРИИ ВХОДА:
+- Confluence score > 20 для тренда — УЖЕ достаточно для входа
+- Рейндж: score > 25 с чётким уровнем поддержки/сопротивления
+- Confidence > 20% — если алгоритм видит сигнал, доверяй ему
+- Score improving — бонус, но НЕ обязательно для входа
+- Не нужно ждать идеального сетапа — хороший сетап = ENTER
 
-IMPORTANT: You are a TRADER, not a risk manager. Your job is to find opportunities, not avoid all risk. The pre-filters already removed bad setups. If a signal looks decent — ENTER it.
+КРИТЕРИИ ОТКАЗА (только эти причины для SKIP):
+- Сигнал явно против D1 тренда БЕЗ уровня поддержки
+- Funding rate экстремальный в направлении сделки (>0.03%)
+- Уже есть 3 позиции или коррелированная пара открыта
+- 3 стопа за день
+- Score < 15 (совсем мусор)
 
-Pay attention to daily context: if few trades have been made today and urgency is HIGH, lower your threshold and favor ENTER.`;
+ВАЖНО: Ты ТРЕЙДЕР-БИЗНЕСМЕН. Каждый пропущенный хороший вход = упущенная прибыль.
+Лучше войти с SL и потерять 1%, чем пропустить движение на 5%.
+ENTER должен быть твоим DEFAULT решением если нет явных причин для SKIP.
+
+ФОРМАТ ОТВЕТА — ТОЛЬКО JSON массив, без маркдауна, без пояснений:
+[{"pair": "BTCUSDT", "decision": "ENTER|SKIP|WAIT", "reason": "краткая причина на русском", "confidence": 0-100}]`;
 
 export async function runLLMAdvisorCycle(
   cycleId: string,
@@ -124,26 +152,29 @@ export async function runLLMAdvisorCycle(
 ): Promise<LLMDecision[]> {
   if (signals.length === 0) return [];
 
-  // Проверка бюджета LLM
+  // Проверка бюджета
   const budget = await checkLLMBudget();
   if (!budget.allowed) {
-    log.warn('LLM budget exceeded — auto-entering all signals', { reason: budget.reason });
-    return signals.map((s) => ({
-      pair: s.pair,
-      decision: 'ENTER' as LLMDecisionType,
-      reason: `LLM budget exceeded — auto-enter: ${budget.reason}`,
-      confidence: 50,
-    }));
+    log.warn('LLM budget exceeded — auto-entering top signals', { reason: budget.reason });
+    return signals
+      .filter((s) => Math.abs(s.confluence.total) >= 35 && s.confidence >= 40)
+      .map((s) => ({
+        pair: s.pair,
+        decision: 'ENTER' as LLMDecisionType,
+        reason: `Budget exceeded, auto-enter: ${budget.reason}`,
+        confidence: s.confidence,
+      }));
   }
 
   const allSnapshots = loadAllRecentSnapshots(2);
   const dailyContext = buildDailyContext();
+  const tradeHistory = getTradeHistory(20);
 
   const signalBlocks = signals
     .map((sig) => formatSignal(sig, allSnapshots.get(sig.pair) ?? [], isWatched(sig.pair)))
     .join('\n\n---\n\n');
 
-  const prompt = `${SYSTEM_PROMPT}
+  const prompt = `${TRADING_RULES}
 
 ---
 
@@ -151,34 +182,41 @@ ${dailyContext}
 
 ---
 
-Review ${signals.length} trading signal(s) for cycle ${cycleId}:
+ИСТОРИЯ СДЕЛОК (учись на ошибках и успехах):
+${tradeHistory}
+
+---
+
+Анализ ${signals.length} пар (цикл ${cycleId}):
 
 ${signalBlocks}
 
-Respond with ONLY a JSON array (no markdown, no explanation):
-[{"pair": "BTCUSDT", "decision": "ENTER|SKIP|WAIT", "reason": "brief reason", "confidence": 0-100}]`;
+Ответь ТОЛЬКО JSON массивом. Решение для КАЖДОЙ пары из списка.`;
 
   try {
-    const content = await runClaudeCli(prompt, {
-      maxOutput: 2000,
-      timeoutMs: 120_000,
+    log.info('Calling Claude Code for trading decisions', {
+      cycleId,
+      pairs: signals.map((s) => s.pair).join(', '),
     });
 
-    const promptTokens = estimateTokens(prompt);
-    const completionTokens = estimateTokens(content);
-    const costEntry = recordLLMCall(cycleId, promptTokens, completionTokens, 'advisor');
-    log.info('LLM advisor response', {
+    const content = await runClaudeCli(prompt, {
+      maxOutput: 4000,
+      timeoutMs: 180_000, // 3 мин макс
+      stream: false, // не стримить в Telegram (это фоновый процесс)
+      useSession: false, // каждый цикл — чистый контекст
+    });
+
+    log.info('Claude Code response received', {
       cycleId,
-      promptTokens,
-      completionTokens,
-      costUSD: costEntry.costUSD,
+      responseLength: content.length,
     });
 
     const decisions = parseDecisions(
       content,
       signals.map((s) => s.pair),
     );
-    log.info('LLM decisions', {
+
+    log.info('Trading decisions', {
       cycleId,
       enter: decisions.filter((d) => d.decision === 'ENTER').length,
       skip: decisions.filter((d) => d.decision === 'SKIP').length,
@@ -188,14 +226,17 @@ Respond with ONLY a JSON array (no markdown, no explanation):
 
     return decisions;
   } catch (err) {
-    log.error('LLM advisor failed — falling back to auto-enter', {
+    log.error('Claude Code advisor failed — falling back to score-based', {
       error: (err as Error).message,
     });
-    return signals.map((s) => ({
-      pair: s.pair,
-      decision: 'ENTER' as LLMDecisionType,
-      reason: `LLM error fallback: ${(err as Error).message}`,
-      confidence: 50,
-    }));
+    // Fallback: входим в сильные сигналы автоматически
+    return signals
+      .filter((s) => Math.abs(s.confluence.total) >= 40 && s.confidence >= 50)
+      .map((s) => ({
+        pair: s.pair,
+        decision: 'ENTER' as LLMDecisionType,
+        reason: `Claude Code unavailable, auto-enter strong signal`,
+        confidence: s.confidence,
+      }));
   }
 }

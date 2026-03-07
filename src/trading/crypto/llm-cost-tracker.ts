@@ -11,9 +11,9 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const COST_FILE = path.join(PROJECT_ROOT, 'data', 'llm-costs.jsonl');
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 
-// Лимиты по умолчанию
-const DEFAULT_DAILY_LIMIT_USD = 1.0;
-const DEFAULT_MONTHLY_LIMIT_USD = 15.0;
+// Лимиты по умолчанию (гибрид: больше вызовов LLM для лучших решений)
+const DEFAULT_DAILY_LIMIT_USD = 3.0;
+const DEFAULT_MONTHLY_LIMIT_USD = 50.0;
 
 // Цены Claude Sonnet через OpenRouter (за 1M токенов)
 const PROMPT_PRICE_PER_M = 3.0; // $3/1M prompt tokens

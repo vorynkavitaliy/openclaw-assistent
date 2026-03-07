@@ -30,12 +30,12 @@ const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
 
 // Fast-track: сигналы выше этих порогов исполняются немедленно без LLM
-const FAST_TRACK_CONFLUENCE = 45;
-const FAST_TRACK_CONFIDENCE = 75;
+const FAST_TRACK_CONFLUENCE = 55;
+const FAST_TRACK_CONFIDENCE = 80;
 
-// LLM trigger условия
-const LLM_COOLDOWN_MS = 10 * 60 * 1000; // 10 мин между LLM вызовами
-const SKIP_DEDUP_HOURS = 0.5; // 30 мин — не отправлять пару в LLM если она была SKIP недавно
+// LLM trigger условия (гибрид: чаще вызываем, ниже пороги)
+const LLM_COOLDOWN_MS = 5 * 60 * 1000; // 5 мин между LLM вызовами
+const SKIP_DEDUP_HOURS = 0.25; // 15 мин — не отправлять пару в LLM если она была SKIP недавно
 
 function checkStatus(): { ok: boolean; reason: string } {
   state.load();
@@ -88,7 +88,7 @@ async function refreshAccount(): Promise<void> {
 }
 
 /**
- * Проверяет, прошёл ли LLM cooldown (30 мин с последнего вызова).
+ * Проверяет, прошёл ли LLM cooldown (5 мин с последнего вызова).
  */
 function isLLMCooldownPassed(): boolean {
   const s = state.get();
@@ -211,12 +211,12 @@ async function main(): Promise<void> {
         }
       }
 
-      // === EVENT-DRIVEN LLM TRIGGER ===
-      // LLM вызывается ТОЛЬКО когда ВСЕ условия выполнены:
-      // 1. Есть кандидаты (normal signals)
-      // 2. Прошёл cooldown (30 мин)
+      // === EVENT-DRIVEN LLM TRIGGER (гибрид) ===
+      // LLM вызывается когда ВСЕ условия выполнены:
+      // 1. Есть кандидаты (normal signals — прошли regime threshold)
+      // 2. Прошёл cooldown (5 мин)
       // 3. Есть свободные слоты для позиций
-      // 4. Кандидаты не дублируют недавние SKIP
+      // 4. Кандидаты не дублируют недавние SKIP (15 мин dedup)
 
       if (normalSignals.length > 0) {
         const cooldownOk = isLLMCooldownPassed();

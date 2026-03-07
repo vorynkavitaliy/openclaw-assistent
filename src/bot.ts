@@ -42,6 +42,8 @@ const COOLDOWNS_MS: Record<string, number> = {
 };
 const LLM_MAX_PER_HOUR = 5;
 const LLM_WINDOW_MS = 60 * 60 * 1000;
+const CLAUDE_MAX_PER_HOUR = 3;
+const claudeUsageTimestamps: number[] = [];
 
 function checkRateLimit(cmd: string): string | null {
   const now = Date.now();
@@ -58,6 +60,20 @@ function checkRateLimit(cmd: string): string | null {
       const oldestMs = llmUsageTimestamps[0]!;
       const nextMinutes = Math.ceil((oldestMs + LLM_WINDOW_MS - now) / 60_000);
       return `⏳ Лимит: 5 вызовов/час. Осталось 0. Следующий через ${nextMinutes} мин.`;
+    }
+    return null;
+  }
+
+  if (cmd === '/claude') {
+    const cutoff = now - LLM_WINDOW_MS;
+    while (claudeUsageTimestamps.length > 0 && claudeUsageTimestamps[0]! < cutoff) {
+      claudeUsageTimestamps.shift();
+    }
+    const remaining = CLAUDE_MAX_PER_HOUR - claudeUsageTimestamps.length;
+    if (remaining <= 0) {
+      const oldestMs = claudeUsageTimestamps[0]!;
+      const nextMinutes = Math.ceil((oldestMs + LLM_WINDOW_MS - now) / 60_000);
+      return `⏳ Лимит: ${CLAUDE_MAX_PER_HOUR} вызовов/час. Следующий через ${nextMinutes} мин.`;
     }
     return null;
   }
@@ -81,6 +97,8 @@ function recordCommandUsage(cmd: string): void {
   const now = Date.now();
   if (cmd === '/llm') {
     llmUsageTimestamps.push(now);
+  } else if (cmd === '/claude') {
+    claudeUsageTimestamps.push(now);
   } else if (cmd !== '/stop_kill') {
     commandCooldowns.set(cmd, now);
   }
@@ -367,6 +385,7 @@ function resolveCommand(raw: string): string {
   const lower = raw.toLowerCase().trim();
   if (ALIASES[lower]) return ALIASES[lower];
   if (lower.startsWith('/llm')) return '/llm';
+  if (lower.startsWith('/claude')) return '/claude';
   return lower.split(' ')[0] ?? lower;
 }
 
@@ -392,6 +411,47 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     const response = await chatWithLLM(prompt);
     const trimmed = response.length > 4000 ? response.slice(0, 4000) + '\n...(обрезано)' : response;
     await sendTelegram(trimmed);
+    return;
+  }
+
+  // /claude — запуск Claude Code CLI
+  if (cmd === '/claude') {
+    const prompt = text.slice(7).trim();
+    if (!prompt) {
+      await sendTelegram(
+        `Использование: /claude {задание}
+
+Примеры:
+/claude покажи последние сигналы
+/claude почему бот не торгует?
+/claude измени риск на 2% для крипто
+/claude перезапусти бота
+/claude добавь пару DOGEUSDT в конфиг
+
+Полный доступ к проекту: чтение, редактирование, bash, билд.`,
+        'HTML',
+      );
+      return;
+    }
+    const rateLimitMsg = checkRateLimit('/claude');
+    if (rateLimitMsg !== null) {
+      await sendTelegram(rateLimitMsg);
+      return;
+    }
+    recordCommandUsage('/claude');
+    const remaining = CLAUDE_MAX_PER_HOUR - claudeUsageTimestamps.length;
+    await sendTelegram(
+      `🧠 Claude Code работает... (${remaining}/${CLAUDE_MAX_PER_HOUR} осталось)\nПолный доступ к проекту. До 5 мин.`,
+    );
+    try {
+      const { runClaudeCli } = await import('./utils/claude-cli.js');
+      const response = await runClaudeCli(prompt);
+      const trimmed =
+        response.length > 4000 ? response.slice(0, 4000) + '\n...(обрезано)' : response;
+      await sendTelegram(trimmed);
+    } catch (err) {
+      await sendTelegram(`Ошибка Claude Code: ${(err as Error).message}`);
+    }
     return;
   }
 
@@ -448,7 +508,8 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 
 <b>Прочее</b>
 /costs — расходы на LLM
-/llm {вопрос} — спросить AI
+/llm {вопрос} — спросить AI (быстро, Sonnet)
+/claude {задание} — Claude Code (мощно, до 2 мин)
 /help — эта справка`,
       'HTML',
     );
@@ -488,6 +549,7 @@ async function setMenuCommands(): Promise<void> {
     { command: 'report_forex', description: 'Форекс отчёт' },
     { command: 'costs', description: 'Расходы на LLM' },
     { command: 'llm', description: 'Спросить AI (/llm вопрос)' },
+    { command: 'claude', description: 'Claude Code (/claude задание)' },
     { command: 'help', description: 'Список команд' },
   ];
 

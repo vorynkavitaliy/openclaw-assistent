@@ -42,7 +42,7 @@ const COOLDOWNS_MS: Record<string, number> = {
 };
 const LLM_MAX_PER_HOUR = 5;
 const LLM_WINDOW_MS = 60 * 60 * 1000;
-const CLAUDE_MAX_PER_HOUR = 3;
+const CLAUDE_MAX_PER_HOUR = 50;
 const claudeUsageTimestamps: number[] = [];
 
 function checkRateLimit(cmd: string): string | null {

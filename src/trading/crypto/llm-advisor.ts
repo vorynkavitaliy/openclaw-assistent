@@ -1,4 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
+import { estimateTokens, runClaudeCli } from '../../utils/claude-cli.js';
 import { checkLLMBudget, recordLLMCall } from './llm-cost-tracker.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
@@ -7,8 +8,6 @@ import { isWatched } from './watchlist.js';
 
 const log = createLogger('llm-advisor');
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'anthropic/claude-sonnet-4';
 const DAILY_TRADE_TARGET = 3; // Целевое количество сделок в день
 
 export type LLMDecisionType = 'ENTER' | 'SKIP' | 'WAIT';
@@ -18,51 +17,6 @@ export interface LLMDecision {
   decision: LLMDecisionType;
   reason: string;
   confidence: number;
-}
-
-interface OpenRouterResponse {
-  choices: Array<{ message: { content: string } }>;
-  usage?: { prompt_tokens: number; completion_tokens: number };
-}
-
-interface ChatMessage {
-  role: string;
-  content: string;
-}
-
-function getApiKey(): string {
-  return process.env.OPENROUTER_API_KEY ?? '';
-}
-
-async function callOpenRouter(
-  messages: ChatMessage[],
-): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
-
-  const res = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://github.com/openclaw/crypto-trader',
-      'X-Title': 'OpenClaw Crypto Trader',
-    },
-    body: JSON.stringify({ model: MODEL, messages, max_tokens: 1024, temperature: 0.1 }),
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`);
-  }
-
-  const data = (await res.json()) as OpenRouterResponse;
-  return {
-    content: data.choices[0]?.message?.content ?? '',
-    promptTokens: data.usage?.prompt_tokens ?? 0,
-    completionTokens: data.usage?.completion_tokens ?? 0,
-  };
 }
 
 function formatSignal(
@@ -170,16 +124,6 @@ export async function runLLMAdvisorCycle(
 ): Promise<LLMDecision[]> {
   if (signals.length === 0) return [];
 
-  if (!getApiKey()) {
-    log.warn('No OPENROUTER_API_KEY — auto-entering all signals');
-    return signals.map((s) => ({
-      pair: s.pair,
-      decision: 'ENTER' as LLMDecisionType,
-      reason: 'LLM not configured — auto-enter',
-      confidence: 50,
-    }));
-  }
-
   // Проверка бюджета LLM
   const budget = await checkLLMBudget();
   if (!budget.allowed) {
@@ -199,7 +143,11 @@ export async function runLLMAdvisorCycle(
     .map((sig) => formatSignal(sig, allSnapshots.get(sig.pair) ?? [], isWatched(sig.pair)))
     .join('\n\n---\n\n');
 
-  const userPrompt = `${dailyContext}
+  const prompt = `${SYSTEM_PROMPT}
+
+---
+
+${dailyContext}
 
 ---
 
@@ -207,15 +155,17 @@ Review ${signals.length} trading signal(s) for cycle ${cycleId}:
 
 ${signalBlocks}
 
-Respond with ONLY a JSON array:
+Respond with ONLY a JSON array (no markdown, no explanation):
 [{"pair": "BTCUSDT", "decision": "ENTER|SKIP|WAIT", "reason": "brief reason", "confidence": 0-100}]`;
 
   try {
-    const { content, promptTokens, completionTokens } = await callOpenRouter([
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ]);
+    const content = await runClaudeCli(prompt, {
+      maxOutput: 2000,
+      timeoutMs: 120_000,
+    });
 
+    const promptTokens = estimateTokens(prompt);
+    const completionTokens = estimateTokens(content);
     const costEntry = recordLLMCall(cycleId, promptTokens, completionTokens, 'advisor');
     log.info('LLM advisor response', {
       cycleId,

@@ -58,6 +58,62 @@ export async function sendTelegram(
   }
 }
 
+/**
+ * Отправить сообщение и вернуть message_id (для последующего редактирования).
+ */
+export async function sendTelegramWithId(
+  message: string,
+  parseMode: 'HTML' | 'Markdown' = 'Markdown',
+): Promise<number | null> {
+  const token = getToken();
+  const chatId = getChatId();
+  if (!token || !chatId) return null;
+
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: parseMode }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { ok: boolean; result?: { message_id: number } };
+    return data.result?.message_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Редактировать существующее сообщение по message_id.
+ */
+export async function editTelegramMessage(
+  messageId: number,
+  text: string,
+  parseMode: 'HTML' | 'Markdown' = 'Markdown',
+): Promise<boolean> {
+  const token = getToken();
+  const chatId = getChatId();
+  if (!token || !chatId) return false;
+
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: text.slice(0, 4096),
+        parse_mode: parseMode,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Обратная совместимость — старое имя функции
 export const sendViaOpenClaw = sendTelegram;
 

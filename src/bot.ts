@@ -385,6 +385,7 @@ function resolveCommand(raw: string): string {
   const lower = raw.toLowerCase().trim();
   if (ALIASES[lower]) return ALIASES[lower];
   if (lower.startsWith('/llm')) return '/llm';
+  if (lower === '/claude_reset') return '/claude_reset';
   if (lower.startsWith('/claude')) return '/claude';
   return lower.split(' ')[0] ?? lower;
 }
@@ -414,7 +415,7 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     return;
   }
 
-  // /claude — запуск Claude Code CLI
+  // /claude — запуск Claude Code CLI (стриминг + сессия)
   if (cmd === '/claude') {
     const prompt = text.slice(7).trim();
     if (!prompt) {
@@ -428,7 +429,8 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 /claude перезапусти бота
 /claude добавь пару DOGEUSDT в конфиг
 
-Полный доступ к проекту: чтение, редактирование, bash, билд.`,
+Сессия сохраняется между вызовами.
+/claude_reset — сбросить контекст.`,
         'HTML',
       );
       return;
@@ -439,19 +441,21 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
       return;
     }
     recordCommandUsage('/claude');
-    const remaining = CLAUDE_MAX_PER_HOUR - claudeUsageTimestamps.length;
-    await sendTelegram(
-      `🧠 Claude Code работает... (${remaining}/${CLAUDE_MAX_PER_HOUR} осталось)\nПолный доступ к проекту. До 5 мин.`,
-    );
     try {
+      // runClaudeCli сам отправляет и стримит сообщения в Telegram
       const { runClaudeCli } = await import('./utils/claude-cli.js');
-      const response = await runClaudeCli(prompt);
-      const trimmed =
-        response.length > 4000 ? response.slice(0, 4000) + '\n...(обрезано)' : response;
-      await sendTelegram(trimmed);
+      await runClaudeCli(prompt);
     } catch (err) {
       await sendTelegram(`Ошибка Claude Code: ${(err as Error).message}`);
     }
+    return;
+  }
+
+  // /claude_reset — сбросить сессию Claude Code
+  if (cmd === '/claude_reset') {
+    const { resetClaudeSession } = await import('./utils/claude-cli.js');
+    resetClaudeSession();
+    await sendTelegram('Сессия Claude Code сброшена. Следующий /claude начнёт новый диалог.');
     return;
   }
 
@@ -509,7 +513,8 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
 <b>Прочее</b>
 /costs — расходы на LLM
 /llm {вопрос} — спросить AI (быстро, Sonnet)
-/claude {задание} — Claude Code (мощно, до 2 мин)
+/claude {задание} — Claude Code (стриминг, сессия)
+/claude_reset — сбросить контекст Claude
 /help — эта справка`,
       'HTML',
     );
@@ -529,7 +534,19 @@ async function handleCommand(_chatId: string, text: string): Promise<void> {
     return;
   }
 
-  await sendTelegram('Не понял команду. /help для списка.', 'HTML');
+  // Любой текст без команды → Claude Code
+  const rateLimitMsg = checkRateLimit('/claude');
+  if (rateLimitMsg !== null) {
+    await sendTelegram(rateLimitMsg);
+    return;
+  }
+  recordCommandUsage('/claude');
+  try {
+    const { runClaudeCli } = await import('./utils/claude-cli.js');
+    await runClaudeCli(text);
+  } catch (err) {
+    await sendTelegram(`Ошибка Claude Code: ${(err as Error).message}`);
+  }
 }
 
 async function setMenuCommands(): Promise<void> {
@@ -550,6 +567,7 @@ async function setMenuCommands(): Promise<void> {
     { command: 'costs', description: 'Расходы на LLM' },
     { command: 'llm', description: 'Спросить AI (/llm вопрос)' },
     { command: 'claude', description: 'Claude Code (/claude задание)' },
+    { command: 'claude_reset', description: 'Сбросить контекст Claude' },
     { command: 'help', description: 'Список команд' },
   ];
 

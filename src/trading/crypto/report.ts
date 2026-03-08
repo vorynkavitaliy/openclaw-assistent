@@ -1,3 +1,5 @@
+import { loadEnv } from '../../utils/env.js';
+loadEnv();
 import { getArgOrDefault, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';

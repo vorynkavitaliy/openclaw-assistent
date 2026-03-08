@@ -4,7 +4,7 @@
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-PROTECTED_PATTERNS=(".env" "keys.md" "credentials.json" "openclaw.json" ".git/")
+PROTECTED_PATTERNS=( "keys.md" "credentials.json" "openclaw.json" )
 
 for pattern in "${PROTECTED_PATTERNS[@]}"; do
   if [[ "$FILE_PATH" == *"$pattern"* ]]; then

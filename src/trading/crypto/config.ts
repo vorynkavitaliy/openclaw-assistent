@@ -17,7 +17,7 @@ const config: TradingConfig = {
   riskPerTrade: 0.01,
   maxDailyLoss: 400,
   maxStopsPerDay: 3,
-  maxRiskPerTrade: 200,
+  maxRiskPerTrade: 75,
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,

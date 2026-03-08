@@ -162,11 +162,8 @@ export async function managePositions(positions: PositionWithId[]): Promise<void
       try {
         await closePosition(posId, partialLots);
 
-        // Перенос SL на безубыток
+        // Перенос SL на безубыток (старые SL/TP ордера отменяются внутри modifyPosition)
         const breakevenSl = entryPrice;
-        // TODO: modifyPosition добавляет новые SL/TP Stop/Limit ордера поверх старых
-        // (placeProtectiveOrders), а не заменяет их. Нужно реализовать отмену
-        // старых защитных ордеров через OrderCancelRequest перед установкой новых.
         await modifyPosition(posId, { sl: { price: breakevenSl } });
 
         meta.partialClosed = true;
@@ -212,9 +209,7 @@ export async function managePositions(positions: PositionWithId[]): Promise<void
         );
 
         try {
-          // TODO: modifyPosition добавляет новые Stop/Limit ордера поверх старых
-          // (placeProtectiveOrders), а не заменяет их. Нужно реализовать отмену
-          // старых защитных ордеров через OrderCancelRequest перед установкой новых.
+          // Старые SL/TP ордера отменяются внутри modifyPosition перед установкой новых
           await modifyPosition(posId, { sl: { price: newSl } });
 
           meta.sl = newSl;

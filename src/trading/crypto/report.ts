@@ -29,6 +29,7 @@ interface ReportData {
     side: string;
     size: string;
     entryPrice: string;
+    markPrice: string;
     leverage: string;
     unrealisedPnl: string;
     stopLoss?: string | undefined;
@@ -131,9 +132,33 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function getSession(utcHour: number): string {
+  if (utcHour >= 13 && utcHour < 16) return '🇺🇸🇬🇧 London+NY';
+  if (utcHour >= 8 && utcHour < 16) return '🇬🇧 London';
+  if (utcHour >= 13 && utcHour < 21) return '🇺🇸 New York';
+  return '🌏 Азия';
+}
+
+function calcPositionStats(
+  side: string,
+  entry: number,
+  mark: number,
+  sl: number | null,
+  tp: number | null,
+): { rMultiple: number | null; distToSl: number | null; distToTp: number | null } {
+  const isLong = side === 'Buy';
+  const riskPips = sl !== null ? Math.abs(entry - sl) : 0;
+  const profitPips = isLong ? mark - entry : entry - mark;
+  const rMultiple = riskPips > 0 ? profitPips / riskPips : null;
+  const distToSl = sl !== null ? (isLong ? (mark - sl) / mark : (sl - mark) / mark) * 100 : null;
+  const distToTp = tp !== null ? (isLong ? (tp - mark) / mark : (mark - tp) / mark) * 100 : null;
+  return { rMultiple, distToSl, distToTp };
+}
+
 function formatTelegramReport(data: ReportData): string {
   const now = new Date();
   const timeStr = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const utcHour = now.getUTCHours();
   const lines: string[] = [];
 
   lines.push(`<b>Крипто-трейдер</b>  ${timeStr}`);
@@ -152,34 +177,71 @@ function formatTelegramReport(data: ReportData): string {
   lines.push(`💰 <b>Баланс</b>`);
   lines.push(`Equity: <code>$${fmt(data.balance.total)}</code>`);
   lines.push(`Доступно: <code>$${fmt(data.balance.available)}</code>`);
-  lines.push(`Unrealized: <code>$${fmt(data.balance.unrealizedPnl)}</code>`);
+  const uplSign = data.balance.unrealizedPnl >= 0 ? '+' : '';
+  const uplPct =
+    data.balance.total > 0
+      ? ` (${uplSign}${((data.balance.unrealizedPnl / data.balance.total) * 100).toFixed(2)}%)`
+      : '';
+  lines.push(
+    `Unrealized: <code>${uplSign}$${fmt(data.balance.unrealizedPnl)}${esc(uplPct)}</code>`,
+  );
 
   // Позиции
   lines.push('');
   if (data.positions.length > 0) {
-    lines.push(`📈 <b>Позиции (${data.positions.length})</b>`);
+    lines.push(`📈 <b>Позиции (${data.positions.length}/3)</b>`);
     for (const p of data.positions) {
       const pnl = parseFloat(p.unrealisedPnl) || 0;
+      const entry = parseFloat(p.entryPrice) || 0;
+      const mark = parseFloat(p.markPrice) || 0;
+      const sl = p.stopLoss ? parseFloat(p.stopLoss) : null;
+      const tp = p.takeProfit ? parseFloat(p.takeProfit) : null;
       const icon = pnl >= 0 ? '🟢' : '🔴';
       const sym = p.symbol.replace('USDT', '');
+      const stats = entry > 0 && mark > 0 ? calcPositionStats(p.side, entry, mark, sl, tp) : null;
+      const rStr =
+        stats?.rMultiple !== null && stats?.rMultiple !== undefined
+          ? ` R:<code>${stats.rMultiple >= 0 ? '+' : ''}${stats.rMultiple.toFixed(2)}</code>`
+          : '';
+      const pnlPct =
+        data.balance.total > 0
+          ? ` (${pnl >= 0 ? '+' : ''}${((pnl / data.balance.total) * 100).toFixed(2)}%)`
+          : '';
       lines.push(
-        `${icon} <b>${sym}</b> ${p.side} x${p.leverage}  <code>${p.size} @ ${p.entryPrice}</code>`,
+        `${icon} <b>${sym}</b> ${p.side} x${p.leverage}  <code>${p.size} @ ${fmtPrice(entry)}</code>  mark:<code>${fmtPrice(mark)}</code>`,
       );
       lines.push(
-        `    P&amp;L: <code>$${fmt(pnl)}</code>  SL: <code>${p.stopLoss ?? '—'}</code>  TP: <code>${p.takeProfit ?? '—'}</code>`,
+        `    P&amp;L: <code>${pnl >= 0 ? '+' : ''}$${fmt(pnl)}${esc(pnlPct)}</code>${rStr}`,
       );
+      const slStr =
+        sl !== null
+          ? `<code>${fmtPrice(sl)}</code>${stats?.distToSl !== null && stats?.distToSl !== undefined ? ` <i>${stats.distToSl.toFixed(1)}%</i>` : ''}`
+          : '<code>—</code>';
+      const tpStr =
+        tp !== null
+          ? `<code>${fmtPrice(tp)}</code>${stats?.distToTp !== null && stats?.distToTp !== undefined ? ` <i>${stats.distToTp.toFixed(1)}%</i>` : ''}`
+          : '<code>—</code>';
+      lines.push(`    SL: ${slStr}  TP: ${tpStr}`);
     }
   } else {
     lines.push('📈 <b>Позиции:</b> нет открытых');
   }
 
   // Дневная статистика
+  const dailyTarget = 3;
+  const tradesDone = data.daily.trades;
+  const progressBar = '█'.repeat(tradesDone) + '░'.repeat(Math.max(0, dailyTarget - tradesDone));
   lines.push('');
-  lines.push(`📅 <b>День</b>`);
-  const statsLine = `Сделок: ${data.daily.trades} (✅${data.daily.wins} ❌${data.daily.losses})  Стопов: ${data.daily.stops}/${config.maxStopsPerDay}`;
+  lines.push(`📅 <b>День</b>  ${esc(getSession(utcHour))}`);
+  lines.push(`Цель: <code>${progressBar}</code> ${tradesDone}/${dailyTarget} сделок`);
+  const statsLine = `✅${data.daily.wins} ❌${data.daily.losses}  Стопов: ${data.daily.stops}/${config.maxStopsPerDay}`;
   lines.push(statsLine);
   const pnlSign = data.daily.totalPnl >= 0 ? '+' : '';
-  lines.push(`P&amp;L: <code>${pnlSign}$${fmt(data.daily.totalPnl)}</code>`);
+  const pnlPctDay =
+    data.balance.total > 0
+      ? ` (${pnlSign}${((data.daily.totalPnl / data.balance.total) * 100).toFixed(2)}%)`
+      : '';
+  lines.push(`P&amp;L: <code>${pnlSign}$${fmt(data.daily.totalPnl)}${esc(pnlPctDay)}</code>`);
   if (data.daily.trades > 0) {
     const winRate = ((data.daily.wins / data.daily.trades) * 100).toFixed(0);
     lines.push(`Винрейт: <code>${winRate}%</code>`);

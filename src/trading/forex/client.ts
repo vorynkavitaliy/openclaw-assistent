@@ -9,7 +9,13 @@ import type {
   Position as OurPosition,
 } from '../shared/types.js';
 import config from './config.js';
-import { FixSession, MsgType, Tag, type FixSessionConfig } from './fix-connection.js';
+import {
+  FixSession,
+  MsgType,
+  Tag,
+  type FixMessage,
+  type FixSessionConfig,
+} from './fix-connection.js';
 
 const log = createLogger('forex-client');
 
@@ -542,6 +548,110 @@ async function placeProtectiveOrders(
   }
 }
 
+export interface ActiveOrder {
+  orderId: string;
+  clOrdId: string;
+  ordType: string; // '2'=Limit (TP), '3'=Stop (SL)
+  positionId: string;
+}
+
+/**
+ * Получить активные защитные ордера (SL/TP) для конкретной позиции.
+ * Использует OrderMassStatusRequest (35=AF, MassStatusReqType=7 — все активные ордера).
+ * Фильтрует по PosMaintRptID == positionId и OrdType 2 (Limit) или 3 (Stop).
+ */
+async function getOrdersForPosition(
+  session: FixSession,
+  positionId: string,
+): Promise<ActiveOrder[]> {
+  const massReqId = nextReqId('mass');
+
+  let reports: FixMessage[];
+  try {
+    reports = await session.requestMassStatus(
+      [
+        [Tag.MassStatusReqID, massReqId],
+        [Tag.MassStatusReqType, 7], // All orders
+      ],
+      massReqId,
+      REQUEST_TIMEOUT_MS,
+    );
+  } catch (err) {
+    log.warn(`getOrdersForPosition: mass status request failed: ${(err as Error).message}`);
+    return [];
+  }
+
+  const result: ActiveOrder[] = [];
+
+  for (const rpt of reports) {
+    const rptPosId = rpt.getString(Tag.PosMaintRptID);
+    if (rptPosId !== positionId) continue;
+
+    const ordStatus = rpt.getString(Tag.OrdStatus);
+    // Учитываем только активные (New=0, PartiallyFilled=1, PendingNew=A)
+    if (ordStatus !== '0' && ordStatus !== '1' && ordStatus !== 'A') continue;
+
+    const ordType = rpt.getString(Tag.OrdType);
+    if (ordType !== '2' && ordType !== '3') continue;
+
+    result.push({
+      orderId: rpt.getString(Tag.OrderID),
+      clOrdId: rpt.getString(Tag.ClOrdID),
+      ordType,
+      positionId: rptPosId,
+    });
+  }
+
+  log.debug(
+    `getOrdersForPosition pos=${positionId}: found ${result.length} protective order(s) from ${reports.length} total`,
+  );
+  return result;
+}
+
+/**
+ * Отменить существующие защитные ордера (SL/TP) для позиции перед установкой новых.
+ * Отправляет OrderCancelRequest (35=F) для каждого найденного ордера.
+ * Ошибки отмены логируются, но не прерывают выполнение.
+ */
+async function cancelProtectiveOrders(session: FixSession, positionId: string): Promise<void> {
+  const orders = await getOrdersForPosition(session, positionId);
+
+  if (orders.length === 0) {
+    log.debug(`cancelProtectiveOrders pos=${positionId}: no active orders to cancel`);
+    return;
+  }
+
+  log.info(`cancelProtectiveOrders pos=${positionId}: cancelling ${orders.length} order(s)`);
+
+  for (const order of orders) {
+    const cancelClOrdId = nextReqId('cxl');
+    try {
+      const resp = await session.request(
+        MsgType.OrderCancelRequest,
+        [
+          [Tag.OrigClOrdID, order.clOrdId],
+          [Tag.ClOrdID, cancelClOrdId],
+          [Tag.OrderID, order.orderId],
+          [Tag.TransactTime, fixTransactTime()],
+        ],
+        MsgType.ExecutionReport,
+        cancelClOrdId,
+        REQUEST_TIMEOUT_MS,
+      );
+      const execType = resp.getString(Tag.ExecType);
+      if (execType === '8') {
+        log.warn(`Cancel order ${order.orderId} rejected: ${resp.getString(Tag.Text)}`);
+      } else {
+        log.info(`Cancelled protective order ${order.orderId} (type=${order.ordType})`);
+      }
+    } catch (err) {
+      log.warn(
+        `Failed to cancel order ${order.orderId} for pos=${positionId}: ${(err as Error).message}`,
+      );
+    }
+  }
+}
+
 export async function modifyPosition(
   positionId: number | string,
   opts: ModifyOptions,
@@ -568,6 +678,9 @@ export async function modifyPosition(
   const symbolId = await resolveSymbolId(pos.symbol);
   const fixSide = pos.side === 'long' ? '1' : '2';
   const units = lotsToUnits(pos.symbol, parseFloat(pos.size));
+
+  // Отменяем старые SL/TP ордера перед установкой новых, чтобы избежать дублей
+  await cancelProtectiveOrders(session, String(positionId));
 
   await placeProtectiveOrders(
     session,

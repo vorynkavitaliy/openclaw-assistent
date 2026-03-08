@@ -29,10 +29,9 @@ const log = createLogger('crypto-monitor');
 const DRY_RUN = hasFlag('dry-run') || config.mode !== 'execute';
 const SINGLE_PAIR = getArg('pair');
 
-// Claude Code архитектура: все сигналы идут через Claude Code (Opus)
-// Fast-track отключён — Claude принимает все решения
-const LLM_COOLDOWN_MS = 5 * 60 * 1000; // 5 мин между вызовами Claude
-const SKIP_DEDUP_HOURS = 0.25; // 15 мин — не отправлять пару если Claude уже SKIP-нул
+// Claude вызывается каждый цикл, cooldown только для предотвращения перегрузки
+const LLM_COOLDOWN_MS = 5 * 60 * 1000; // 5 мин между вызовами
+const SKIP_DEDUP_HOURS = 0.25; // 15 мин дедупликация SKIP
 
 function checkStatus(): { ok: boolean; reason: string } {
   state.load();
@@ -84,20 +83,13 @@ async function refreshAccount(): Promise<void> {
   state.checkDayLimits();
 }
 
-/**
- * Проверяет, прошёл ли LLM cooldown (5 мин с последнего вызова).
- */
 function isLLMCooldownPassed(): boolean {
   const s = state.get();
-  if (!s.lastLLMCycleAt) return true; // Первый раз — можно
+  if (!s.lastLLMCycleAt) return true;
   const elapsed = Date.now() - new Date(s.lastLLMCycleAt).getTime();
   return elapsed >= LLM_COOLDOWN_MS;
 }
 
-/**
- * Фильтрует сигналы, убирая пары которые LLM уже SKIP-нул за последние 2 часа.
- * Это предотвращает повторную отправку одних и тех же пар в LLM каждые 5 минут.
- */
 function deduplicateSkippedPairs(
   signals: import('./market-analyzer.js').TradeSignalInternal[],
 ): import('./market-analyzer.js').TradeSignalInternal[] {
@@ -108,7 +100,6 @@ function deduplicateSkippedPairs(
       .pop();
     if (!lastSkip) return true;
 
-    // Пропускаем если score значительно вырос с момента SKIP
     const prevScore = lastSkip.data.confluenceScore ?? 0;
     const scoreImproved = Math.abs(sig.confluence.total) - Math.abs(prevScore) >= 10;
     if (scoreImproved) {
@@ -120,7 +111,7 @@ function deduplicateSkippedPairs(
       return true;
     }
 
-    log.debug('Dedup: skipping pair (LLM SKIP < 2h ago)', {
+    log.debug('Dedup: skipping pair (LLM SKIP < 15min ago)', {
       pair: sig.pair,
       skippedAt: lastSkip.timestamp,
     });
@@ -129,11 +120,33 @@ function deduplicateSkippedPairs(
 }
 
 /**
- * Проверяет наличие свободных слотов для позиций.
+ * Проверяет, есть ли сигналы ПРОТИВ открытых позиций.
+ * Если да — Claude должен оценить нужно ли закрывать.
  */
-function hasFreePositionSlots(): boolean {
+function hasPositionReviewNeeded(
+  allSignals: import('./market-analyzer.js').TradeSignalInternal[],
+): boolean {
   const s = state.get();
-  return s.positions.length < config.maxOpenPositions;
+  if (s.positions.length === 0) return false;
+
+  for (const pos of s.positions) {
+    const signal = allSignals.find((sig) => sig.pair === pos.symbol);
+    if (!signal) continue;
+
+    const isAgainstPosition =
+      (pos.side === 'long' && signal.confluence.total < -25) ||
+      (pos.side === 'short' && signal.confluence.total > 25);
+
+    if (isAgainstPosition) {
+      log.info('Signal against open position detected', {
+        symbol: pos.symbol,
+        positionSide: pos.side,
+        confluenceScore: signal.confluence.total,
+      });
+      return true;
+    }
+  }
+  return false;
 }
 
 async function main(): Promise<void> {
@@ -141,7 +154,6 @@ async function main(): Promise<void> {
   const cycleId = generateCycleId();
   rotateIfNeeded();
 
-  // Проверяем конфигурацию при первом запуске
   const envCheck = validateRequiredEnv('crypto');
   if (!envCheck.valid) {
     log.error('Configuration invalid — aborting', { errors: envCheck.errors });
@@ -163,103 +175,124 @@ async function main(): Promise<void> {
 
     await refreshAccount();
 
-    // Position management — каждый цикл (5 мин)
+    // Position management — каждый цикл (trailing SL, partial close, SL guard)
     await managePositions(cycleId, DRY_RUN);
     if (!DRY_RUN) await cancelStaleOrders();
 
     // Market analysis — каждый цикл (бесплатно, только Bybit API)
-    const signals = await analyzeMarket(cycleId, SINGLE_PAIR ?? undefined);
-    saveSnapshots(cycleId, signals);
+    const allSignals = await analyzeMarket(cycleId, SINGLE_PAIR ?? undefined);
+    saveSnapshots(cycleId, allSignals);
 
     const s = state.get();
+    const cooldownOk = isLLMCooldownPassed();
 
-    if (signals.length === 0) {
-      log.info('No signals this cycle', { cycleId });
-      s.lastMonitor = new Date().toISOString();
-      state.save();
-    } else {
-      // === ВСЕ СИГНАЛЫ → Claude Code (Opus) ===
-      // Claude получает полный контекст и принимает решения
-      const cooldownOk = isLLMCooldownPassed();
-      const slotsAvailable = hasFreePositionSlots();
-      const candidates = deduplicateSkippedPairs(signals);
+    // Кандидаты на вход (прошедшие confluence фильтр)
+    const candidates = deduplicateSkippedPairs(
+      allSignals.filter((sig) => sig.confluence.signal !== 'NEUTRAL'),
+    );
 
-      if (candidates.length > 0 && cooldownOk && slotsAvailable) {
-        const expired = cleanExpired();
-        if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
+    // Проверяем нужен ли review позиций (сигнал против)
+    const needsReview = hasPositionReviewNeeded(allSignals);
 
-        const llmDecisions = await runLLMAdvisorCycle(cycleId, candidates);
+    // Claude вызывается если:
+    // 1. Есть кандидаты на вход И cooldown прошёл
+    // 2. Есть сигнал против открытой позиции (review)
+    // 3. Есть позиции и прошёл cooldown (регулярная проверка)
+    const shouldCallClaude =
+      cooldownOk && (candidates.length > 0 || needsReview || s.positions.length > 0);
 
-        const enterSignals = candidates.filter((sig) => {
-          const dec = llmDecisions.find((d) => d.pair === sig.pair);
-          return dec?.decision === 'ENTER';
-        });
+    if (shouldCallClaude) {
+      const expired = cleanExpired();
+      if (expired > 0) log.info(`Cleaned ${expired} expired watchlist entries`);
 
-        for (const dec of llmDecisions) {
-          if (dec.decision === 'WAIT') {
-            const sig = candidates.find((si) => si.pair === dec.pair);
-            if (sig) addToWatchlist(sig.pair, sig, dec.reason);
-          }
-          if (dec.decision === 'SKIP') {
-            const sig = candidates.find((si) => si.pair === dec.pair);
-            logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
-              ...(sig
-                ? {
-                    confluenceScore: sig.confluence.total,
-                    confluenceSignal: sig.confluence.signal,
-                    confidence: sig.confidence,
-                    regime: sig.regime,
-                  }
-                : {}),
-            });
-          }
+      const { decisions, actionResults } = await runLLMAdvisorCycle(
+        cycleId,
+        candidates,
+        allSignals,
+        DRY_RUN,
+      );
+
+      // Обработка ENTER решений через signal-executor
+      const enterSignals = candidates.filter((sig) => {
+        const dec = decisions.find((d) => d.pair === sig.pair);
+        return dec?.decision === 'ENTER';
+      });
+
+      for (const dec of decisions) {
+        if (dec.decision === 'WAIT') {
+          const sig = candidates.find((si) => si.pair === dec.pair);
+          if (sig) addToWatchlist(sig.pair, sig, dec.reason);
         }
-
-        const execResults = await executeSignals(enterSignals, cycleId, DRY_RUN);
-
-        s.lastLLMCycleAt = new Date().toISOString();
-
-        state.logEvent('llm_cycle', {
-          cycleId,
-          candidates: candidates.length,
-          enter: enterSignals.length,
-          executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-          skip: llmDecisions.filter((d) => d.decision === 'SKIP').length,
-          wait: llmDecisions.filter((d) => d.decision === 'WAIT').length,
-          elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
-        });
-
-        log.info('Claude Code cycle', {
-          cycleId,
-          candidates: candidates.length,
-          enter: enterSignals.length,
-          executed: execResults.filter((r) => r.action === 'EXECUTED').length,
-        });
-      } else {
-        const reasons: string[] = [];
-        if (candidates.length === 0) reasons.push('all candidates deduped (recently SKIP)');
-        if (!cooldownOk) {
-          const elapsed = s.lastLLMCycleAt
-            ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
-            : 0;
-          reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+        if (dec.decision === 'SKIP') {
+          const sig = candidates.find((si) => si.pair === dec.pair);
+          logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
+            ...(sig
+              ? {
+                  confluenceScore: sig.confluence.total,
+                  confluenceSignal: sig.confluence.signal,
+                  confidence: sig.confidence,
+                  regime: sig.regime,
+                }
+              : {}),
+          });
         }
-        if (!slotsAvailable)
-          reasons.push(`no free slots (${s.positions.length}/${config.maxOpenPositions})`);
-
-        log.info('Signals present, Claude not triggered', {
-          cycleId,
-          signals: signals.length,
-          deduped: candidates.length,
-          reasons: reasons.join('; '),
-        });
       }
 
-      s.lastMonitor = new Date().toISOString();
-      state.save();
+      // Исполняем ENTER через signal-executor (только если action-executor не сделал это)
+      const alreadyEntered = new Set(
+        actionResults.filter((r) => r.type === 'ENTER' && r.status === 'OK').map((r) => r.pair),
+      );
+      const remainingEnters = enterSignals.filter((sig) => !alreadyEntered.has(sig.pair));
+      const execResults = await executeSignals(remainingEnters, cycleId, DRY_RUN);
+
+      s.lastLLMCycleAt = new Date().toISOString();
+
+      state.logEvent('llm_cycle', {
+        cycleId,
+        candidates: candidates.length,
+        positions: s.positions.length,
+        needsReview,
+        enter: enterSignals.length,
+        executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+        skip: decisions.filter((d) => d.decision === 'SKIP').length,
+        wait: decisions.filter((d) => d.decision === 'WAIT').length,
+        closes: actionResults.filter((r) => r.type === 'CLOSE' && r.status === 'OK').length,
+        modifies: actionResults.filter(
+          (r) => (r.type === 'MODIFY_SL' || r.type === 'MODIFY_TP') && r.status === 'OK',
+        ).length,
+        elapsed: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      });
+
+      log.info('Claude cycle complete', {
+        cycleId,
+        candidates: candidates.length,
+        enter: enterSignals.length,
+        executed: execResults.filter((r) => r.action === 'EXECUTED').length,
+      });
+    } else {
+      const reasons: string[] = [];
+      if (candidates.length === 0 && s.positions.length === 0)
+        reasons.push('no signals and no positions');
+      if (!cooldownOk) {
+        const elapsed = s.lastLLMCycleAt
+          ? Math.round((Date.now() - new Date(s.lastLLMCycleAt).getTime()) / 60_000)
+          : 0;
+        reasons.push(`cooldown ${elapsed}m / ${LLM_COOLDOWN_MS / 60_000}m`);
+      }
+
+      log.info('Claude not triggered', {
+        cycleId,
+        signals: allSignals.length,
+        candidates: candidates.length,
+        positions: s.positions.length,
+        reasons: reasons.join('; '),
+      });
     }
 
-    // Пишем healthcheck для внешнего мониторинга
+    s.lastMonitor = new Date().toISOString();
+    state.save();
+
+    // Healthcheck
     const healthFile = path.join(path.dirname(config.stateFile), 'health.json');
     try {
       const healthData = {

@@ -79,8 +79,15 @@ export interface StoredEvent {
   [key: string]: unknown;
 }
 
+/** Текущая дата в UTC+2 (Киев) */
+function kyivDate(): string {
+  const d = new Date();
+  d.setUTCHours(d.getUTCHours() + 2);
+  return d.toISOString().slice(0, 10);
+}
+
 function defaultState(): CryptoState {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kyivDate();
   return {
     version: 1,
     lastUpdate: new Date().toISOString(),
@@ -125,7 +132,7 @@ export function load(): CryptoState {
   if (fs.existsSync(STATE_FILE)) {
     try {
       _state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) as CryptoState;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = kyivDate();
       if (_state.daily?.date !== today) {
         resetDaily();
       }
@@ -158,7 +165,7 @@ export function get(): CryptoState {
 
 export function resetDaily(): void {
   const state = get();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kyivDate();
   state.today = today;
   state.daily = {
     date: today,
@@ -266,21 +273,6 @@ export function updatePositions(
 export function checkDayLimits(): boolean {
   const s = get();
   const d = s.daily;
-
-  // Учитываем unrealized P&L чтобы не ждать закрытия позиций
-  const unrealizedPnl = s.balance.unrealizedPnl || 0;
-  const effectivePnl = d.totalPnl + Math.min(0, unrealizedPnl); // только убытки
-
-  if (effectivePnl <= -config.maxDailyLoss) {
-    d.stopDay = true;
-    d.stopDayReason = `Daily loss reached $${Math.abs(effectivePnl).toFixed(2)} (realized $${Math.abs(d.totalPnl).toFixed(2)} + unrealized $${unrealizedPnl.toFixed(2)}, limit $${config.maxDailyLoss})`;
-    logEvent('stop_day', {
-      reason: d.stopDayReason,
-      effectivePnl,
-      realizedPnl: d.totalPnl,
-      unrealizedPnl,
-    });
-  }
 
   if (d.stops >= config.maxStopsPerDay) {
     d.stopDay = true;
@@ -409,12 +401,12 @@ export function getRecentEvents(count: number = 50): StoredEvent[] {
 }
 
 export function getTodayTrades(): StoredEvent[] {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kyivDate();
   return getRecentEvents(200).filter((e) => e.type === 'trade' && e.ts?.startsWith(today));
 }
 
 export function getTodayEvents(types?: string[]): StoredEvent[] {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = kyivDate();
   return getRecentEvents(500).filter((e) => {
     if (!e.ts?.startsWith(today)) return false;
     return types ? types.includes(e.type) : true;

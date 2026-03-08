@@ -44,3 +44,15 @@ bybit-client + state, или экспортировать функции с по
 - `monitor.ts` — импортирует из bybit-client, но `closePosition` не в списке импортов
 - `state.ts` — `API_ERROR_TYPES` константы нет, нужно добавить
 - `config.ts` — `mode: 'execute'`, `demoTrading: true`, данные в `data/`
+
+## Архитектура LLM (llm-advisor.ts, 2026-03-08)
+- Текущий вызов: `runClaudeCli(prompt, {stream: false, useSession: false})` — каждый раз чистый контекст
+- Формат ответа: JSON массив `[{pair, decision, reason, confidence}]`
+- Cooldown: 5 мин (LLM_COOLDOWN_MS), дедуп SKIP 15 мин (SKIP_DEDUP_HOURS=0.25)
+- Бюджет: дневной лимит в `llm-cost-tracker.ts` (по умолчанию $1/день)
+- PLAN-002: расширить до полного управления позициями — новые модули:
+  - `claude-trader-context.ts` — компактный контекст для промпта
+  - `claude-action-executor.ts` — парсинг и исполнение ClaudeAction[]
+  - Новый JSON формат: `{summary, actions: [{type, pair, reason, confidence, ...}]}`
+  - Новый тип action: CLOSE_POSITION, MODIFY_SL, MODIFY_TP (в дополнение к ENTER/SKIP/WAIT)
+  - Position review триггер: confluence >= 30 противоположного направления открытой позиции

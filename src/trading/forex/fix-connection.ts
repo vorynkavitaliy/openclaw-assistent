@@ -103,6 +103,10 @@ export const Tag = {
   TotNoRelatedSym: 393,
   SecurityRequestResult: 560,
   LegSymbol: 1007,
+
+  MassStatusReqID: 584,
+  MassStatusReqType: 585,
+  TotNumReports: 911,
 } as const;
 
 export const MsgType = {
@@ -129,6 +133,7 @@ export const MsgType = {
   CollateralReport: 'BA',
   OrderCancelReject: '9',
   BusinessMessageReject: 'j',
+  OrderMassStatusRequest: 'AF',
 } as const;
 
 export class FixMessage {
@@ -476,6 +481,29 @@ export class FixSession extends EventEmitter {
     });
   }
 
+  /**
+   * Запрос OrderMassStatus (35=AF). ExecutionReport-ы роутятся по MassStatusReqID (584).
+   * Ключ в multiResponses: `ExecutionReport:mass:<massReqId>`.
+   */
+  async requestMassStatus(
+    fields: [number, string | number][],
+    massReqId: string,
+    timeoutMs = 15000,
+  ): Promise<FixMessage[]> {
+    return new Promise((resolve, reject) => {
+      const key = `${MsgType.ExecutionReport}:mass:${massReqId}`;
+
+      const timeout = setTimeout(() => {
+        const pending = this.multiResponses.get(key);
+        this.multiResponses.delete(key);
+        resolve(pending?.messages ?? []);
+      }, timeoutMs);
+
+      this.multiResponses.set(key, { messages: [], resolve, reject, timeout });
+      this.sendRaw(MsgType.OrderMassStatusRequest, fields);
+    });
+  }
+
   private sendLogon(): void {
     log.info(`Sending Logon (user=${this.config.username}, sender=${this.config.senderCompID})...`);
 
@@ -600,6 +628,25 @@ export class FixSession extends EventEmitter {
 
   private routeResponse(msg: FixMessage): void {
     const msgType = msg.msgType;
+
+    // ExecutionReport может быть ответом на OrderMassStatusRequest (35=AF).
+    // В этом случае роутим по MassStatusReqID (584), а не по ClOrdID.
+    if (msgType === MsgType.ExecutionReport && msg.has(Tag.MassStatusReqID)) {
+      const massReqId = msg.getString(Tag.MassStatusReqID);
+      const key = `${MsgType.ExecutionReport}:mass:${massReqId}`;
+      const multi = this.multiResponses.get(key);
+      if (multi) {
+        multi.messages.push(msg);
+        const totNum = msg.getInt(Tag.TotNumReports);
+        if (totNum > 0) multi.expectedTotal = totNum;
+        if (multi.expectedTotal && multi.messages.length >= multi.expectedTotal) {
+          clearTimeout(multi.timeout);
+          this.multiResponses.delete(key);
+          multi.resolve(multi.messages);
+        }
+        return;
+      }
+    }
 
     const routeMap: [string, number][] = [
       [MsgType.CollateralReport, Tag.CollInquiryID],

@@ -19,6 +19,7 @@ const SYMBOL_SPECS: Record<string, { qtyDec: number; priceDec: number }> = {
   NEARUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
   APTUSDT: { qtyDec: 1, priceDec: 2 }, // step=0.1,   tick=0.01
   PEPEUSDT: { qtyDec: 0, priceDec: 7 }, // step=1,     tick=0.0000001
+  '1000PEPEUSDT': { qtyDec: 0, priceDec: 6 }, // step=1, tick=0.000001
   LTCUSDT: { qtyDec: 2, priceDec: 2 }, // step=0.01,  tick=0.01
   FILUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
   ATOMUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
@@ -34,6 +35,7 @@ const SYMBOL_SPECS: Record<string, { qtyDec: number; priceDec: number }> = {
   TRXUSDT: { qtyDec: 0, priceDec: 5 }, // step=1,     tick=0.00001
   TONUSDT: { qtyDec: 1, priceDec: 3 }, // step=0.1,   tick=0.001
   SHIBUSDT: { qtyDec: 0, priceDec: 7 }, // step=1,     tick=0.0000001
+  '1000SHIBUSDT': { qtyDec: 0, priceDec: 6 }, // step=1, tick=0.000001
   MKRUSDT: { qtyDec: 3, priceDec: 1 }, // step=0.001, tick=0.1
   STXUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001
   SEIUSDT: { qtyDec: 0, priceDec: 4 }, // step=1,     tick=0.0001

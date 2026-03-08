@@ -4,6 +4,7 @@ import { getArgOrDefault, hasFlag } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
 import { fmt, fmtPrice, sendTelegram } from '../../utils/telegram.js';
+import { getKyivHour, formatKyivDateTime } from '../../utils/time.js';
 import { getBalance, getMarketInfo, getPositions } from './bybit-client.js';
 import config from './config.js';
 import { generateSummary } from './decision-journal.js';
@@ -132,10 +133,10 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function getSession(utcHour: number): string {
-  if (utcHour >= 13 && utcHour < 16) return '🇺🇸🇬🇧 London+NY';
-  if (utcHour >= 8 && utcHour < 16) return '🇬🇧 London';
-  if (utcHour >= 13 && utcHour < 21) return '🇺🇸 New York';
+function getSession(kyivHour: number): string {
+  if (kyivHour >= 15 && kyivHour < 18) return '🇺🇸🇬🇧 London+NY';
+  if (kyivHour >= 10 && kyivHour < 18) return '🇬🇧 London';
+  if (kyivHour >= 15 && kyivHour < 23) return '🇺🇸 New York';
   return '🌏 Азия';
 }
 
@@ -157,8 +158,8 @@ function calcPositionStats(
 
 function formatTelegramReport(data: ReportData): string {
   const now = new Date();
-  const timeStr = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-  const utcHour = now.getUTCHours();
+  const timeStr = formatKyivDateTime(now);
+  const kyivHour = getKyivHour(now);
   const lines: string[] = [];
 
   lines.push(`<b>Крипто-трейдер</b>  ${timeStr}`);
@@ -232,7 +233,7 @@ function formatTelegramReport(data: ReportData): string {
   const tradesDone = data.daily.trades;
   const progressBar = '█'.repeat(tradesDone) + '░'.repeat(Math.max(0, dailyTarget - tradesDone));
   lines.push('');
-  lines.push(`📅 <b>День</b>  ${esc(getSession(utcHour))}`);
+  lines.push(`📅 <b>День</b>  ${esc(getSession(kyivHour))}`);
   lines.push(`Цель: <code>${progressBar}</code> ${tradesDone}/${dailyTarget} сделок`);
   const statsLine = `✅${data.daily.wins} ❌${data.daily.losses}  Стопов: ${data.daily.stops}/${config.maxStopsPerDay}`;
   lines.push(statsLine);

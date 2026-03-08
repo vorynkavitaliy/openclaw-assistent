@@ -9,7 +9,7 @@ import {
 } from './bybit-client.js';
 import config from './config.js';
 import { logDecision } from './decision-journal.js';
-import { recordPairTrade, type TradeSignalInternal } from './market-analyzer.js';
+import type { TradeSignalInternal } from './market-analyzer.js';
 import * as state from './state.js';
 import { formatQty, roundPrice } from './symbol-specs.js';
 
@@ -327,7 +327,7 @@ export async function executeSignals(
 
       // Помечаем экосистему как занятую и записываем cooldown
       if (ecosystem) openEcosystems.add(ecosystem);
-      recordPairTrade(sig.pair);
+      state.recordPairTrade(sig.pair);
 
       results.push({
         ...sig,

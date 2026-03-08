@@ -86,28 +86,45 @@ export async function sendTelegramWithId(
 
 /**
  * Редактировать существующее сообщение по message_id.
+ * При ошибке Markdown парсинга — повторяет без parse_mode (plain text).
  */
 export async function editTelegramMessage(
   messageId: number,
   text: string,
-  parseMode: 'HTML' | 'Markdown' = 'Markdown',
+  parseMode: 'HTML' | 'Markdown' | null = null,
 ): Promise<boolean> {
   const token = getToken();
   const chatId = getChatId();
   if (!token || !chatId) return false;
 
+  const truncated = text.slice(0, 4096);
+
   try {
+    const body: Record<string, unknown> = {
+      chat_id: chatId,
+      message_id: messageId,
+      text: truncated,
+    };
+    if (parseMode) body.parse_mode = parseMode;
+
     const resp = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        text: text.slice(0, 4096),
-        parse_mode: parseMode,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
+
+    if (!resp.ok && parseMode) {
+      // Fallback: повтор без parse_mode (Markdown символы в тексте Claude)
+      const fallback = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId, text: truncated }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      return fallback.ok;
+    }
+
     return resp.ok;
   } catch {
     return false;

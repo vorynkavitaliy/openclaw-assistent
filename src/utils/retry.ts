@@ -7,9 +7,10 @@ export interface RetryOptions {
   backoffMs?: number;
   maxBackoffMs?: number;
   onRetry?: (error: Error, attempt: number) => void;
+  shouldRetry?: (error: Error) => boolean;
 }
 
-const DEFAULTS: Required<Omit<RetryOptions, 'onRetry'>> = {
+const DEFAULTS: Required<Omit<RetryOptions, 'onRetry' | 'shouldRetry'>> = {
   retries: 3,
   backoffMs: 1000,
   maxBackoffMs: 10_000,
@@ -27,6 +28,8 @@ export async function retryAsync<T>(fn: () => Promise<T>, options: RetryOptions 
       lastError = err instanceof Error ? err : new Error(String(err));
 
       if (attempt > retries) break;
+
+      if (options.shouldRetry && !options.shouldRetry(lastError)) break;
 
       const baseDelay = Math.min(backoffMs * Math.pow(2, attempt - 1), maxBackoffMs);
       const jitter = (Math.random() - 0.5) * 0.3 * baseDelay;

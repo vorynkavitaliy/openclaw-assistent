@@ -1,6 +1,8 @@
 import { getArg, hasFlag } from '../../utils/args.js';
 import { loadEnv } from '../../utils/env.js';
 import { createLogger } from '../../utils/logger.js';
+import { runClaudeCli } from '../../utils/claude-cli.js';
+import { buildSystemPrompt } from './claude-trader-context.js';
 
 loadEnv();
 
@@ -142,6 +144,20 @@ async function getKlinesBefore(
 
 const log = createLogger('backtester');
 
+interface RawSignal {
+  pair: string;
+  side: 'Buy' | 'Sell';
+  entry: number;
+  sl: number;
+  tp: number;
+  rr: number;
+  confluence: ConfluenceScore;
+  regime: string;
+  barIndex: number;
+  entryTime: string;
+  atr: number;
+}
+
 interface BacktestTrade {
   pair: string;
   side: 'Buy' | 'Sell';
@@ -153,6 +169,7 @@ interface BacktestTrade {
   exitPrice: number;
   pnl: number;
   pnlPercent: number;
+  rMultiple: number; // Фактический R-множитель (1R = риск на сделку)
   result: 'WIN' | 'LOSS' | 'OPEN';
   confluence: number;
   confidence: number;
@@ -359,6 +376,10 @@ function simulateTrade(
   const rawPnl = side === 'Buy' ? exitPrice - avgEntry : avgEntry - exitPrice;
   const pnlPercent = (rawPnl / avgEntry) * 100 * volumeMultiplier;
 
+  // R-множитель: сколько R заработали/потеряли (1R = расстояние до SL)
+  const riskPerUnit = Math.abs(avgEntry - sl);
+  const rMultiple = riskPerUnit > 0 ? rawPnl / riskPerUnit : 0;
+
   return {
     pair,
     side,
@@ -370,6 +391,7 @@ function simulateTrade(
     exitPrice,
     pnl: rawPnl,
     pnlPercent,
+    rMultiple,
     result,
     confluence: confluence.total,
     confidence: confluence.confidence,
@@ -377,7 +399,12 @@ function simulateTrade(
   };
 }
 
-async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResult> {
+async function backtestPair(
+  pair: string,
+  m15Bars: number,
+  btcM15?: OHLC[],
+  collectSignals?: RawSignal[],
+): Promise<BacktestResult> {
   log.info('Fetching candles', { pair, m15Bars });
 
   // M15 — основной TF, загружаем с пагинацией для больших периодов
@@ -435,8 +462,8 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
 
     if (absScore < threshold) continue;
 
-    // Confidence filter
-    if (confluence.confidence < config.minConfidence) continue;
+    // Confidence filter (бэктест: порог ниже из-за отсутствия live-данных)
+    if (confluence.confidence < config.backtestMinConfidence) continue;
 
     const side: 'Buy' | 'Sell' = confluence.total > 0 ? 'Buy' : 'Sell';
 
@@ -445,6 +472,24 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
     if (regime === 'STRONG_TREND' || regime === 'WEAK_TREND') {
       if (trendBias === 'BULLISH' && side === 'Sell') continue;
       if (trendBias === 'BEARISH' && side === 'Buy') continue;
+    }
+
+    // BTC корреляция для альтов
+    if (config.btcCorrelationFilter && pair !== 'BTCUSDT' && btcM15 && btcM15.length > i) {
+      // Считаем BTC 24h change (96 баров M15 = 24ч)
+      const lookback = Math.min(96, i);
+      const btcNow = btcM15[i]?.close ?? 0;
+      const btcPrev = btcM15[i - lookback]?.close ?? btcNow;
+      const btc24hPct = btcPrev > 0 ? ((btcNow - btcPrev) / btcPrev) * 100 : 0;
+
+      if (side === 'Buy' && btc24hPct < -2) continue; // BTC падает — не лонгуем альты
+      if (side === 'Sell' && btc24hPct > 2) continue; // BTC растёт — не шортим альты
+    }
+
+    // Повышенный порог confidence для слабых пар
+    if (config.weakPairs.includes(pair)) {
+      const weakThreshold = config.backtestMinConfidence + config.weakPairConfidenceBonus;
+      if (confluence.confidence < weakThreshold) continue;
     }
 
     signalCount++;
@@ -462,6 +507,22 @@ async function backtestPair(pair: string, m15Bars: number): Promise<BacktestResu
     // Динамический R:R по режиму
     const rr = getRegimeRR(regime);
     const tp = roundPrice(side === 'Buy' ? entry + slDistance * rr : entry - slDistance * rr, pair);
+
+    if (collectSignals) {
+      collectSignals.push({
+        pair,
+        side,
+        entry,
+        sl: roundPrice(sl, pair),
+        tp: roundPrice(tp, pair),
+        rr,
+        confluence,
+        regime,
+        barIndex: i,
+        entryTime: currentCandle.time,
+        atr,
+      });
+    }
 
     // Simulate trade on future candles
     const futureCandles = m15Candles.slice(i + 1, i + 200); // max ~50 часов
@@ -572,16 +633,26 @@ async function main(): Promise<void> {
   const bars = parseInt(getArg('bars') ?? '500');
   const verbose = hasFlag('verbose') || hasFlag('v');
   const allPairs = hasFlag('all');
+  const withLlm = hasFlag('with-llm');
+  const llmTopN = parseInt(getArg('llm-top') ?? '15');
+  const startBalance = parseFloat(getArg('balance') ?? '10000');
 
   const pairsToTest = allPairs ? config.pairs : [pair.toUpperCase()];
 
   log.info('Starting backtest', { pairs: pairsToTest.length, bars });
 
+  // Загружаем BTC свечи для корреляционного фильтра
+  let btcM15: OHLC[] | undefined;
+  if (config.btcCorrelationFilter) {
+    log.info('Loading BTC candles for correlation filter');
+    btcM15 = await getKlinesPaginated('BTCUSDT', '15', bars);
+  }
+
   const allResults: BacktestResult[] = [];
 
   for (const p of pairsToTest) {
     try {
-      const result = await backtestPair(p, bars);
+      const result = await backtestPair(p, bars, btcM15);
       allResults.push(result);
       console.log(formatResult(result, verbose));
       console.log('');
@@ -590,7 +661,7 @@ async function main(): Promise<void> {
     }
   }
 
-  if (allResults.length > 1) {
+  if (allResults.length > 0) {
     // Summary
     const totalTrades = allResults.reduce((s, r) => s + r.trades, 0);
     const totalWins = allResults.reduce((s, r) => s + r.wins, 0);
@@ -603,6 +674,186 @@ async function main(): Promise<void> {
     console.log(`═══ SUMMARY (${allResults.length} пар) ═══`);
     console.log(`Всего сделок: ${totalTrades} | Win rate: ${avgWR.toFixed(1)}%`);
     console.log(`Средний P&L на пару: ${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(2)}%`);
+
+    // ─── Долларовая симуляция equity curve ──────────────────────────
+    // Собираем ВСЕ сделки со всех пар, сортируем по времени входа
+    const allTrades = allResults
+      .flatMap((r) => r.trades_list)
+      .sort((a, b) => a.entryTime.localeCompare(b.entryTime));
+
+    if (allTrades.length > 0) {
+      let balance = startBalance;
+      let peakBalance = startBalance;
+      let maxDollarDD = 0;
+      const monthlyPnl = new Map<string, number>(); // "YYYY-MM" → $pnl
+
+      console.log(`\n═══ EQUITY CURVE ($${startBalance.toLocaleString()} start) ═══`);
+      console.log(
+        `Risk per trade: ${(config.riskPerTrade * 100).toFixed(1)}% (max $${config.maxRiskPerTrade})\n`,
+      );
+
+      for (const t of allTrades) {
+        if (t.result === 'OPEN') continue;
+
+        // Риск на сделку: min(balance * riskPerTrade, maxRiskPerTrade)
+        const riskAmount = Math.min(balance * config.riskPerTrade, config.maxRiskPerTrade);
+        // Долларовый P&L = riskAmount * R-множитель
+        const dollarPnl = riskAmount * t.rMultiple;
+
+        balance += dollarPnl;
+        if (balance > peakBalance) peakBalance = balance;
+        const dd = peakBalance - balance;
+        if (dd > maxDollarDD) maxDollarDD = dd;
+
+        // Месячная статистика
+        const month = t.entryTime.slice(0, 7); // "YYYY-MM"
+        monthlyPnl.set(month, (monthlyPnl.get(month) ?? 0) + dollarPnl);
+
+        if (verbose) {
+          const sign = dollarPnl >= 0 ? '+' : '';
+          console.log(
+            `  ${t.entryTime.slice(5, 16)} ${t.pair.padEnd(10)} ${t.side.padEnd(4)} ${t.result.padEnd(4)} ` +
+              `${sign}$${dollarPnl.toFixed(2).padStart(8)} | R=${t.rMultiple >= 0 ? '+' : ''}${t.rMultiple.toFixed(2)} ` +
+              `| bal=$${balance.toFixed(0)}`,
+          );
+        }
+      }
+
+      const totalDollarPnl = balance - startBalance;
+      const totalReturn = ((balance - startBalance) / startBalance) * 100;
+      const months = monthlyPnl.size || 1;
+      const avgMonthlyReturn = totalReturn / months;
+
+      console.log(`\n--- Итог ---`);
+      console.log(`Начальный баланс: $${startBalance.toLocaleString()}`);
+      console.log(`Конечный баланс:  $${balance.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`);
+      console.log(
+        `Прибыль/убыток:   ${totalDollarPnl >= 0 ? '+' : ''}$${totalDollarPnl.toFixed(0)} (${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(1)}%)`,
+      );
+      console.log(
+        `Max Drawdown:     $${maxDollarDD.toFixed(0)} (${((maxDollarDD / peakBalance) * 100).toFixed(1)}%)`,
+      );
+      console.log(
+        `Месяцев: ${months} | Средний возврат/мес: ${avgMonthlyReturn >= 0 ? '+' : ''}${avgMonthlyReturn.toFixed(1)}%`,
+      );
+
+      if (monthlyPnl.size > 0) {
+        console.log(`\n--- По месяцам ---`);
+        for (const [month, pnl] of [...monthlyPnl.entries()].sort()) {
+          const balAtMonth =
+            startBalance +
+            [...monthlyPnl.entries()].filter(([m]) => m <= month).reduce((s, [, p]) => s + p, 0);
+          console.log(
+            `  ${month}: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0).padStart(6)} | bal=$${balAtMonth.toFixed(0)}`,
+          );
+        }
+      }
+    }
+  }
+
+  if (withLlm) {
+    // Собираем все сигналы заново с collectSignals
+    console.log(`\n═══ LLM EVALUATION (top ${llmTopN} signals) ═══\n`);
+
+    const allSignals: RawSignal[] = [];
+    for (const p of pairsToTest) {
+      try {
+        await backtestPair(p, bars, btcM15, allSignals);
+      } catch {
+        // ignore
+      }
+    }
+
+    // Сортируем по абсолютному confluence score, берём топ
+    allSignals.sort((a, b) => Math.abs(b.confluence.total) - Math.abs(a.confluence.total));
+    const topSignals = allSignals.slice(0, llmTopN);
+
+    console.log(`Всего сигналов: ${allSignals.length}, отправляем ${topSignals.length} в Claude\n`);
+
+    let llmApproved = 0;
+    let llmRejected = 0;
+    const llmResults: Array<{ signal: RawSignal; decision: string; approved: boolean }> = [];
+
+    for (const sig of topSignals) {
+      const prompt = `${buildSystemPrompt()}
+
+=== СИГНАЛ ДЛЯ ОЦЕНКИ (БЭКТЕСТ) ===
+
+${sig.pair} ${sig.side} | score=${sig.confluence.total} conf=${sig.confluence.confidence}% regime=${sig.regime}
+entry=${sig.entry} SL=${sig.sl} TP=${sig.tp} R:R=${sig.rr.toFixed(1)}
+Время: ${sig.entryTime}
+ATR: ${sig.atr.toFixed(4)}
+Детали: ${sig.confluence.details.slice(0, 5).join(' | ')}
+
+Баланс: $5000 (тест)
+Позиции: нет
+
+Оцени этот сигнал. Ответь СТРОГО JSON:
+{"summary": "...", "actions": [{"type": "ENTER|SKIP", "pair": "${sig.pair}", "reason": "...", "confidence": 0-100}]}`;
+
+      try {
+        console.log(`  Claude оценивает: ${sig.pair} ${sig.side} score=${sig.confluence.total}...`);
+        const response = await runClaudeCli(prompt, {
+          timeoutMs: 120_000,
+          stream: false,
+          useSession: false,
+        });
+
+        // Парсим ответ Claude
+        const jsonMatch = response.match(/\{[\s\S]*"actions"[\s\S]*\}/);
+        let approved = false;
+        let decision = 'PARSE_ERROR';
+
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]) as {
+              actions?: Array<{ type: string; reason?: string }>;
+            };
+            const action = parsed.actions?.[0];
+            if (action) {
+              approved = action.type === 'ENTER';
+              decision = `${action.type}: ${action.reason ?? ''}`;
+            }
+          } catch {
+            decision = response.slice(0, 200);
+          }
+        } else {
+          decision = response.slice(0, 200);
+        }
+
+        if (approved) llmApproved++;
+        else llmRejected++;
+
+        llmResults.push({ signal: sig, decision, approved });
+        console.log(`    -> ${approved ? 'ENTER' : 'SKIP'}: ${decision.slice(0, 100)}`);
+      } catch (err) {
+        console.log(`    -> Ошибка: ${(err as Error).message}`);
+      }
+
+      // Пауза между вызовами чтобы не перегрузить
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    console.log(`\n═══ LLM RESULTS ═══`);
+    if (topSignals.length > 0) {
+      console.log(
+        `Одобрено: ${llmApproved}/${topSignals.length} (${((llmApproved / topSignals.length) * 100).toFixed(0)}%)`,
+      );
+    } else {
+      console.log(`Одобрено: 0/0`);
+    }
+    console.log(`Отклонено: ${llmRejected}/${topSignals.length}`);
+
+    // Показываем какие сделки были бы с LLM фильтром
+    const approvedSignals = llmResults.filter((r) => r.approved);
+    if (approvedSignals.length > 0) {
+      console.log(`\nОдобренные сигналы:`);
+      for (const r of approvedSignals) {
+        console.log(
+          `  ${r.signal.pair} ${r.signal.side} score=${r.signal.confluence.total} conf=${r.signal.confluence.confidence}% | ${r.decision.slice(0, 80)}`,
+        );
+      }
+    }
   }
 }
 

@@ -49,6 +49,23 @@ const circuitBreaker: CircuitBreaker = createCircuitBreaker({
   name: 'bybit-api',
 });
 
+const RATE_LIMIT_RETCODE = 10006;
+const RATE_LIMIT_BACKOFF_MS = 2000;
+
+class RateLimitError extends Error {
+  constructor() {
+    super('Bybit rate limit exceeded');
+  }
+}
+
+function isRateLimitError(err: Error): boolean {
+  return (
+    err instanceof RateLimitError ||
+    err.message.includes('10006') ||
+    err.message.toLowerCase().includes('rate limit')
+  );
+}
+
 function getClient(): RestClientV5 {
   if (_client) return _client;
 
@@ -68,16 +85,25 @@ function getClient(): RestClientV5 {
   return _client;
 }
 
-// Обёртка для auth API вызовов с rate limiting и circuit breaker
+// Обёртка для auth API вызовов с rate limiting, circuit breaker и retry на 429
 async function withRateLimit<T>(fn: (client: RestClientV5) => Promise<T>): Promise<T> {
-  return circuitBreaker.execute(async () => {
-    await limiter.acquire();
-    try {
-      return await fn(getClient());
-    } finally {
-      limiter.release();
-    }
-  });
+  return retryAsync(
+    () =>
+      circuitBreaker.execute(async () => {
+        await limiter.acquire();
+        try {
+          return await fn(getClient());
+        } finally {
+          limiter.release();
+        }
+      }),
+    {
+      retries: 3,
+      backoffMs: RATE_LIMIT_BACKOFF_MS,
+      maxBackoffMs: 10_000,
+      shouldRetry: isRateLimitError,
+    },
+  );
 }
 
 async function apiGet(
@@ -96,29 +122,42 @@ async function apiGet(
   }
 
   try {
-    return await circuitBreaker.execute(async () => {
-      await limiter.acquire();
-      try {
-        const resp = await retryAsync(
-          () =>
-            fetch(url, {
+    return await retryAsync(
+      () =>
+        circuitBreaker.execute(async () => {
+          await limiter.acquire();
+          try {
+            const resp = await fetch(url, {
               headers: { 'User-Agent': 'OpenClaw/1.0' },
               signal: AbortSignal.timeout(API_TIMEOUT_MS),
-            }),
-          { retries: 2, backoffMs: 500 },
-        );
+            });
 
-        const data = (await resp.json()) as BybitApiResponse;
+            if (resp.status === 429) {
+              throw new RateLimitError();
+            }
 
-        if (data.retCode !== 0) {
-          return { error: data.retMsg ?? 'Unknown API error', retCode: data.retCode };
-        }
+            const data = (await resp.json()) as BybitApiResponse;
 
-        return data.result ?? {};
-      } finally {
-        limiter.release();
-      }
-    });
+            if (data.retCode === RATE_LIMIT_RETCODE) {
+              throw new RateLimitError();
+            }
+
+            if (data.retCode !== 0) {
+              return { error: data.retMsg ?? 'Unknown API error', retCode: data.retCode };
+            }
+
+            return data.result ?? {};
+          } finally {
+            limiter.release();
+          }
+        }),
+      {
+        retries: 3,
+        backoffMs: RATE_LIMIT_BACKOFF_MS,
+        maxBackoffMs: 10_000,
+        shouldRetry: isRateLimitError,
+      },
+    );
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }

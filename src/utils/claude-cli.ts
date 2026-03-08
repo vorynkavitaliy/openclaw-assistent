@@ -22,12 +22,43 @@ const PROJECT_DIR = '/root/Projects/openclaw-assistent';
 const NODE_PATH = '/root/.nvm/versions/node/v22.22.0/bin';
 const FULL_PATH = `${NODE_PATH}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
 
+// Разрешённые инструменты (read-only: без Edit, Write, NotebookEdit)
+const ALLOWED_TOOLS = 'Bash,Read,Glob,Grep,WebFetch,WebSearch';
+
+// Системный промпт для бота — Claude как read-only ассистент
+const BOT_SYSTEM_PROMPT = `Ты — ассистент крипто-трейдера в Telegram. Отвечай на русском, кратко и по делу.
+
+ДОСТУПНЫЕ КОМАНДЫ (bash скрипты):
+1. bash scripts/crypto_report_full.sh — полный отчёт (баланс, позиции, P&L, сигналы)
+2. bash scripts/crypto_market_summary.sh — рыночные сигналы и confluence scores
+3. npx tsx src/trading/crypto/report.ts --format text --no-send — отчёт без отправки в TG
+4. npx tsx src/trading/crypto/journal-cli.ts --summary — дневник решений (сводка)
+5. npx tsx src/trading/crypto/journal-cli.ts --last — последнее решение
+6. cat data/state.json — текущее состояние (баланс, позиции, daily stats)
+7. cat data/health.json — healthcheck последнего цикла
+8. tail -50 data/monitor.log — последние логи мониторинга
+9. tail -20 data/sl-guard.log — логи SL-guard
+10. bash scripts/trading_control.sh status — статус cron трейдеров
+11. bash scripts/trading_control.sh start crypto-trader — запустить крипто cron
+12. bash scripts/trading_control.sh stop crypto-trader — остановить крипто cron
+
+СТРОГИЕ ПРАВИЛА:
+- НИКОГДА не запускай monitor.ts напрямую (npm run trade:crypto:monitor) — он запускается по cron
+- НИКОГДА не редактируй файлы (ты не разработчик, у тебя нет Edit/Write)
+- НИКОГДА не делай git commit/push
+- НИКОГДА не запускай killswitch.ts — для этого есть /stop_kill
+- Запускай ТОЛЬКО скрипты из списка выше
+- Для ответа используй данные из скриптов, форматируй красиво для Telegram
+- Если пользователь просит новости, аналитику рынка или информацию из интернета — используй WebSearch/WebFetch
+- Если пользователь просит что-то за пределами твоих возможностей — скажи что это нужно делать через Claude Code напрямую`;
+
 const ROOT_CREDS = '/root/.claude/.credentials.json';
 const BOT_CREDS = '/home/claudebot/.claude/.credentials.json';
 
-/** Синхронизирует OAuth credentials root → claudebot перед каждым вызовом */
+/** Синхронизирует OAuth credentials root → claudebot перед каждым вызовом (только от root) */
 function syncCredentials(): void {
   try {
+    if (process.getuid?.() !== 0) return; // только root может копировать
     if (!existsSync(ROOT_CREDS)) return;
     copyFileSync(ROOT_CREDS, BOT_CREDS);
     spawnSync('chown', ['claudebot:claudebot', BOT_CREDS], { stdio: 'ignore' });
@@ -114,52 +145,47 @@ export async function runClaudeCli(prompt: string, options?: ClaudeCliOptions): 
       '--dangerously-skip-permissions',
       '--output-format stream-json',
       '--verbose',
-      '--model sonnet',
+      '--model claude-opus-4-6',
       '--max-budget-usd 0.50',
-      continueFlag,
+      `--tools ${ALLOWED_TOOLS}`,
+      continueFlag ? continueFlag : `--system-prompt ${shellEscape(BOT_SYSTEM_PROMPT)}`,
     ]
       .filter(Boolean)
       .join(' '),
   ].join(' && ');
 
-  // Убираем CLAUDECODE (nested session) и ANTHROPIC_API_KEY (используем OAuth)
-  const EXCLUDE_ENV = new Set(['CLAUDECODE', 'ANTHROPIC_API_KEY']);
-  const envVars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (!EXCLUDE_ENV.has(k) && v !== undefined) {
-      envVars[k] = v;
-    }
-  }
-
-  const args = [
-    '-i',
-    `HOME=/home/claudebot`,
-    `PATH=${FULL_PATH}`,
-    'LANG=en_US.UTF-8',
-    '/usr/sbin/runuser',
-    '-u',
-    'claudebot',
-    '--',
-    'bash',
-    '-c',
-    claudeCmd,
-  ];
+  // Чистое окружение — без CLAUDECODE и ANTHROPIC_API_KEY (используем OAuth)
+  const childEnv: Record<string, string> = {
+    HOME: '/home/claudebot',
+    PATH: FULL_PATH,
+    LANG: 'en_US.UTF-8',
+  };
 
   syncCredentials();
+
+  const isClaudebot = process.getuid?.() !== 0;
 
   log.info('Starting claude CLI', {
     promptLength: prompt.length,
     continue: hasActiveSession,
+    runAs: isClaudebot ? 'direct' : 'runuser',
   });
 
   const statusMsgId = stream ? await sendTelegramWithId('🧠 Claude Code думает...') : null;
 
   return new Promise((resolve) => {
-    const proc: ChildProcess = spawn('env', args, {
-      timeout: timeoutMs,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: envVars,
-    });
+    // Если уже claudebot — запускаем напрямую, иначе через runuser
+    const proc: ChildProcess = isClaudebot
+      ? spawn('bash', ['-c', claudeCmd], {
+          timeout: timeoutMs,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: childEnv,
+        })
+      : spawn('/usr/sbin/runuser', ['-u', 'claudebot', '--', 'bash', '-c', claudeCmd], {
+          timeout: timeoutMs,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: childEnv,
+        });
 
     let fullText = ''; // Накопленный текст ответа
     const toolsCalled: string[] = []; // Список вызванных инструментов

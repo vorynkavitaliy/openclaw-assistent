@@ -29,6 +29,8 @@ NC='\033[0m'
 CRON_TAG_CRYPTO="# openclaw-crypto-monitor"
 CRON_TAG_SL_GUARD="# openclaw-sl-guard"
 CRON_TAG_FOREX="# openclaw-forex-monitor"
+CRON_TAG_CRYPTO_REPORT="# openclaw-crypto-report"
+CRON_TAG_DIGEST="# openclaw-market-digest"
 
 rotate_logs() {
   local max_size=10485760  # 10 MB
@@ -93,6 +95,10 @@ has_sl_guard_cron() {
   crontab -l 2>/dev/null | grep -qF "$CRON_TAG_SL_GUARD"
 }
 
+has_report_cron() {
+  crontab -l 2>/dev/null | grep -qF "$CRON_TAG_CRYPTO_REPORT"
+}
+
 create_cron() {
   local agent="$1"
 
@@ -112,13 +118,34 @@ create_cron() {
     local sl_guard_line
     sl_guard_line="* * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/crypto/sl-guard.ts >> ${LOG_DIR}/sl-guard.log 2>&1 ${CRON_TAG_SL_GUARD}"
 
-    if has_sl_guard_cron; then
-      echo -e "${YELLOW}SL-Guard cron already exists, skipping${NC}"
+    # Каждый час: отчёт о позициях/P&L
+    local report_hourly_line
+    report_hourly_line="0 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/crypto/report.ts >> ${LOG_DIR}/report.log 2>&1 ${CRON_TAG_CRYPTO_REPORT}"
+
+    # Каждые 15 минут: обновление market digest (новости, макро-события)
+    local digest_line
+    digest_line="*/15 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/market/digest.ts >> ${LOG_DIR}/digest.log 2>&1 ${CRON_TAG_DIGEST}"
+
+    local new_entries="$cron_line"$'\n'"$sl_guard_line"
+    if ! has_sl_guard_cron; then
+      :
     else
-      (crontab -l 2>/dev/null || true; echo "$cron_line"; echo "$sl_guard_line") | crontab -
-      echo -e "${GREEN}${agent}: cron created (monitor */5 min, sl-guard */1 min)${NC}"
-      return 0
+      echo -e "${YELLOW}SL-Guard cron already exists, skipping${NC}"
     fi
+    if ! has_report_cron; then
+      new_entries="$new_entries"$'\n'"$report_hourly_line"
+    else
+      echo -e "${YELLOW}Report cron already exists, skipping${NC}"
+    fi
+    if ! crontab -l 2>/dev/null | grep -qF "$CRON_TAG_DIGEST"; then
+      new_entries="$new_entries"$'\n'"$digest_line"
+    else
+      echo -e "${YELLOW}Digest cron already exists, skipping${NC}"
+    fi
+
+    (crontab -l 2>/dev/null || true; echo "$new_entries") | crontab -
+    echo -e "${GREEN}${agent}: cron created (monitor */5, sl-guard */1, report */1h, digest */15m)${NC}"
+    return 0
   elif [[ "$agent" == "forex-trader" ]]; then
     cron_line="*/10 * * * * export PATH=\"${node_bin}:\$PATH\" && cd ${PROJECT_DIR} && npx tsx src/trading/forex/monitor.ts >> ${LOG_DIR}/forex-monitor.log 2>&1 ${CRON_TAG_FOREX}"
   else
@@ -142,9 +169,9 @@ remove_cron() {
   fi
 
   if [[ "$agent" == "crypto-trader" ]]; then
-    # Удаляем и monitor, и sl-guard
-    crontab -l 2>/dev/null | grep -vF "$tag" | grep -vF "$CRON_TAG_SL_GUARD" | crontab -
-    echo -e "${GREEN}${agent}: cron removed (monitor + sl-guard)${NC}"
+    # Удаляем monitor, sl-guard, report и digest
+    crontab -l 2>/dev/null | grep -vF "$tag" | grep -vF "$CRON_TAG_SL_GUARD" | grep -vF "$CRON_TAG_CRYPTO_REPORT" | grep -vF "$CRON_TAG_DIGEST" | crontab -
+    echo -e "${GREEN}${agent}: cron removed (monitor + sl-guard + report + digest)${NC}"
   else
     crontab -l 2>/dev/null | grep -vF "$tag" | crontab -
     echo -e "${GREEN}${agent}: cron removed${NC}"

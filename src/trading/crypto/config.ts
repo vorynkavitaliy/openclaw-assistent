@@ -6,7 +6,58 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const config: TradingConfig = {
-  pairs: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'LINKUSDT', 'AVAXUSDT', 'SUIUSDT'],
+  pairs: [
+    // Tier 1: основные (самые ликвидные)
+    'BTCUSDT',
+    'ETHUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+    'BNBUSDT',
+    // Tier 2: крупные альты
+    'ADAUSDT',
+    'AVAXUSDT',
+    'LINKUSDT',
+    'DOTUSDT',
+    'SUIUSDT',
+    'NEARUSDT',
+    'APTUSDT',
+    'LTCUSDT',
+    'ATOMUSDT',
+    'INJUSDT',
+    // Tier 3: средние альты
+    'AAVEUSDT',
+    'UNIUSDT',
+    'ARBUSDT',
+    'OPUSDT',
+    'TIAUSDT',
+    'RENDERUSDT',
+    'FETUSDT',
+    'ONDOUSDT',
+    'JUPUSDT',
+    'WLDUSDT',
+    // Tier 4: расширенный набор
+    'TONUSDT',
+    'MKRUSDT',
+    'ICPUSDT',
+    'STXUSDT',
+    'SEIUSDT',
+    'PENDLEUSDT',
+    'ENAUSDT',
+    'EIGENUSDT',
+    'THETAUSDT',
+    'FTMUSDT',
+    'RUNEUSDT',
+    'LDOUSDT',
+    'PYTHUSDT',
+    'GRTUSDT',
+    'ALGOUSDT',
+    // Tier 5: спекулятивные
+    'DOGEUSDT',
+    'SHIBUSDT',
+    'PEPEUSDT',
+    'TRXUSDT',
+    'CRVUSDT',
+  ],
 
   allowedOrderTypes: ['Market', 'Limit'],
 
@@ -17,7 +68,7 @@ const config: TradingConfig = {
   riskPerTrade: 0.01,
   maxDailyLoss: 400,
   maxStopsPerDay: 3,
-  maxRiskPerTrade: 75,
+  maxRiskPerTrade: 165, // $75 × 2.2
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,
@@ -33,7 +84,8 @@ const config: TradingConfig = {
   maxSpreadPercent: 0.1,
   atrSlMultiplier: 2.0,
   staleOrderMinutes: 30,
-  minConfidence: 15, // Снижено: Claude Code сам решает, алгоритм только фильтрует мусор
+  minConfidence: 55, // Повышен: только качественные сигналы
+  backtestMinConfidence: 38, // Ниже чем live: в бэктесте нет orderbook/OI/funding данных
   pairCooldownMin: 180, // 3 часа между сделками на одну пару
 
   // Grid entry: 3 лимитных ордера, каждый на 0.3 ATR глубже, суммарно ×1.5 объём
@@ -43,9 +95,65 @@ const config: TradingConfig = {
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [
-    ['SOLUSDT', 'AVAXUSDT', 'SUIUSDT'], // Alt L1
-    ['ETHUSDT', 'LINKUSDT'], // ETH-экосистема
+    ['SOLUSDT', 'AVAXUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT', 'SEIUSDT'], // Alt L1
+    ['ETHUSDT', 'LINKUSDT', 'AAVEUSDT', 'UNIUSDT', 'LDOUSDT'], // ETH-экосистема
+    ['XRPUSDT', 'ADAUSDT', 'DOTUSDT', 'ATOMUSDT', 'ALGOUSDT'], // Legacy L1
+    ['ARBUSDT', 'OPUSDT', 'STXUSDT'], // L2
+    ['RENDERUSDT', 'FETUSDT', 'WLDUSDT', 'THETAUSDT', 'GRTUSDT'], // AI/Infra tokens
+    ['TIAUSDT', 'ONDOUSDT', 'EIGENUSDT'], // Modular/RWA
+    ['DOGEUSDT', 'SHIBUSDT', 'PEPEUSDT'], // Meme coins
+    ['JUPUSDT', 'PYTHUSDT'], // Solana DeFi
+    ['PENDLEUSDT', 'ENAUSDT'], // DeFi yield
+    ['TONUSDT', 'ICPUSDT'], // Alt infra
   ],
+
+  // BTC корреляция: альты следуют за BTC
+  btcCorrelationFilter: true, // Включить фильтр BTC-корреляции для альтов
+  weakPairs: [
+    'SOLUSDT',
+    'XRPUSDT',
+    'BNBUSDT',
+    'LINKUSDT',
+    'SUIUSDT',
+    'ADAUSDT',
+    'DOTUSDT',
+    'NEARUSDT',
+    'APTUSDT',
+    'LTCUSDT',
+    'ATOMUSDT',
+    'INJUSDT',
+    'AAVEUSDT',
+    'UNIUSDT',
+    'ARBUSDT',
+    'OPUSDT',
+    'TIAUSDT',
+    'RENDERUSDT',
+    'FETUSDT',
+    'ONDOUSDT',
+    'JUPUSDT',
+    'WLDUSDT',
+    'TONUSDT',
+    'MKRUSDT',
+    'ICPUSDT',
+    'STXUSDT',
+    'SEIUSDT',
+    'PENDLEUSDT',
+    'ENAUSDT',
+    'EIGENUSDT',
+    'THETAUSDT',
+    'FTMUSDT',
+    'RUNEUSDT',
+    'LDOUSDT',
+    'PYTHUSDT',
+    'GRTUSDT',
+    'ALGOUSDT',
+    'DOGEUSDT',
+    'SHIBUSDT',
+    'PEPEUSDT',
+    'TRXUSDT',
+    'CRVUSDT',
+  ], // Пары с повышенным порогом
+  weakPairConfidenceBonus: 5, // Доп. порог confidence для слабых пар (minConfidence + bonus)
 
   mode: 'execute',
   demoTrading: true,

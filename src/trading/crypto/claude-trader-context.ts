@@ -6,6 +6,8 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
+import { getKyivHour, formatKyivTime } from '../../utils/time.js';
+import { loadDigestCache } from '../../market/digest.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { getTradeHistory } from './decision-journal.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
@@ -29,7 +31,7 @@ export function buildSystemPrompt(): string {
 6. WAIT — наблюдать за парой (pair, reason)
 
 ПРАВИЛА РИСК-МЕНЕДЖМЕНТА:
-- Макс риск на сделку: $75 (это абсолютный лимит, НЕ процент)
+- Макс риск на сделку: $165 (это абсолютный лимит, НЕ процент)
 - SL обязателен, R:R мин 1.5 (лучше 2.0+)
 - SL ставь на 2×ATR от entry — НЕ ближе (близкий SL = большой объём = большой риск)
 - Макс 3 позиции одновременно
@@ -56,10 +58,12 @@ export function buildSystemPrompt(): string {
 
 // ─── Вспомогательные функции ───────────────────────────────────────────────
 
-function formatSession(hour: number): string {
-  if (hour >= 8 && hour < 12) return 'Лондон';
-  if (hour >= 12 && hour < 17) return 'Лондон+Нью-Йорк';
-  if (hour >= 17 && hour < 22) return 'Нью-Йорк';
+function formatSession(kyivHour: number): string {
+  // Лондон открывается в 10:00 Kyiv (8:00 UTC зимой, 7:00 UTC летом)
+  // Нью-Йорк открывается в 16:30 Kyiv
+  if (kyivHour >= 10 && kyivHour < 14) return 'Лондон';
+  if (kyivHour >= 14 && kyivHour < 19) return 'Лондон+Нью-Йорк';
+  if (kyivHour >= 19 && kyivHour < 24) return 'Нью-Йорк';
   return 'Азия (низкая ликвидность)';
 }
 
@@ -176,9 +180,9 @@ function buildDailySection(): string {
 
 function buildTimeSection(): string {
   const now = new Date();
-  const hour = now.getUTCHours();
-  const min = now.getUTCMinutes().toString().padStart(2, '0');
-  return `Время UTC: ${hour}:${min} | Сессия: ${formatSession(hour)}\n`;
+  const kyivHour = getKyivHour(now);
+  const kyivTime = formatKyivTime(now);
+  return `Время: ${kyivTime} Kyiv | Сессия: ${formatSession(kyivHour)}\n`;
 }
 
 // ─── Секция сигналов ───────────────────────────────────────────────────────
@@ -236,6 +240,35 @@ function buildSignalsSection(
   return lines.join('\n') + '\n';
 }
 
+// ─── Секция новостного фона ───────────────────────────────────────────────
+
+function buildNewsSection(): string {
+  const cache = loadDigestCache();
+  if (!cache) return '';
+
+  const lines: string[] = ['\n=== НОВОСТНОЙ ФОН ===\n'];
+
+  if (cache.macro.length > 0) {
+    const highImpact = cache.macro.filter((e) => e.impact === 'High' || e.impact === 'Medium');
+    const events = highImpact.length > 0 ? highImpact.slice(0, 5) : cache.macro.slice(0, 3);
+    for (const e of events) {
+      const icon = e.impact === 'High' ? '⚠️' : '📅';
+      const forecast = e.forecast ? ` прогноз=${e.forecast}` : '';
+      const prev = e.previous ? ` пред=${e.previous}` : '';
+      lines.push(`${icon} ${e.date} ${e.time} ${e.currency} ${e.title}${forecast}${prev}`);
+    }
+  }
+
+  if (cache.news.length > 0) {
+    lines.push('');
+    for (const n of cache.news.slice(0, 5)) {
+      lines.push(`📰 [${n.source}] ${n.title}`);
+    }
+  }
+
+  return lines.join('\n') + '\n';
+}
+
 // ─── Основная функция ──────────────────────────────────────────────────────
 
 /**
@@ -268,6 +301,7 @@ export function buildTraderContext(
     reviewSection,
     '\n',
     buildSignalsSection(signals, allSignals, snapshots),
+    buildNewsSection(),
     '\n=== ИСТОРИЯ (последние 20 сделок) ===\n',
     tradeHistory,
     '\n',

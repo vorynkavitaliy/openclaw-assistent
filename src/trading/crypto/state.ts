@@ -56,6 +56,7 @@ interface CryptoState {
   lastReport: string | null;
   lastLLMCycleAt: string | null;
   balance: BalanceSnapshot;
+  pairLastTrade: Record<string, string>; // symbol → ISO timestamp последнего трейда
 }
 
 interface TradeInput {
@@ -116,6 +117,7 @@ function defaultState(): CryptoState {
       unrealizedPnl: 0,
       lastUpdate: null,
     },
+    pairLastTrade: {},
   };
 }
 
@@ -132,6 +134,8 @@ export function load(): CryptoState {
   if (fs.existsSync(STATE_FILE)) {
     try {
       _state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8')) as CryptoState;
+      // Backward compatibility: поле могло отсутствовать в старом state.json
+      if (!_state.pairLastTrade) _state.pairLastTrade = {};
       const today = kyivDate();
       if (_state.daily?.date !== today) {
         resetDaily();
@@ -411,4 +415,22 @@ export function getTodayEvents(types?: string[]): StoredEvent[] {
     if (!e.ts?.startsWith(today)) return false;
     return types ? types.includes(e.type) : true;
   });
+}
+
+export function recordPairTrade(symbol: string): void {
+  const s = get();
+  if (!s.pairLastTrade) s.pairLastTrade = {};
+  s.pairLastTrade[symbol] = new Date().toISOString();
+  save();
+}
+
+export function getPairLastTrade(symbol: string): string | null {
+  const s = get();
+  return s.pairLastTrade?.[symbol] ?? null;
+}
+
+export function isPairCooldownActive(symbol: string, cooldownMs: number): boolean {
+  const last = get().pairLastTrade?.[symbol];
+  if (!last) return false;
+  return Date.now() - new Date(last).getTime() < cooldownMs;
 }

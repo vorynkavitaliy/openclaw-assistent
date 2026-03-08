@@ -38,23 +38,15 @@ function getRegimeRR(regime: string): number {
   }
 }
 
-// Per-pair cooldown: не торгуем пару если недавно уже была сделка
-const lastTradeTime = new Map<string, number>();
-
-export function recordPairTrade(pair: string): void {
-  lastTradeTime.set(pair, Date.now());
-}
-
+// Per-pair cooldown: не торгуем пару если недавно уже была сделка (персистентно через state)
 function isPairOnCooldown(pair: string): boolean {
-  const last = lastTradeTime.get(pair);
-  if (!last) return false;
-  return Date.now() - last < config.pairCooldownMin * 60 * 1000;
+  return state.isPairCooldownActive(pair, config.pairCooldownMin * 60 * 1000);
 }
 
 function getPairCooldownRemaining(pair: string): number {
-  const last = lastTradeTime.get(pair);
+  const last = state.getPairLastTrade(pair);
   if (!last) return 0;
-  const remaining = config.pairCooldownMin * 60 * 1000 - (Date.now() - last);
+  const remaining = config.pairCooldownMin * 60 * 1000 - (Date.now() - new Date(last).getTime());
   return Math.max(0, Math.ceil(remaining / 60_000));
 }
 
@@ -73,7 +65,7 @@ export interface TradeSignalInternal {
 
 // Параллельный анализ с ограничением пропускной способности
 // Каждая пара делает ~12 API запросов, Bybit лимит ~20 req/sec
-const ANALYSIS_CONCURRENCY = 3;
+const ANALYSIS_CONCURRENCY = 5;
 
 export async function analyzeMarket(
   cycleId: string,
@@ -307,6 +299,45 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
     if (trendBias === 'BEARISH' && side === 'Buy') {
       logDecision(cycleId, 'skip', pair, 'AGAINST_TREND', [
         `Buy сигнал при BEARISH тренде (${regime}) — пропускаем`,
+      ]);
+      return null;
+    }
+  }
+
+  // BTC корреляция: альты следуют за BTC
+  // Если BTC в bearish тренде, не открываем лонги на альтах
+  // Если BTC в bullish тренде, не открываем шорты на альтах
+  if (config.btcCorrelationFilter && pair !== 'BTCUSDT') {
+    try {
+      const btcMarket = await getMarketInfo('BTCUSDT').catch(() => null);
+      if (btcMarket) {
+        const btc24h = btcMarket.price24hPct;
+        // BTC падает больше 2% за 24ч — не лонгуем альты
+        if (side === 'Buy' && btc24h < -2) {
+          logDecision(cycleId, 'skip', pair, 'BTC_BEARISH', [
+            `BTC 24h: ${btc24h.toFixed(2)}% — не лонгуем альты при падающем BTC`,
+          ]);
+          return null;
+        }
+        // BTC растёт больше 2% за 24ч — не шортим альты (они летят за BTC)
+        if (side === 'Sell' && btc24h > 2) {
+          logDecision(cycleId, 'skip', pair, 'BTC_BULLISH', [
+            `BTC 24h: +${btc24h.toFixed(2)}% — не шортим альты при растущем BTC`,
+          ]);
+          return null;
+        }
+      }
+    } catch {
+      // Если не удалось получить BTC данные — продолжаем без фильтра
+    }
+  }
+
+  // Повышенный порог confidence для "слабых" пар
+  if (config.weakPairs.includes(pair)) {
+    const weakThreshold = config.minConfidence + config.weakPairConfidenceBonus;
+    if (confluence.confidence < weakThreshold) {
+      logDecision(cycleId, 'skip', pair, 'WEAK_PAIR_LOW_CONFIDENCE', [
+        `Слабая пара: confidence ${confluence.confidence}% < повышенный порог ${weakThreshold}%`,
       ]);
       return null;
     }

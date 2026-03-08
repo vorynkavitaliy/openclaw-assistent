@@ -138,6 +138,98 @@ async function fetchRSS(source: string, url: string): Promise<NewsItem[]> {
   });
 }
 
+/** Получить предстоящие макро-события (ForexFactory) */
+export async function fetchMacroEvents(hoursAhead: number = 24): Promise<MacroEvent[]> {
+  const nowTs = Math.floor(Date.now() / 1000);
+  const untilTs = nowTs + hoursAhead * 3600;
+  const events: MacroEvent[] = [];
+
+  for (const url of FF_XML_URLS) {
+    try {
+      const xml = await httpGet(url);
+      events.push(...parseFFCalendar(xml));
+    } catch (err) {
+      log.warn('Failed to fetch FF calendar', { url, error: (err as Error).message });
+    }
+  }
+
+  return events
+    .filter((e) => e.timestamp !== null && e.timestamp >= nowTs && e.timestamp <= untilTs)
+    .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
+    .slice(0, 20);
+}
+
+/** Получить свежие крипто-новости (RSS) */
+export async function fetchCryptoNews(
+  hoursBack: number = 6,
+  max: number = 10,
+): Promise<NewsItem[]> {
+  const sinceTs = Math.floor(Date.now() / 1000) - hoursBack * 3600;
+  const items: NewsItem[] = [];
+
+  for (const [source, url] of RSS_FEEDS) {
+    try {
+      items.push(...(await fetchRSS(source, url)));
+    } catch (err) {
+      log.warn('Failed to fetch RSS', { source, error: (err as Error).message });
+    }
+  }
+
+  return items
+    .filter((n) => n.timestamp !== null && n.timestamp >= sinceTs)
+    .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+    .slice(0, max);
+}
+
+export type { MacroEvent, NewsItem, DigestOutput };
+
+// ─── Кеш дайджеста для trader context ─────────────────────────────────────
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const DIGEST_CACHE_PATH = path.resolve(
+  process.env.DATA_DIR ?? path.join(process.cwd(), 'data'),
+  'market-digest.json',
+);
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 минут
+
+export interface DigestCache {
+  generatedAt: string;
+  macro: MacroEvent[];
+  news: NewsItem[];
+}
+
+/** Обновить кеш дайджеста (вызывать из cron раз в 15-30 мин) */
+export async function refreshDigestCache(): Promise<DigestCache> {
+  const [macro, news] = await Promise.all([fetchMacroEvents(24), fetchCryptoNews(6, 10)]);
+  const cache: DigestCache = { generatedAt: new Date().toISOString(), macro, news };
+
+  const dir = path.dirname(DIGEST_CACHE_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmp = DIGEST_CACHE_PATH + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(cache), 'utf8');
+  fs.renameSync(tmp, DIGEST_CACHE_PATH);
+
+  log.info('Digest cache refreshed', { macro: macro.length, news: news.length });
+  return cache;
+}
+
+/** Прочитать кеш (для trader context, без HTTP) */
+export function loadDigestCache(): DigestCache | null {
+  try {
+    if (!fs.existsSync(DIGEST_CACHE_PATH)) return null;
+    const raw = JSON.parse(fs.readFileSync(DIGEST_CACHE_PATH, 'utf8')) as DigestCache;
+    const age = Date.now() - new Date(raw.generatedAt).getTime();
+    if (age > CACHE_MAX_AGE_MS) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+// ─── CLI entrypoint ───────────────────────────────────────────────────────
+
 async function main(): Promise<void> {
   const hours = getNumArgOrDefault('hours', 48);
   const maxNews = getNumArgOrDefault('max-news', 20);
@@ -191,6 +283,9 @@ async function main(): Promise<void> {
     macro: { upcoming, sample: rawSample, errors: macroErrors },
     news: { recent: recentNews, errors: newsErrors },
   };
+
+  // Также обновляем кеш при ручном запуске
+  await refreshDigestCache();
 
   log.info('Market digest', { output });
 }

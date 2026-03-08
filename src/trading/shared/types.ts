@@ -274,7 +274,11 @@ export interface TradingConfig extends BaseTradingConfig {
   atrSlMultiplier: number; // ATR multiplier for SL distance (default 2.0)
   staleOrderMinutes: number; // Cancel limit orders older than N minutes
   ecosystemGroups: string[][]; // Correlated pairs groups (max 1 position per group)
+  btcCorrelationFilter: boolean; // Filter alts against BTC trend
+  weakPairs: string[]; // Pairs requiring higher confidence
+  weakPairConfidenceBonus: number; // Extra confidence % for weak pairs
   minConfidence: number; // Minimum confidence % to enter (default 50)
+  backtestMinConfidence: number; // Minimum confidence % for backtester (lower due to missing live data)
   pairCooldownMin: number; // Cooldown between trades on same pair (minutes)
   gridLevels: number; // Grid entry: количество лимитных ордеров (1 = обычный, 2-3 = grid)
   gridSpacingAtr: number; // Расстояние между grid-уровнями в долях ATR (0.3 = 30% ATR)

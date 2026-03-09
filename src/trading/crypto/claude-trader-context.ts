@@ -42,7 +42,7 @@ PROP FIRM ПРАВИЛА (HyroTrader 2-Step Challenge):
 
 СТРАТЕГИЯ ДЛЯ PROP FIRM:
 - Цель: стабильно зарабатывать каждый день, НЕ одной большой сделкой
-- Риск: 1.5% на сделку ($${(config.accountBalance * 0.015).toFixed(0)}), макс $${config.maxRiskPerTrade}
+- Риск: ${(config.riskPerTrade * 100).toFixed(1)}% на сделку ($${(config.accountBalance * config.riskPerTrade).toFixed(0)}), макс $${config.maxRiskPerTrade}
 - Цель: 3-8 сделок в день, активно ищи возможности
 - Если confluence score ≥ 30 и confidence ≥ 40% — СКЛОНЯЙСЯ К ENTER
 - Не жди идеальных условий — хороший сетап лучше чем бесконечное ожидание
@@ -58,6 +58,12 @@ PROP FIRM ПРАВИЛА (HyroTrader 2-Step Challenge):
 - Если позиция в плюсе >1.5R — подтяни SL в безубыток (MODIFY_SL)
 - Если позиция в плюсе >2R — можно подтянуть SL на +1R
 - Забирай прибыль: лучше +1R в кармане чем -1R на стопе
+
+ЖЁСТКИЕ ПРАВИЛА (из прошлых ошибок):
+- Позиция В МИНУСЕ + confluence ПРОПАЛ → CLOSE НЕМЕДЛЕННО, НЕ WAIT. Нет confluence = нет причины держать позицию.
+- Одноразовый всплеск score без тренда (score<25 на предыдущих циклах) → с осторожностью, лучше WAIT и подождать подтверждения
+- Смотри на историю score в trend(4): если score нестабильный и прыгает — это шум, не сигнал
+- Prop firm: каждый -$50 drawdown = минус к запасу. Лучше малый убыток (-$15) чем полный стоп (-$115)
 
 ФОРМАТ ОТВЕТА — СТРОГО JSON:
 {"summary": "краткий обзор решений", "actions": [{"type": "ENTER|CLOSE|MODIFY_SL|MODIFY_TP|SKIP|WAIT", "pair": "BTCUSDT", "reason": "причина", ...доп параметры}]}

@@ -265,24 +265,41 @@ export function updatePositions(
   // Детекция закрытых позиций (SL/TP на Bybit или ликвидация)
   for (const old of s.positions) {
     if (!newSymbols.has(old.symbol)) {
-      const pnl = parseFloat(old.unrealisedPnl) || 0;
       const entryPrice = parseFloat(old.entryPrice) || 0;
       const markPrice = parseFloat(old.markPrice) || 0;
       const slPrice = parseFloat(old.stopLoss ?? '0') || 0;
+      const tpPrice = parseFloat(old.takeProfit ?? '0') || 0;
+      const size = parseFloat(old.size) || 0;
 
-      // Определяем: SL или TP?
+      // Определяем: SL или TP по последнему markPrice
       const isStop =
         slPrice > 0 &&
-        ((old.side === 'long' && markPrice <= slPrice) ||
-          (old.side === 'short' && markPrice >= slPrice));
+        ((old.side === 'long' && markPrice <= slPrice * 1.002) ||
+          (old.side === 'short' && markPrice >= slPrice * 0.998));
 
-      log.info('Position closed externally (SL/TP)', {
+      const isTp =
+        !isStop &&
+        tpPrice > 0 &&
+        ((old.side === 'long' && markPrice >= tpPrice * 0.998) ||
+          (old.side === 'short' && markPrice <= tpPrice * 1.002));
+
+      // Реальная цена выхода: SL/TP цена (не stale markPrice)
+      const exitPrice = isStop && slPrice > 0 ? slPrice : isTp && tpPrice > 0 ? tpPrice : markPrice;
+
+      // Пересчитываем P&L по реальной цене выхода
+      const pnl =
+        old.side === 'long' ? (exitPrice - entryPrice) * size : (entryPrice - exitPrice) * size;
+
+      log.info('Position closed externally', {
         symbol: old.symbol,
         side: old.side,
-        pnl,
+        pnl: pnl.toFixed(2),
         entryPrice,
+        exitPrice,
         markPrice,
-        isStop,
+        slPrice,
+        tpPrice,
+        trigger: isStop ? 'STOP_LOSS' : isTp ? 'TAKE_PROFIT' : 'UNKNOWN',
       });
 
       recordTrade({
@@ -290,7 +307,7 @@ export function updatePositions(
         side: old.side,
         pnl,
         entryPrice,
-        exitPrice: markPrice,
+        exitPrice,
         isStop,
       });
 
@@ -299,10 +316,11 @@ export function updatePositions(
         side: old.side,
         size: old.size,
         entryPrice: old.entryPrice,
+        exitPrice,
         markPrice: old.markPrice,
         pnl,
         isStop,
-        trigger: isStop ? 'STOP_LOSS' : 'TAKE_PROFIT',
+        trigger: isStop ? 'STOP_LOSS' : isTp ? 'TAKE_PROFIT' : 'UNKNOWN',
       });
     }
   }

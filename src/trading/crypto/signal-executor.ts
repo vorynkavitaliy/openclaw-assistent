@@ -201,8 +201,27 @@ export async function executeSignals(
     }
 
     // Проверка доступной маржи перед ордером (для полного grid)
+    // Лимит 40% от available — чтобы хватало на 3 позиции одновременно
     const balance = s.balance.available;
     const requiredMargin = (sig.entryPrice * totalQty) / config.defaultLeverage;
+    const maxMarginPerPosition = balance * 0.4;
+    if (balance > 0 && requiredMargin > maxMarginPerPosition) {
+      logDecision(
+        cycleId,
+        'skip',
+        sig.pair,
+        'MARGIN_PER_POSITION_LIMIT',
+        [
+          `Маржа $${requiredMargin.toFixed(0)} > 40% доступного $${maxMarginPerPosition.toFixed(0)} (резерв для других позиций)`,
+        ],
+        { confluenceScore: sig.confluence.total, regime: sig.regime },
+      );
+      results.push({
+        ...sig,
+        action: `SKIP: margin $${requiredMargin.toFixed(0)} > 40% available $${maxMarginPerPosition.toFixed(0)}`,
+      });
+      continue;
+    }
     if (balance > 0 && requiredMargin > balance) {
       logDecision(
         cycleId,

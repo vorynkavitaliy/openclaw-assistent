@@ -68,10 +68,10 @@ const config: TradingConfig = {
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
-  riskPerTrade: 0.015, // 1.5% от баланса на сделку (консервативнее лимита HyroTrader 3%)
+  riskPerTrade: 0.01, // 1% от баланса на сделку (3 позиции × ~33% маржи = влезают все)
   maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — оставляем запас до лимита 5%
   maxStopsPerDay: 4,
-  maxRiskPerTrade: ACCOUNT_BALANCE * 0.025, // $250 при $10k (лимит HyroTrader 3% = $300, запас для grid ×1.5)
+  maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k (лимит HyroTrader 3% = $300, запас для 3 позиций)
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,
@@ -91,10 +91,10 @@ const config: TradingConfig = {
   backtestMinConfidence: 38, // Ниже чем live: в бэктесте нет orderbook/OI/funding данных
   pairCooldownMin: 180, // 3 часа между сделками на одну пару
 
-  // Grid entry: 3 лимитных ордера, каждый на 0.3 ATR глубже, суммарно ×1.5 объём
+  // Grid entry: 3 ордера (1 Market + 2 Limit), каждый на 0.3 ATR глубже, суммарно ×1.3 объём
   gridLevels: 3,
   gridSpacingAtr: 0.3,
-  gridVolumeMultiplier: 1.5,
+  gridVolumeMultiplier: 1.3,
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [

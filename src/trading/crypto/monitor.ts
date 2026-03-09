@@ -213,18 +213,16 @@ async function main(): Promise<void> {
       );
 
       // Обработка ENTER решений через signal-executor
-      const enterSignals = candidates.filter((sig) => {
-        const dec = decisions.find((d) => d.pair === sig.pair);
-        return dec?.decision === 'ENTER';
-      });
-
+      // Ищем в allSignals (не только candidates) — Claude может ENTER по "сильным другим" парам
+      const allSignalMap = new Map(allSignals.map((s) => [s.pair, s]));
+      const enterSignals: typeof allSignals = [];
       for (const dec of decisions) {
-        if (dec.decision === 'WAIT') {
-          const sig = candidates.find((si) => si.pair === dec.pair);
+        const sig = allSignalMap.get(dec.pair);
+        if (dec.decision === 'ENTER' && sig) {
+          enterSignals.push(sig);
+        } else if (dec.decision === 'WAIT') {
           if (sig) addToWatchlist(sig.pair, sig, dec.reason);
-        }
-        if (dec.decision === 'SKIP') {
-          const sig = candidates.find((si) => si.pair === dec.pair);
+        } else if (dec.decision === 'SKIP') {
           logDecision(cycleId, 'skip', dec.pair, 'LLM_SKIP', [dec.reason], {
             ...(sig
               ? {

@@ -244,11 +244,28 @@ function buildSignalsSection(
   const signalPairs = new Set(signals.map((s) => s.pair));
   const otherSignals = allSignals.filter((s) => !signalPairs.has(s.pair));
   if (otherSignals.length > 0) {
-    lines.push(`\nОстальные пары (score/conf):`);
-    const summary = otherSignals
-      .map((s) => `${s.pair}:${s.confluence.total}/${s.confidence}%`)
-      .join('  ');
-    lines.push(`  ${summary}`);
+    // Сильные пары (score >= 25 и conf >= 35%) показываем с полными деталями — Claude может по ним ENTER
+    const strongOthers = otherSignals.filter(
+      (s) => Math.abs(s.confluence.total) >= 25 && s.confidence >= 35,
+    );
+    const weakOthers = otherSignals.filter(
+      (s) => Math.abs(s.confluence.total) < 25 || s.confidence < 35,
+    );
+
+    if (strongOthers.length > 0) {
+      lines.push(`\nСильные пары вне основного списка (${strongOthers.length}):`);
+      for (const sig of strongOthers) {
+        lines.push(buildSignalBlock(sig, snapshots));
+      }
+    }
+
+    if (weakOthers.length > 0) {
+      lines.push(`\nОстальные пары (score/conf):`);
+      const summary = weakOthers
+        .map((s) => `${s.pair}:${s.confluence.total}/${s.confidence}%`)
+        .join('  ');
+      lines.push(`  ${summary}`);
+    }
   }
 
   return lines.join('\n') + '\n';

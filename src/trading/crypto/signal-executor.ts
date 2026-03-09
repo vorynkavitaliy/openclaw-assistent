@@ -240,17 +240,22 @@ export async function executeSignals(
       const qtyParts: string[] = [];
       let totalFilledQtyStr = '';
 
-      for (const level of gridLevels) {
+      for (let i = 0; i < gridLevels.length; i++) {
+        const level = gridLevels[i]!;
         const levelQty = totalQty * level.qtyFraction;
         const qtyStr = formatQty(levelQty, sig.pair);
         if (parseFloat(qtyStr) <= 0) continue;
 
+        // Первый ордер — Market (гарантированный вход), остальные — Limit (grid добор)
+        const isFirstOrder = i === 0;
+        const orderType = isFirstOrder ? 'Market' : 'Limit';
+
         const orderRes = await submitOrder({
           symbol: sig.pair,
           side: sig.side,
-          orderType: 'Limit',
+          orderType,
           qty: qtyStr,
-          price: String(level.price),
+          ...(orderType === 'Limit' ? { price: String(level.price) } : {}),
         });
 
         orderIds.push(orderRes.orderId);

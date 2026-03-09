@@ -71,7 +71,7 @@ const config: TradingConfig = {
   riskPerTrade: 0.015, // 1.5% от баланса на сделку (консервативнее лимита HyroTrader 3%)
   maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — оставляем запас до лимита 5%
   maxStopsPerDay: 4,
-  maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k (лимит HyroTrader 3% = $300)
+  maxRiskPerTrade: ACCOUNT_BALANCE * 0.025, // $250 при $10k (лимит HyroTrader 3% = $300, запас для grid ×1.5)
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,

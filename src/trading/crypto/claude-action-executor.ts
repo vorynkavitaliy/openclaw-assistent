@@ -224,12 +224,16 @@ async function executeEnter(
     reason,
   });
 
+  log.info('Calling executeSignals for ENTER', { pair, dryRun });
   const signalResults = await executeSignals([signal], cycleId, dryRun);
   const res = signalResults[0];
 
   if (!res) {
+    log.error('executeSignals returned empty', { pair });
     return { type: 'ENTER', pair, status: 'ERROR', message: 'executeSignals returned empty' };
   }
+
+  log.info('executeSignals result', { pair, action: res.action, dryRun });
 
   if (dryRun) {
     return { type: 'ENTER', pair, status: 'DRY_RUN', message: res.action };

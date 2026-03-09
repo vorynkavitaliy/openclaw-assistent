@@ -202,7 +202,26 @@ function buildTimeSection(): string {
   const now = new Date();
   const kyivHour = getKyivHour(now);
   const kyivTime = formatKyivTime(now);
-  return `Время: ${kyivTime} Kyiv | Сессия: ${formatSession(kyivHour)}\n`;
+  const days = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+  // День недели в Kyiv timezone
+  const kyivDayStr = now.toLocaleDateString('en-US', { timeZone: 'Europe/Kyiv', weekday: 'long' });
+  const kyivDayIdx = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ].indexOf(kyivDayStr);
+  const dayName = kyivDayIdx >= 0 ? days[kyivDayIdx] : kyivDayStr;
+  const dateStr = now.toLocaleDateString('uk-UA', {
+    timeZone: 'Europe/Kyiv',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `Дата: ${dateStr} (${dayName}) | Время: ${kyivTime} Kyiv | Сессия: ${formatSession(kyivHour)}\n`;
 }
 
 // ─── Секция сигналов ───────────────────────────────────────────────────────

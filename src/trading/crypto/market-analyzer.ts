@@ -233,7 +233,11 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
     confluence.confidence,
   );
 
-  if (absScore < threshold) {
+  // Momentum breakout bypass: сильный momentum может пропустить слабый confluence
+  // Это ловит ранние развороты когда EMA ещё bearish, но MACD/RSI уже bullish
+  const momentumBreakout = Math.abs(confluence.momentum) >= 15;
+
+  if (absScore < threshold && !momentumBreakout) {
     logDecision(
       cycleId,
       'skip',
@@ -257,6 +261,16 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
       },
     );
     return null;
+  }
+
+  if (momentumBreakout && absScore < threshold) {
+    log.info('Momentum breakout bypass', {
+      pair,
+      momentum: confluence.momentum,
+      score: confluence.total,
+      threshold,
+      regime,
+    });
   }
 
   // Фильтр минимального confidence

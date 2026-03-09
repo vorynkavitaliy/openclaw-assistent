@@ -345,9 +345,49 @@ export function getTradeHistory(count: number = 20): string {
   for (const d of recent.slice(-10)) {
     const pnl = d.outcome?.pnl ?? 0;
     const icon = pnl > 0 ? '+' : '';
+    const regime = d.data.regime ?? '?';
+    const time = d.timestamp?.slice(5, 16) ?? '';
     lines.push(
-      `${d.symbol} ${d.data.side ?? '?'} | ${d.outcome?.result} ${icon}$${pnl.toFixed(2)} | score=${d.data.confluenceScore ?? '?'} conf=${d.data.confidence ?? '?'}% | ${d.reasoning[0] ?? ''}`,
+      `${time} ${d.symbol} ${d.data.side ?? '?'} | ${d.outcome?.result} ${icon}$${pnl.toFixed(2)} | score=${d.data.confluenceScore ?? '?'} conf=${d.data.confidence ?? '?'}% regime=${regime} | ${d.reasoning[0] ?? ''}`,
     );
+  }
+
+  // Анализ: какие режимы/score дают wins vs losses
+  if (recent.length >= 5) {
+    const winTrades = recent.filter((d) => d.outcome?.result === 'win');
+    const lossTrades = recent.filter((d) => d.outcome?.result === 'loss');
+    const avgWinScore =
+      winTrades.length > 0
+        ? winTrades.reduce((s, d) => s + Math.abs(d.data.confluenceScore ?? 0), 0) /
+          winTrades.length
+        : 0;
+    const avgLossScore =
+      lossTrades.length > 0
+        ? lossTrades.reduce((s, d) => s + Math.abs(d.data.confluenceScore ?? 0), 0) /
+          lossTrades.length
+        : 0;
+    const avgWinConf =
+      winTrades.length > 0
+        ? winTrades.reduce((s, d) => s + (d.data.confidence ?? 0), 0) / winTrades.length
+        : 0;
+    const avgLossConf =
+      lossTrades.length > 0
+        ? lossTrades.reduce((s, d) => s + (d.data.confidence ?? 0), 0) / lossTrades.length
+        : 0;
+    lines.push('');
+    lines.push(
+      `ПАТТЕРНЫ: wins avg score=${avgWinScore.toFixed(0)} conf=${avgWinConf.toFixed(0)}% | losses avg score=${avgLossScore.toFixed(0)} conf=${avgLossConf.toFixed(0)}%`,
+    );
+
+    // Какие пары чаще убыточны
+    const lossPairs: Record<string, number> = {};
+    for (const d of lossTrades) lossPairs[d.symbol] = (lossPairs[d.symbol] ?? 0) + 1;
+    const worstPairs = Object.entries(lossPairs)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    if (worstPairs.length > 0) {
+      lines.push(`Проблемные пары: ${worstPairs.map(([p, n]) => `${p}(${n} loss)`).join(', ')}`);
+    }
   }
 
   // Анализ паттернов

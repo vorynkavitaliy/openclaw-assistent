@@ -260,6 +260,53 @@ export function updatePositions(
   }>,
 ): void {
   const s = get();
+  const newSymbols = new Set(positions.map((p) => p.symbol));
+
+  // Детекция закрытых позиций (SL/TP на Bybit или ликвидация)
+  for (const old of s.positions) {
+    if (!newSymbols.has(old.symbol)) {
+      const pnl = parseFloat(old.unrealisedPnl) || 0;
+      const entryPrice = parseFloat(old.entryPrice) || 0;
+      const markPrice = parseFloat(old.markPrice) || 0;
+      const slPrice = parseFloat(old.stopLoss ?? '0') || 0;
+
+      // Определяем: SL или TP?
+      const isStop =
+        slPrice > 0 &&
+        ((old.side === 'long' && markPrice <= slPrice) ||
+          (old.side === 'short' && markPrice >= slPrice));
+
+      log.info('Position closed externally (SL/TP)', {
+        symbol: old.symbol,
+        side: old.side,
+        pnl,
+        entryPrice,
+        markPrice,
+        isStop,
+      });
+
+      recordTrade({
+        symbol: old.symbol,
+        side: old.side,
+        pnl,
+        entryPrice,
+        exitPrice: markPrice,
+        isStop,
+      });
+
+      logEvent('position_closed_by_exchange', {
+        symbol: old.symbol,
+        side: old.side,
+        size: old.size,
+        entryPrice: old.entryPrice,
+        markPrice: old.markPrice,
+        pnl,
+        isStop,
+        trigger: isStop ? 'STOP_LOSS' : 'TAKE_PROFIT',
+      });
+    }
+  }
+
   s.positions = positions.map((p) => ({
     symbol: p.symbol,
     side: p.side as PositionSide,

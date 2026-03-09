@@ -53,7 +53,7 @@ const config: TradingConfig = {
     'ALGOUSDT',
     // Tier 5: спекулятивные
     'DOGEUSDT',
-    'SHIBUSDT',
+    '1000SHIBUSDT',
     '1000PEPEUSDT',
     'TRXUSDT',
     'CRVUSDT',
@@ -101,7 +101,7 @@ const config: TradingConfig = {
     ['ARBUSDT', 'OPUSDT', 'STXUSDT'], // L2
     ['RENDERUSDT', 'FETUSDT', 'WLDUSDT', 'THETAUSDT', 'GRTUSDT'], // AI/Infra tokens
     ['TIAUSDT', 'ONDOUSDT', 'EIGENUSDT'], // Modular/RWA
-    ['DOGEUSDT', 'SHIBUSDT', '1000PEPEUSDT'], // Meme coins
+    ['DOGEUSDT', '1000SHIBUSDT', '1000PEPEUSDT'], // Meme coins
     ['JUPUSDT', 'PYTHUSDT'], // Solana DeFi
     ['PENDLEUSDT', 'ENAUSDT'], // DeFi yield
     ['TONUSDT', 'ICPUSDT'], // Alt infra
@@ -116,7 +116,7 @@ const config: TradingConfig = {
     'GRTUSDT',
     'STXUSDT',
     'DOGEUSDT',
-    'SHIBUSDT',
+    '1000SHIBUSDT',
     '1000PEPEUSDT',
     'TRXUSDT',
     'CRVUSDT',

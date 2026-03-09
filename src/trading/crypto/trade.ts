@@ -2,6 +2,7 @@ import { getArg, getNumArg, getRequiredArg } from '../../utils/args.js';
 import { createLogger } from '../../utils/logger.js';
 import { runMain } from '../../utils/process.js';
 import {
+  cancelSymbolOrders,
   closeAllPositions,
   closePosition,
   getBalance,
@@ -61,6 +62,9 @@ async function actionClose(): Promise<void> {
   const pair = getRequiredArg('pair').toUpperCase();
   const result = await closePosition(pair);
   log.info('Position closed', { ...result, timestamp: new Date().toISOString() });
+  // Отменяем оставшиеся ордера (grid-лимитки, SL/TP)
+  const cancelled = await cancelSymbolOrders(pair);
+  if (cancelled > 0) log.info('Cancelled remaining orders', { pair, cancelled });
 }
 
 async function actionCloseAll(): Promise<void> {

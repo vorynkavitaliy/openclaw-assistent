@@ -1,6 +1,6 @@
 import { createLogger } from '../../utils/logger.js';
 import { sendTelegram } from '../../utils/telegram.js';
-import { closePosition, modifyPosition } from './bybit-client.js';
+import { cancelSymbolOrders, closePosition, modifyPosition } from './bybit-client.js';
 import { logDecision } from './decision-journal.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import { executeSignals } from './signal-executor.js';
@@ -278,6 +278,19 @@ async function executeClose(
 
   try {
     const orderResult = await closePosition(pair);
+
+    // Отменяем все оставшиеся ордера по символу (grid-лимитки, SL/TP)
+    try {
+      const cancelled = await cancelSymbolOrders(pair);
+      if (cancelled > 0) {
+        log.info('Cancelled remaining orders after close', { symbol: pair, cancelled });
+      }
+    } catch (cancelErr) {
+      log.warn('Failed to cancel remaining orders', {
+        symbol: pair,
+        error: (cancelErr as Error).message,
+      });
+    }
 
     const entryPrice = parseFloat(position.entryPrice) || 0;
     const markPrice = parseFloat(position.markPrice) || 0;

@@ -400,6 +400,20 @@ export async function cancelAllOrders(): Promise<number> {
   return list?.length ?? 0;
 }
 
+export async function cancelSymbolOrders(symbol: string): Promise<number> {
+  const res = await withRateLimit((c) =>
+    c.cancelAllOrders({
+      category: CATEGORY,
+      symbol: symbol.toUpperCase(),
+    }),
+  );
+  if (res.retCode !== 0) {
+    throw new Error(`Failed to cancel orders for ${symbol}: ${res.retMsg}`);
+  }
+  const list = (res.result as { list?: unknown[] })?.list;
+  return list?.length ?? 0;
+}
+
 export async function submitOrder(params: {
   symbol: string;
   side: 'Buy' | 'Sell';

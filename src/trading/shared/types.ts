@@ -283,6 +283,14 @@ export interface TradingConfig extends BaseTradingConfig {
   gridLevels: number; // Grid entry: количество лимитных ордеров (1 = обычный, 2-3 = grid)
   gridSpacingAtr: number; // Расстояние между grid-уровнями в долях ATR (0.3 = 30% ATR)
   gridVolumeMultiplier: number; // Множитель общего объёма при grid входе (1.5 = +50%)
+  // Prop firm settings
+  propFirm: boolean; // Включён ли режим prop firm
+  accountBalance: number; // Начальный баланс аккаунта (для расчёта лимитов)
+  maxDailyLossPct: number; // Max daily drawdown % (HyroTrader 2-step: 5%)
+  maxTotalDrawdownPct: number; // Max total drawdown % (HyroTrader 2-step: 10%)
+  profitTargetPct: number; // Profit target % (HyroTrader phase 1: 10%)
+  maxRiskPerTradePct: number; // Max risk per trade % от начального баланса (HyroTrader: 3%)
+  maxSingleTradeProfitPct: number; // Max profit from single trade as % of total profit (HyroTrader: 40%)
   demoTrading: boolean;
   trendTF: string;
   zonesTF: string;

@@ -5,6 +5,9 @@ import type { TradingConfig } from '../shared/types.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
+// ═══ HyroTrader Prop Firm — МЕНЯЙ ЗДЕСЬ ═══
+const ACCOUNT_BALANCE = 10_000; // Размер аккаунта HyroTrader ($5k/$10k/$25k/$50k)
+
 const config: TradingConfig = {
   pairs: [
     // Tier 1: основные (самые ликвидные)
@@ -65,10 +68,10 @@ const config: TradingConfig = {
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
-  riskPerTrade: 0.01,
-  maxDailyLoss: 400,
-  maxStopsPerDay: 3,
-  maxRiskPerTrade: 165, // $75 × 2.2
+  riskPerTrade: 0.015, // 1.5% от баланса на сделку (консервативнее лимита HyroTrader 3%)
+  maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — оставляем запас до лимита 5%
+  maxStopsPerDay: 4,
+  maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k (лимит HyroTrader 3% = $300)
   maxOpenPositions: 3,
   maxLeverage: 5,
   defaultLeverage: 3,
@@ -124,6 +127,16 @@ const config: TradingConfig = {
   weakPairConfidenceBonus: 3, // Доп. порог confidence для слабых пар
 
   mode: 'execute',
+
+  // ═══ HyroTrader 2-Step Challenge ═══
+  propFirm: true,
+  accountBalance: ACCOUNT_BALANCE,
+  maxDailyLossPct: 5, // HyroTrader 2-step: 5% daily drawdown
+  maxTotalDrawdownPct: 10, // HyroTrader 2-step: 10% max drawdown (trailing)
+  profitTargetPct: 10, // Phase 1: 10%, Phase 2: 5%
+  maxRiskPerTradePct: 3, // HyroTrader: макс 3% на сделку
+  maxSingleTradeProfitPct: 40, // Одна сделка не больше 40% общей прибыли
+
   demoTrading: true,
 
   trendTF: '240',

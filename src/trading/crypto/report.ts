@@ -187,6 +187,24 @@ function formatTelegramReport(data: ReportData): string {
     `Unrealized: <code>${uplSign}$${fmt(data.balance.unrealizedPnl)}${esc(uplPct)}</code>`,
   );
 
+  // Prop firm прогресс
+  if (config.propFirm) {
+    const pnlFromStart = data.balance.total - config.accountBalance;
+    const pnlPct = (pnlFromStart / config.accountBalance) * 100;
+    const target = config.profitTargetPct;
+    const ddLimit = config.accountBalance * (config.maxTotalDrawdownPct / 100);
+    const ddUsed = Math.max(0, config.accountBalance - data.balance.total);
+    const ddPct = (ddUsed / config.accountBalance) * 100;
+    lines.push('');
+    lines.push(`🏢 <b>HyroTrader 2-Step</b>`);
+    lines.push(
+      `Прогресс: <code>${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%</code> / ${target}%`,
+    );
+    lines.push(
+      `DD: <code>${ddPct.toFixed(2)}%</code> / ${config.maxTotalDrawdownPct}% ($${ddUsed.toFixed(0)}/$${ddLimit.toFixed(0)})`,
+    );
+  }
+
   // Позиции
   lines.push('');
   if (data.positions.length > 0) {

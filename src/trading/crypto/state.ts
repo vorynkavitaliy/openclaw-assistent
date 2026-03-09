@@ -187,7 +187,11 @@ export function resetDaily(): void {
   save();
 }
 
+// Символы, уже закрытые через recordTrade в этом цикле (защита от двойного учёта)
+const recentlyRecordedSymbols = new Map<string, number>(); // symbol → timestamp
+
 export function recordTrade(trade: TradeInput): void {
+  recentlyRecordedSymbols.set(trade.symbol, Date.now());
   const s = get();
   s.daily.trades++;
   const pnl = typeof trade.pnl === 'string' ? parseFloat(trade.pnl) : trade.pnl;
@@ -265,6 +269,13 @@ export function updatePositions(
   // Детекция закрытых позиций (SL/TP на Bybit или ликвидация)
   for (const old of s.positions) {
     if (!newSymbols.has(old.symbol)) {
+      // Пропускаем если уже записано через recordTrade (Claude CLOSE) — защита от двойного учёта
+      const recentTs = recentlyRecordedSymbols.get(old.symbol);
+      if (recentTs && Date.now() - recentTs < 5 * 60_000) {
+        log.info('Skipping duplicate recordTrade (already closed by bot)', { symbol: old.symbol });
+        recentlyRecordedSymbols.delete(old.symbol);
+        continue;
+      }
       const entryPrice = parseFloat(old.entryPrice) || 0;
       const markPrice = parseFloat(old.markPrice) || 0;
       const slPrice = parseFloat(old.stopLoss ?? '0') || 0;

@@ -97,11 +97,11 @@ export function createRateLimiter(options: {
     pending--;
     completed++;
 
-    // Safety timeout: если release() не был вызван за 30с — освобождаем автоматически
+    // Safety timeout: отслеживаем конкретный слот через snapshot concurrentNow
+    const slotSnapshot = concurrentNow;
     setTimeout(() => {
-      // Проверяем косвенно: если concurrentNow > 0, значит кто-то не вызвал release
-      // Нельзя знать точно какой именно слот — просто освобождаем один
-      if (concurrentNow > 0) {
+      // Если concurrentNow не уменьшился с момента acquire — значит этот слот не был освобождён
+      if (concurrentNow >= slotSnapshot) {
         log.warn('Rate limiter: safety timeout — release() не был вызван за 30с, освобождаем слот');
         release();
       }

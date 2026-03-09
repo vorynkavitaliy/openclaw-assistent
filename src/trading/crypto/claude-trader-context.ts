@@ -196,6 +196,55 @@ function buildDailySection(): string {
   );
 }
 
+// ─── Обзор рынка (все ключевые пары) ─────────────────────────────────────
+
+const KEY_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT'];
+
+function buildMarketOverview(snapshots: Map<string, MarketSnapshot[]>): string {
+  const lines: string[] = ['ОБЗОР РЫНКА (все пары):'];
+
+  // Топ-5 пар всегда показываем
+  for (const pair of KEY_PAIRS) {
+    const snaps = snapshots.get(pair) ?? [];
+    const latest = snaps[snaps.length - 1];
+    if (!latest) continue;
+    const prev = snaps.length >= 2 ? snaps[snaps.length - 2] : null;
+    const priceTrend = prev
+      ? latest.price > prev.price
+        ? '↑'
+        : latest.price < prev.price
+          ? '↓'
+          : '→'
+      : '?';
+    const scoreTrend = prev
+      ? latest.confluenceScore > prev.confluenceScore
+        ? '↑'
+        : latest.confluenceScore < prev.confluenceScore
+          ? '↓'
+          : '→'
+      : '?';
+    lines.push(
+      `  ${pair}: $${latest.price} ${priceTrend} | score=${latest.confluenceScore}(${latest.confluenceSignal}) conf=${latest.confidence}% regime=${latest.regime} ${scoreTrend}`,
+    );
+  }
+
+  // Остальные пары: только те с score >= 15 (потенциально интересные)
+  const interestingPairs: string[] = [];
+  for (const [pair, snaps] of snapshots) {
+    if (KEY_PAIRS.includes(pair)) continue;
+    const latest = snaps[snaps.length - 1];
+    if (!latest || Math.abs(latest.confluenceScore) < 15) continue;
+    interestingPairs.push(
+      `${pair}:${latest.confluenceScore}/${latest.confidence}%/${latest.regime}`,
+    );
+  }
+  if (interestingPairs.length > 0) {
+    lines.push(`  Активные альты: ${interestingPairs.join('  ')}`);
+  }
+
+  return lines.join('\n') + '\n';
+}
+
 // ─── Секция времени и сессии ───────────────────────────────────────────────
 
 function buildTimeSection(): string {
@@ -352,6 +401,8 @@ export function buildTraderContext(
     buildTimeSection(),
     buildBalanceSection(),
     buildDailySection(),
+    '\n',
+    buildMarketOverview(snapshots),
     '\n',
     positionsSection,
     reviewSection,

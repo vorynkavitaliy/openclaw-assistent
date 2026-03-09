@@ -56,7 +56,7 @@ const config: TradingConfig = {
     'ALGOUSDT',
     // Tier 5: спекулятивные
     'DOGEUSDT',
-    '1000SHIBUSDT',
+    'SHIB1000USDT',
     '1000PEPEUSDT',
     'TRXUSDT',
     'CRVUSDT',
@@ -119,7 +119,7 @@ const config: TradingConfig = {
     'GRTUSDT',
     'STXUSDT',
     'DOGEUSDT',
-    '1000SHIBUSDT',
+    'SHIB1000USDT',
     '1000PEPEUSDT',
     'TRXUSDT',
     'CRVUSDT',

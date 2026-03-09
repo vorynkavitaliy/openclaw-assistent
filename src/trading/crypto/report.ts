@@ -229,7 +229,7 @@ function formatTelegramReport(data: ReportData): string {
   }
 
   // Дневная статистика
-  const dailyTarget = 3;
+  const dailyTarget = 8;
   const tradesDone = data.daily.trades;
   const progressBar = '█'.repeat(tradesDone) + '░'.repeat(Math.max(0, dailyTarget - tradesDone));
   lines.push('');

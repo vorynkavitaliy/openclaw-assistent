@@ -103,7 +103,7 @@ export function logDecision(
   return decision;
 }
 
-function readAllDecisions(maxLines: number = 2000): Decision[] {
+function readAllDecisions(maxLines: number = 50000): Decision[] {
   if (!fs.existsSync(JOURNAL_FILE)) return [];
   const lines = fs.readFileSync(JOURNAL_FILE, 'utf-8').trim().split('\n').filter(Boolean);
   return lines

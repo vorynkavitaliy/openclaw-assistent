@@ -636,6 +636,7 @@ async function main(): Promise<void> {
   const withLlm = hasFlag('with-llm');
   const llmTopN = parseInt(getArg('llm-top') ?? '15');
   const startBalance = parseFloat(getArg('balance') ?? '10000');
+  const fixedRisk = hasFlag('fixed-risk'); // Prop-firm: риск от начального баланса, без compound
 
   const pairsToTest = allPairs ? config.pairs : [pair.toUpperCase()];
 
@@ -689,14 +690,16 @@ async function main(): Promise<void> {
 
       console.log(`\n═══ EQUITY CURVE ($${startBalance.toLocaleString()} start) ═══`);
       console.log(
-        `Risk per trade: ${(config.riskPerTrade * 100).toFixed(1)}% (max $${config.maxRiskPerTrade})\n`,
+        `Risk per trade: ${(config.riskPerTrade * 100).toFixed(1)}% (max $${config.maxRiskPerTrade})${fixedRisk ? ' [FIXED — prop mode]' : ''}\n`,
       );
 
       for (const t of allTrades) {
         if (t.result === 'OPEN') continue;
 
-        // Риск на сделку: min(balance * riskPerTrade, maxRiskPerTrade)
-        const riskAmount = Math.min(balance * config.riskPerTrade, config.maxRiskPerTrade);
+        // Prop-firm: фиксированный риск от начального баланса (без compound)
+        // Обычный режим: риск от текущего баланса (compound)
+        const riskBase = fixedRisk ? startBalance : balance;
+        const riskAmount = Math.min(riskBase * config.riskPerTrade, config.maxRiskPerTrade);
         // Долларовый P&L = riskAmount * R-множитель
         const dollarPnl = riskAmount * t.rMultiple;
 

@@ -312,15 +312,15 @@ async function analyzePairV2(pair: string, cycleId: string): Promise<TradeSignal
       const btcMarket = await getMarketInfo('BTCUSDT').catch(() => null);
       if (btcMarket) {
         const btc24h = btcMarket.price24hPct;
-        // BTC падает больше 2% за 24ч — не лонгуем альты
-        if (side === 'Buy' && btc24h < -2) {
+        // BTC падает больше 3% за 24ч — не лонгуем альты
+        if (side === 'Buy' && btc24h < -3) {
           logDecision(cycleId, 'skip', pair, 'BTC_BEARISH', [
             `BTC 24h: ${btc24h.toFixed(2)}% — не лонгуем альты при падающем BTC`,
           ]);
           return null;
         }
-        // BTC растёт больше 2% за 24ч — не шортим альты (они летят за BTC)
-        if (side === 'Sell' && btc24h > 2) {
+        // BTC растёт больше 3% за 24ч — не шортим альты (они летят за BTC)
+        if (side === 'Sell' && btc24h > 3) {
           logDecision(cycleId, 'skip', pair, 'BTC_BULLISH', [
             `BTC 24h: +${btc24h.toFixed(2)}% — не шортим альты при растущем BTC`,
           ]);

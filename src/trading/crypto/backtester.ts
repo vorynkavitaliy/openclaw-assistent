@@ -482,8 +482,8 @@ async function backtestPair(
       const btcPrev = btcM15[i - lookback]?.close ?? btcNow;
       const btc24hPct = btcPrev > 0 ? ((btcNow - btcPrev) / btcPrev) * 100 : 0;
 
-      if (side === 'Buy' && btc24hPct < -2) continue; // BTC падает — не лонгуем альты
-      if (side === 'Sell' && btc24hPct > 2) continue; // BTC растёт — не шортим альты
+      if (side === 'Buy' && btc24hPct < -3) continue; // BTC падает — не лонгуем альты
+      if (side === 'Sell' && btc24hPct > 3) continue; // BTC растёт — не шортим альты
     }
 
     // Повышенный порог confidence для слабых пар

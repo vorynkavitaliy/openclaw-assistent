@@ -84,7 +84,7 @@ const config: TradingConfig = {
   maxSpreadPercent: 0.1,
   atrSlMultiplier: 2.0,
   staleOrderMinutes: 30,
-  minConfidence: 55, // Повышен: только качественные сигналы
+  minConfidence: 35, // Реалистичный порог: live confluence scores обычно 15-40
   backtestMinConfidence: 38, // Ниже чем live: в бэктесте нет orderbook/OI/funding данных
   pairCooldownMin: 180, // 3 часа между сделками на одну пару
 
@@ -110,50 +110,18 @@ const config: TradingConfig = {
   // BTC корреляция: альты следуют за BTC
   btcCorrelationFilter: true, // Включить фильтр BTC-корреляции для альтов
   weakPairs: [
-    'SOLUSDT',
-    'XRPUSDT',
-    'BNBUSDT',
-    'LINKUSDT',
-    'SUIUSDT',
-    'ADAUSDT',
-    'DOTUSDT',
-    'NEARUSDT',
-    'APTUSDT',
-    'LTCUSDT',
-    'ATOMUSDT',
-    'INJUSDT',
-    'AAVEUSDT',
-    'UNIUSDT',
-    'ARBUSDT',
-    'OPUSDT',
-    'TIAUSDT',
-    'RENDERUSDT',
-    'FETUSDT',
-    'ONDOUSDT',
-    'JUPUSDT',
-    'WLDUSDT',
-    'TONUSDT',
-    'MKRUSDT',
-    'ICPUSDT',
-    'STXUSDT',
+    // Только Tier 4-5: реально слабые/волатильные пары
     'SEIUSDT',
-    'PENDLEUSDT',
-    'ENAUSDT',
     'EIGENUSDT',
-    'THETAUSDT',
-    'FTMUSDT',
-    'RUNEUSDT',
-    'LDOUSDT',
-    'PYTHUSDT',
     'GRTUSDT',
-    'ALGOUSDT',
+    'STXUSDT',
     'DOGEUSDT',
     'SHIBUSDT',
     '1000PEPEUSDT',
     'TRXUSDT',
     'CRVUSDT',
-  ], // Пары с повышенным порогом
-  weakPairConfidenceBonus: 5, // Доп. порог confidence для слабых пар (minConfidence + bonus)
+  ], // Пары с повышенным порогом (только мелкие/спекулятивные)
+  weakPairConfidenceBonus: 3, // Доп. порог confidence для слабых пар
 
   mode: 'execute',
   demoTrading: true,

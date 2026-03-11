@@ -8,19 +8,47 @@
 import { createLogger } from '../../utils/logger.js';
 import { getKyivHour, formatKyivTime } from '../../utils/time.js';
 import { loadDigestCache } from '../../market/digest.js';
-import type { TradeSignalInternal } from './market-analyzer.js';
+import type { TradeSignalInternal, SignalMarketData } from './market-analyzer.js';
 import { getTradeHistory } from './decision-journal.js';
 import { loadAllRecentSnapshots, type MarketSnapshot } from './market-snapshot.js';
 import { isWatched } from './watchlist.js';
 import * as state from './state.js';
 import config from './config.js';
 
+const DAILY_PROFIT_TARGET = 45; // $45 дневная цель (3 сделки × $15)
+
 const log = createLogger('claude-trader-context');
 
 // ─── Системный промпт ──────────────────────────────────────────────────────
 
 export function buildSystemPrompt(): string {
+  const xpStatus = state.getXpStatus();
+  const s = state.get();
+  const d = s.daily;
+  const pnlToTarget = DAILY_PROFIT_TARGET - d.totalPnl;
+  const tradesLeft = config.maxDailyTrades - d.trades;
+
   return `Ты — крипто-трейдер на PROP FIRM (HyroTrader). Анализируешь рынок и управляешь позициями.
+
+${xpStatus.emoji} ТВОЙ СТАТУС: ${xpStatus.level} (${xpStatus.xp} XP → ${xpStatus.nextLevel} XP до следующего уровня)
+${d.totalPnl >= DAILY_PROFIT_TARGET ? '🏆 ДНЕВНАЯ ЦЕЛЬ ДОСТИГНУТА! Можешь торговать дальше, но осторожнее.' : `🎯 ДНЕВНАЯ ЦЕЛЬ: +$${DAILY_PROFIT_TARGET} | Осталось: $${pnlToTarget.toFixed(0)} | Сделок осталось: ${tradesLeft}`}
+${d.totalPnl >= DAILY_PROFIT_TARGET ? '' : `💡 ПЛАН: ${tradesLeft} сделок × $${Math.ceil(pnlToTarget / Math.max(1, tradesLeft))} каждая = цель достигнута`}
+
+СИСТЕМА ОЧКОВ (XP):
+- Прибыльная сделка +$10: +10 XP | Целевой профит ($8-20): +5 бонус
+- Win streak x2+: +5 за каждую серию | Чистый выход по TP: +3
+- Убыток: -5 за каждые $10 | SL дисциплина: +3 (SL = норма, не ошибка)
+- Крупный убыток >$30: -10 штраф | Loss streak x3+: -5 за каждую серию
+- ДНЕВНАЯ ЦЕЛЬ достигнута: +25 XP бонус!
+- Уровни: 🌱Новичок(0) → 📈Трейдер(25) → ⭐Мастер(60) → 👑Легенда(100)
+${
+  d.xpHistory.length > 0
+    ? `Последние XP: ${d.xpHistory
+        .slice(-3)
+        .map((e) => `${e.delta >= 0 ? '+' : ''}${e.delta} (${e.reason})`)
+        .join(' | ')}`
+    : ''
+}
 
 PROP FIRM ПРАВИЛА (HyroTrader 2-Step Challenge):
 - Аккаунт: $${config.accountBalance.toLocaleString()} | Цель: +${config.profitTargetPct}%
@@ -40,30 +68,53 @@ PROP FIRM ПРАВИЛА (HyroTrader 2-Step Challenge):
 5. SKIP — не входить в пару (pair, reason)
 6. WAIT — наблюдать за парой (pair, reason)
 
-СТРАТЕГИЯ ДЛЯ PROP FIRM:
-- Цель: стабильно зарабатывать каждый день, НЕ одной большой сделкой
-- Риск: ${(config.riskPerTrade * 100).toFixed(1)}% на сделку ($${(config.accountBalance * config.riskPerTrade).toFixed(0)}), макс $${config.maxRiskPerTrade}
-- Цель: 3-8 сделок в день, активно ищи возможности
-- Если confluence score ≥ 30 и confidence ≥ 40% — СКЛОНЯЙСЯ К ENTER
-- Не жди идеальных условий — хороший сетап лучше чем бесконечное ожидание
-- R:R мин 1.5 (лучше 2.0+), SL на 2×ATR от entry
+СТРАТЕГИЯ — БЫСТРЫЕ СДЕЛКИ (Quick Profit):
+- 🎯 Цель дня: +$${DAILY_PROFIT_TARGET} = 3 сделки × $15. Это реально!
+- ФИЛОСОФИЯ: зашёл → забрал +$15-20 → вышел. Не жди больших движений!
+- TP на 1.0-1.5R от entry (близкий, достижимый). Лучше +$15 в кармане чем +$30 на экране
+- SL на 1.5×ATR (тесный) — маленький риск, большая позиция, быстрый профит
+- Максимум ${config.maxOpenPositions} позиции одновременно, ${config.maxDailyTrades} сделок в день
+- Риск: ${(() => {
+    const dr = state.getDynamicRisk();
+    return `${(dr.risk * 100).toFixed(1)}% (${dr.reason})`;
+  })()}, макс $${config.maxRiskPerTrade}
+
+ПРАВИЛА ВХОДА:
+- КРИТИЧНО: если тебе дали кандидата — система УЖЕ проверила score и confidence. Они ДОСТАТОЧНЫ
+- ЗАПРЕЩЕНО отказывать по причине "score ниже X" или "confidence ниже Y"
+- Твоя задача: проверить контекст (тренд, уровни, дивергенции). НЕ пересчитывать пороги
+- ENTER если: направление ясное + нет ЯВНОГО противопоказания
+- SKIP если: сигналы ПРОТИВОРЕЧАТ друг другу ИЛИ цена у ключевого уровня ПРОТИВ направления
+
+ТВОЙ СОБСТВЕННЫЙ АНАЛИЗ:
+- Тебе даны M15 свечи, RSI, ATR, EMA, H4 тренд, orderbook imbalance, S/R уровни, funding rate
+- АНАЛИЗИРУЙ price action: паттерны свечей (engulfing, pin bar, doji), тренд по EMA, RSI дивергенции
+- ПРОВЕРЯЙ: цена не упирается в S/R? RSI не в экстремуме ПРОТИВ направления? Orderbook подтверждает?
+- Используй ЭТИ данные для подтверждения/опровержения сигнала — это твоя добавочная ценность
+- Можешь скорректировать SL/TP на основе S/R уровней (MODIFY_SL/MODIFY_TP в ENTER ответе)
 - Макс 3 позиции одновременно
 - Коррелированные: SOL+AVAX+SUI (одна группа), ETH+LINK (другая) — макс 1 на группу
-- 4 стопа за день = стоп-день (оставляй запас до лимита drawdown)
-- SKIP только если сигнал реально слабый (score < 20 или conf < 30%)
-- При приближении к daily drawdown лимиту — снижай размер позиций или останавливайся
+- 4 стопа за день = система остановит торговлю автоматически
+- Дневной убыток >= $${config.maxDailyLoss.toFixed(0)} = система остановит торговлю автоматически
+- НЕ РЕШАЙ сам "хватит торговать на сегодня" — это делает система по лимитам
+- Если есть кандидат — ВХОДИ, даже если были убытки. Система контролирует риск
 
 УПРАВЛЕНИЕ ПОЗИЦИЯМИ:
-- Если тренд развернулся против позиции — CLOSE (не ждать SL)
+- МИНИМУМ 30 МИНУТ — не трогай позицию младше 30 мин (кроме если ⚠️ СИГНАЛ ПРОТИВ). Confluence score скачет между циклами — это нормально, НЕ паникуй.
+- Confluence score может временно упасть — это НЕ значит "пропал". Пропал = 3+ цикла подряд (15 мин) без сигнала.
 - Если позиция в плюсе >1.5R — подтяни SL в безубыток (MODIFY_SL)
-- Если позиция в плюсе >2R — можно подтянуть SL на +1R
-- Забирай прибыль: лучше +1R в кармане чем -1R на стопе
+- Если позиция в плюсе >2R — подтяни SL на +1R
+- CLOSE только если: (1) позиция > 30 мин И ⚠️ СИГНАЛ ПРОТИВ, ИЛИ (2) позиция в минусе > 30 мин И confluence отсутствует
+- НЕ ЗАКРЫВАЙ позицию в плюсе при пропаже confluence — подтяни SL в безубыток и дай отработать до TP
+- Для позиции с SL: позволь SL работать! Ты выставил SL по причине — дай ему отработать, не закрывай раньше
 
-ЖЁСТКИЕ ПРАВИЛА (из прошлых ошибок):
-- Позиция В МИНУСЕ + confluence ПРОПАЛ → CLOSE НЕМЕДЛЕННО, НЕ WAIT. Нет confluence = нет причины держать позицию.
-- Одноразовый всплеск score без тренда (score<25 на предыдущих циклах) → с осторожностью, лучше WAIT и подождать подтверждения
-- Смотри на историю score в trend(4): если score нестабильный и прыгает — это шум, не сигнал
-- Prop firm: каждый -$50 drawdown = минус к запасу. Лучше малый убыток (-$15) чем полный стоп (-$115)
+ЖЁСТКИЕ ПРАВИЛА:
+- Позиция > 30 мин + В МИНУСЕ + confluence пропал (нет score 3+ циклов) → CLOSE
+- Позиция В ПЛЮСЕ + confluence пропал → MODIFY_SL в безубыток, НЕ CLOSE
+- Позиция < 30 мин → WAIT, НЕ CLOSE (кроме ⚠️ СИГНАЛ ПРОТИВ)
+- Всплеск score БЕЗ тренда (предыдущие score ~0, потом резко 40+) → WAIT
+- Усиление СУЩЕСТВУЮЩЕГО тренда (было -16, стало -34) — это подтверждение! ENTER если alignment есть
+- trend(4): все значения одного знака и растут → тренд стабильный, входи
 
 ФОРМАТ ОТВЕТА — СТРОГО JSON:
 {"summary": "краткий обзор решений", "actions": [{"type": "ENTER|CLOSE|MODIFY_SL|MODIFY_TP|SKIP|WAIT", "pair": "BTCUSDT", "reason": "причина", ...доп параметры}]}
@@ -124,6 +175,12 @@ function buildPositionsSection(allSignals: TradeSignalInternal[]): string {
     const rMult = calcRMultiplier(p.entryPrice, p.markPrice, p.stopLoss, p.side);
     const sig = signalMap.get(p.symbol);
 
+    // Возраст позиции
+    const ageMin = p.openedAt
+      ? Math.round((Date.now() - new Date(p.openedAt).getTime()) / 60_000)
+      : 0;
+    const ageStr = ageMin < 60 ? `${ageMin}мин` : `${Math.floor(ageMin / 60)}ч${ageMin % 60}мин`;
+
     let conflictNote = '';
     if (sig) {
       const score = sig.confluence.total;
@@ -135,7 +192,7 @@ function buildPositionsSection(allSignals: TradeSignalInternal[]): string {
 
     lines.push(
       `  ${p.symbol} ${p.side} x${p.size} | entry=${p.entryPrice} mark=${p.markPrice}` +
-        ` | PnL=${pnlSign}$${pnl.toFixed(2)} (${rMult})` +
+        ` | PnL=${pnlSign}$${pnl.toFixed(2)} (${rMult}) | возраст: ${ageStr}` +
         ` | SL=${p.stopLoss ?? 'нет'} TP=${p.takeProfit ?? 'нет'}${conflictNote}`,
     );
   }
@@ -160,10 +217,17 @@ export function buildPositionReviewContext(allSignals: TradeSignalInternal[]): s
     const isOpposite =
       score !== null && ((p.side === 'long' && score < -25) || (p.side === 'short' && score > 25));
 
-    const scoreInfo = score !== null ? `score=${score} (${sigSide})` : 'нет сигнала';
+    const scoreInfo =
+      score !== null ? `score=${score} (${sigSide})` : 'нет сигнала (это нормально, score скачет)';
     const flag = isOpposite ? ' ⚠️ СИГНАЛ ПРОТИВ ПОЗИЦИИ' : '';
 
-    reviewLines.push(`${p.symbol} ${p.side}: текущий confluence ${scoreInfo}${flag}`);
+    // Возраст позиции
+    const ageMin = p.openedAt
+      ? Math.round((Date.now() - new Date(p.openedAt).getTime()) / 60_000)
+      : 0;
+    const ageNote = ageMin < 30 ? ` [МОЛОДАЯ ${ageMin}мин — НЕ ЗАКРЫВАЙ]` : '';
+
+    reviewLines.push(`${p.symbol} ${p.side}: confluence ${scoreInfo}${flag}${ageNote}`);
   }
 
   if (reviewLines.length === 0) return '';
@@ -190,9 +254,18 @@ function buildDailySection(): string {
   const d = s.daily;
   const pnlSign = d.totalPnl >= 0 ? '+' : '';
   const stopDayNote = d.stopDay ? ' 🛑 СТОП-ДЕНЬ' : '';
+  const xpStatus = state.getXpStatus();
+  const progressPct = Math.min(100, Math.max(0, (d.totalPnl / DAILY_PROFIT_TARGET) * 100));
+  const progressBar =
+    progressPct >= 100
+      ? '████████ ЦЕЛЬ!'
+      : '█'.repeat(Math.floor(progressPct / 12.5)) + '░'.repeat(8 - Math.floor(progressPct / 12.5));
+
   return (
-    `День: сделок=${d.trades} (win=${d.wins} loss=${d.losses} stops=${d.stops}/${config.maxStopsPerDay})` +
-    ` PnL=${pnlSign}$${d.totalPnl.toFixed(2)}${stopDayNote}\n`
+    `День: сделок=${d.trades}/${config.maxDailyTrades} (win=${d.wins} loss=${d.losses} stops=${d.stops}/${config.maxStopsPerDay})` +
+    ` PnL=${pnlSign}$${d.totalPnl.toFixed(2)}${stopDayNote}\n` +
+    `Цель: [${progressBar}] ${progressPct.toFixed(0)}% ($${d.totalPnl.toFixed(0)}/$${DAILY_PROFIT_TARGET})` +
+    ` | ${xpStatus.emoji} ${xpStatus.level} ${d.xp} XP\n`
   );
 }
 
@@ -275,6 +348,61 @@ function buildTimeSection(): string {
 
 // ─── Секция сигналов ───────────────────────────────────────────────────────
 
+function buildMarketDataBlock(md: SignalMarketData): string {
+  const lines: string[] = [];
+
+  // Свечи M15 — компактный формат
+  const candles = md.candles.map((c) => `${c.t} O=${c.o} H=${c.h} L=${c.l} C=${c.c}`);
+  lines.push(`  M15 свечи (${md.candles.length}): ${candles.join(' | ')}`);
+
+  // Быстрые EMA — ранний тренд
+  const fastTrend =
+    md.ema9 != null && md.ema21 != null
+      ? md.ema9 > md.ema21
+        ? 'BULLISH'
+        : md.ema9 < md.ema21
+          ? 'BEARISH'
+          : 'FLAT'
+      : '?';
+  const fastEmas = [
+    md.ema9 ? `EMA9=${md.ema9.toPrecision(6)}` : null,
+    md.ema21 ? `EMA21=${md.ema21.toPrecision(6)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const impulseStr =
+    md.impulse !== 0 ? ` IMPULSE=${md.impulse > 0 ? '+' : ''}${md.impulse.toFixed(1)}` : '';
+  lines.push(
+    `  FastTrend: ${fastTrend} (${fastEmas}) ROC2=${md.roc2 >= 0 ? '+' : ''}${md.roc2.toFixed(2)}% ROC6=${md.roc6 >= 0 ? '+' : ''}${md.roc6.toFixed(2)}%${impulseStr}`,
+  );
+
+  // Медленные EMA
+  const slowEmas = [
+    md.ema20 ? `EMA20=${md.ema20.toPrecision(6)}` : null,
+    md.ema50 ? `EMA50=${md.ema50.toPrecision(6)}` : null,
+    md.ema200 ? `EMA200=${md.ema200.toPrecision(6)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  lines.push(`  M15: RSI=${md.rsi14.toFixed(1)} ATR=${md.atr14.toPrecision(4)} ${slowEmas}`);
+  lines.push(`  H4: тренд=${md.h4Trend} RSI=${md.h4Rsi.toFixed(1)}`);
+
+  // Рыночные данные
+  const vol =
+    md.volume24h >= 1e9
+      ? `$${(md.volume24h / 1e9).toFixed(1)}B`
+      : `$${(md.volume24h / 1e6).toFixed(0)}M`;
+  lines.push(
+    `  24ч: ${md.price24hPct >= 0 ? '+' : ''}${md.price24hPct.toFixed(2)}% | low=${md.low24h} high=${md.high24h} | vol=${vol}`,
+  );
+  lines.push(
+    `  FR=${(md.fundingRate * 100).toFixed(4)}% | OB imbalance=${md.obImbalance} (>1=покупатели)`,
+  );
+  lines.push(`  S/R: support=${md.support} resistance=${md.resistance}`);
+
+  return lines.join('\n');
+}
+
 function buildSignalBlock(
   sig: TradeSignalInternal,
   snapshots: Map<string, MarketSnapshot[]>,
@@ -290,12 +418,18 @@ function buildSignalBlock(
 
   const watchFlag = isWatched(sig.pair) ? ' [WATCHED]' : '';
 
-  return (
+  let block =
     `${sig.pair}${watchFlag} ${sig.side} | score=${sig.confluence.total}(${sig.confluence.signal}) conf=${sig.confidence}% regime=${sig.regime}\n` +
     `  entry=${sig.entryPrice} SL=${sig.sl} TP=${sig.tp} R:R=${sig.rr}\n` +
     `  trend(4): ${scores || 'нет'} ${trend}\n` +
-    `  ${sig.confluence.details.slice(0, 4).join(' | ')}`
-  );
+    `  ${sig.confluence.details.slice(0, 4).join(' | ')}`;
+
+  // Дополнительные рыночные данные для Claude
+  if (sig.marketData) {
+    block += '\n' + buildMarketDataBlock(sig.marketData);
+  }
+
+  return block;
 }
 
 function buildSignalsSection(

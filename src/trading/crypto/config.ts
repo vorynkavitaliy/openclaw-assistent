@@ -10,121 +10,83 @@ const ACCOUNT_BALANCE = 10_000; // Размер аккаунта HyroTrader ($5k
 
 const config: TradingConfig = {
   pairs: [
-    // Tier 1: основные (самые ликвидные)
+    // Tier 1: топ ликвидность (>$500M/day)
     'BTCUSDT',
     'ETHUSDT',
     'SOLUSDT',
     'XRPUSDT',
     'BNBUSDT',
-    // Tier 2: крупные альты
+    'DOGEUSDT',
+    // Tier 2: крупные альты ($100-500M/day)
     'ADAUSDT',
     'AVAXUSDT',
     'LINKUSDT',
-    'DOTUSDT',
     'SUIUSDT',
     'NEARUSDT',
     'APTUSDT',
+    'DOTUSDT',
     'LTCUSDT',
     'ATOMUSDT',
     'INJUSDT',
-    // Tier 3: средние альты
+    // Tier 3: средние альты ($50-100M/day)
     'AAVEUSDT',
     'UNIUSDT',
     'ARBUSDT',
     'OPUSDT',
-    'TIAUSDT',
     'RENDERUSDT',
     'FETUSDT',
     'ONDOUSDT',
     'JUPUSDT',
     'WLDUSDT',
-    // Tier 4: расширенный набор
     'TONUSDT',
-    'MKRUSDT',
-    'ICPUSDT',
-    'STXUSDT',
-    'SEIUSDT',
-    'PENDLEUSDT',
-    'ENAUSDT',
-    'EIGENUSDT',
-    'THETAUSDT',
-    'FTMUSDT',
     'RUNEUSDT',
-    'LDOUSDT',
-    'PYTHUSDT',
-    'GRTUSDT',
-    'ALGOUSDT',
-    // Tier 5: спекулятивные
-    'DOGEUSDT',
-    'SHIB1000USDT',
-    '1000PEPEUSDT',
-    'TRXUSDT',
-    'CRVUSDT',
   ],
 
   allowedOrderTypes: ['Market', 'Limit'],
 
-  monitorIntervalMin: 5,
+  monitorIntervalMin: 2,
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
-  riskPerTrade: 0.01, // 1% от баланса на сделку (3 позиции × ~33% маржи = влезают все)
-  maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — оставляем запас до лимита 5%
+  riskPerTrade: 0.01, // 1% от баланса на сделку (~$100 при $10k)
+  maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — запас до лимита 5%
   maxStopsPerDay: 4,
-  maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k (лимит HyroTrader 3% = $300, запас для 3 позиций)
-  maxOpenPositions: 3,
+  maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k
+  maxOpenPositions: 2, // Снижено с 3: фокус на 1-2 качественные позиции
   maxLeverage: 5,
   defaultLeverage: 3,
-  minRR: 1.5,
+  minRR: 1.0, // Снижено с 1.5: быстрые TP, цель +$15-20 за сделку
 
-  partialCloseAtR: 1.0,
+  // Quick profit strategy: закрываем 100% по TP, без partial close
+  partialCloseAtR: 99, // Отключён (недостижимый порог) — закрываем всё сразу по TP
   partialClosePercent: 0.5,
-  trailingStartR: 1.5,
-  trailingDistanceR: 0.5,
+  trailingStartR: 0.7, // Раньше начинаем тянуть SL (было 1.5R)
+  trailingDistanceR: 0.3, // Теснее trailing (было 0.5R)
 
   maxFundingRate: 0.005,
   minFundingRate: -0.005,
   maxSpreadPercent: 0.1,
-  atrSlMultiplier: 2.0,
+  atrSlMultiplier: 1.5, // Теснее SL (было 2.0): меньше риск = больше позиция = быстрее $15-20
   staleOrderMinutes: 30,
-  minConfidence: 35, // Реалистичный порог: live confluence scores обычно 15-40
+  minConfidence: 45, // Повышен с 20: отсекаем мусор до Claude (ARB 35% → заблокирован)
   backtestMinConfidence: 38, // Ниже чем live: в бэктесте нет orderbook/OI/funding данных
-  pairCooldownMin: 180, // 3 часа между сделками на одну пару
-
-  // Grid entry: 3 ордера (1 Market + 2 Limit), каждый на 0.3 ATR глубже, суммарно ×1.3 объём
-  gridLevels: 3,
-  gridSpacingAtr: 0.3,
-  gridVolumeMultiplier: 1.3,
+  pairCooldownMin: 240, // 4 часа между сделками на одну пару (было 3ч — WLD спамил)
+  maxDailyTrades: 5, // Максимум сделок в день: 3 целевые + 2 запасные
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [
-    ['SOLUSDT', 'AVAXUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT', 'SEIUSDT'], // Alt L1
-    ['ETHUSDT', 'LINKUSDT', 'AAVEUSDT', 'UNIUSDT', 'LDOUSDT'], // ETH-экосистема
-    ['XRPUSDT', 'ADAUSDT', 'DOTUSDT', 'ATOMUSDT', 'ALGOUSDT'], // Legacy L1
-    ['ARBUSDT', 'OPUSDT', 'STXUSDT'], // L2
-    ['RENDERUSDT', 'FETUSDT', 'WLDUSDT', 'THETAUSDT', 'GRTUSDT'], // AI/Infra tokens
-    ['TIAUSDT', 'ONDOUSDT', 'EIGENUSDT'], // Modular/RWA
-    ['DOGEUSDT', '1000SHIBUSDT', '1000PEPEUSDT'], // Meme coins
-    ['JUPUSDT', 'PYTHUSDT'], // Solana DeFi
-    ['PENDLEUSDT', 'ENAUSDT'], // DeFi yield
-    ['TONUSDT', 'ICPUSDT'], // Alt infra
+    ['SOLUSDT', 'AVAXUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT'], // Alt L1
+    ['ETHUSDT', 'LINKUSDT', 'AAVEUSDT', 'UNIUSDT'], // ETH-экосистема
+    ['XRPUSDT', 'ADAUSDT', 'DOTUSDT', 'ATOMUSDT'], // Legacy L1
+    ['ARBUSDT', 'OPUSDT'], // L2
+    ['RENDERUSDT', 'FETUSDT', 'WLDUSDT'], // AI/Infra tokens
+    ['JUPUSDT', 'ONDOUSDT'], // DeFi
   ],
 
   // BTC корреляция: альты следуют за BTC
-  btcCorrelationFilter: true, // Включить фильтр BTC-корреляции для альтов
-  weakPairs: [
-    // Только Tier 4-5: реально слабые/волатильные пары
-    'SEIUSDT',
-    'EIGENUSDT',
-    'GRTUSDT',
-    'STXUSDT',
-    'DOGEUSDT',
-    'SHIB1000USDT',
-    '1000PEPEUSDT',
-    'TRXUSDT',
-    'CRVUSDT',
-  ], // Пары с повышенным порогом (только мелкие/спекулятивные)
-  weakPairConfidenceBonus: 3, // Доп. порог confidence для слабых пар
+  btcCorrelationFilter: true,
+  weakPairs: ['DOGEUSDT', 'WLDUSDT', 'RUNEUSDT'], // Пары с повышенным порогом confidence
+  weakPairConfidenceBonus: 3,
 
   mode: 'execute',
 

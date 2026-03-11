@@ -11,51 +11,16 @@ import config from './config.js';
 import { logDecision } from './decision-journal.js';
 import type { TradeSignalInternal } from './market-analyzer.js';
 import * as state from './state.js';
-import { formatQty, roundPrice } from './symbol-specs.js';
+import { formatQty } from './symbol-specs.js';
 
 const log = createLogger('signal-executor');
+
+const CORRELATION_THRESHOLD = 0.9;
 
 export interface SignalResult extends TradeSignalInternal {
   action: string;
   orderId?: string | undefined;
-  orderIds?: string[];
   qty?: string;
-}
-
-/**
- * Рассчитывает grid-уровни входа.
- * Ордер 1 (50%): entry (bid1/ask1)
- * Ордер 2 (30%): entry ± 0.3×ATR
- * Ордер 3 (20%): entry ± 0.6×ATR
- * Суммарный объём = baseQty × gridVolumeMultiplier
- */
-interface GridLevel {
-  price: number;
-  qtyFraction: number; // доля от общего объёма (0.5, 0.3, 0.2)
-}
-
-function buildGridLevels(
-  entry: number,
-  side: 'Buy' | 'Sell',
-  atr: number,
-  pair: string,
-): GridLevel[] {
-  const levels = config.gridLevels;
-  if (levels <= 1) {
-    return [{ price: entry, qtyFraction: 1.0 }];
-  }
-
-  const spacing = atr * config.gridSpacingAtr;
-  // Распределение объёма: 50% / 30% / 20% для 3 уровней
-  const fractions = levels === 2 ? [0.6, 0.4] : [0.5, 0.3, 0.2];
-
-  return fractions.slice(0, levels).map((frac, i) => {
-    const offset = spacing * i;
-    // Buy: каждый следующий уровень ниже (лучшая цена)
-    // Sell: каждый следующий уровень выше (лучшая цена)
-    const price = side === 'Buy' ? entry - offset : entry + offset;
-    return { price: roundPrice(price, pair), qtyFraction: frac };
-  });
 }
 
 // Возвращает название группы экосистемы для символа (или null)
@@ -64,6 +29,28 @@ function getEcosystemGroup(symbol: string): string | null {
     if (group.includes(symbol)) return group[0] ?? symbol;
   }
   return null;
+}
+
+// Pearson correlation coefficient между двумя массивами closes
+function pearsonCorrelation(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  if (n < 20) return 0; // недостаточно данных
+  const xa = a.slice(-n);
+  const xb = b.slice(-n);
+  const meanA = xa.reduce((s, v) => s + v, 0) / n;
+  const meanB = xb.reduce((s, v) => s + v, 0) / n;
+  let num = 0,
+    denA = 0,
+    denB = 0;
+  for (let i = 0; i < n; i++) {
+    const da = xa[i]! - meanA;
+    const db = xb[i]! - meanB;
+    num += da * db;
+    denA += da * da;
+    denB += db * db;
+  }
+  const den = Math.sqrt(denA * denB);
+  return den === 0 ? 0 : num / den;
 }
 
 export async function executeSignals(
@@ -96,6 +83,10 @@ export async function executeSignals(
   const openEcosystems = new Set(
     s0.positions.map((p) => getEcosystemGroup(p.symbol)).filter(Boolean) as string[],
   );
+
+  // Корреляционный фильтр: убираем сигналы с высокой корреляцией к уже принятым
+  // Из двух коррелированных оставляем тот, у которого выше confidence
+  const acceptedCloses = new Map<string, number[]>(); // pair → closes уже принятых сигналов
 
   for (const sig of signals) {
     const perm = state.canTrade();
@@ -147,18 +138,37 @@ export async function executeSignals(
       continue;
     }
 
-    // Базовый размер позиции (от riskPerTrade, до увеличения grid multiplier)
-    const baseQty = state.calcPositionSize(sig.entryPrice, sig.sl);
-    if (baseQty <= 0) {
+    // Корреляционный фильтр: проверяем корреляцию с уже принятыми сигналами в этом батче
+    if (sig.recentCloses && sig.recentCloses.length >= 20) {
+      let highCorr: { pair: string; corr: number } | null = null;
+      for (const [acceptedPair, closes] of acceptedCloses) {
+        const corr = pearsonCorrelation(sig.recentCloses, closes);
+        if (Math.abs(corr) >= CORRELATION_THRESHOLD) {
+          highCorr = { pair: acceptedPair, corr };
+          break;
+        }
+      }
+      if (highCorr) {
+        logDecision(cycleId, 'skip', sig.pair, 'HIGH_CORRELATION', [
+          `Корреляция ${highCorr.corr.toFixed(3)} с ${highCorr.pair} > порог ${CORRELATION_THRESHOLD}`,
+        ]);
+        results.push({
+          ...sig,
+          action: `SKIP: correlation ${highCorr.corr.toFixed(3)} with ${highCorr.pair}`,
+        });
+        continue;
+      }
+    }
+
+    // Размер позиции: 1 ордер = baseQty (без grid multiplier)
+    const totalQty = state.calcPositionSize(sig.entryPrice, sig.sl);
+    if (totalQty <= 0) {
       logDecision(cycleId, 'skip', sig.pair, 'QTY_CALCULATION_FAILED', [
         'Не удалось рассчитать размер позиции',
       ]);
       results.push({ ...sig, action: 'SKIP: failed to calculate qty' });
       continue;
     }
-
-    // Grid: общий объём = baseQty × gridVolumeMultiplier
-    const totalQty = baseQty * config.gridVolumeMultiplier;
 
     // Проверка объёма позиции: notional value не должен превышать баланс * maxLeverage
     const notionalValue = sig.entryPrice * totalQty;
@@ -181,7 +191,7 @@ export async function executeSignals(
       continue;
     }
 
-    // Риск при полном заполнении grid (worst case — все ордера заполнены, SL от первого уровня)
+    // Проверка риска на сделку
     const slDist = Math.abs(sig.entryPrice - sig.sl);
     const risk = slDist * totalQty;
     if (risk > config.maxRiskPerTrade) {
@@ -249,68 +259,66 @@ export async function executeSignals(
     try {
       await setLeverage(sig.pair, config.defaultLeverage);
 
-      // ATR для расчёта grid spacing
-      const atr = slDist / config.atrSlMultiplier;
+      const qtyStr = formatQty(totalQty, sig.pair);
+      log.info('Submitting order', {
+        symbol: sig.pair,
+        side: sig.side,
+        qty: qtyStr,
+        rawQty: totalQty,
+        entry: sig.entryPrice,
+      });
 
-      // Grid уровни
-      const gridLevels = buildGridLevels(sig.entryPrice, sig.side, atr, sig.pair);
-      const orderIds: string[] = [];
-      const qtyParts: string[] = [];
-      let totalFilledQtyStr = '';
+      // Один Market ордер — гарантированный вход по рыночной цене
+      const orderRes = await submitOrder({
+        symbol: sig.pair,
+        side: sig.side,
+        orderType: 'Market',
+        qty: qtyStr,
+      });
 
-      for (let i = 0; i < gridLevels.length; i++) {
-        const level = gridLevels[i]!;
-        const levelQty = totalQty * level.qtyFraction;
-        const qtyStr = formatQty(levelQty, sig.pair);
-        if (parseFloat(qtyStr) <= 0) continue;
+      const orderId = orderRes.orderId;
 
-        // Первый ордер — Market (гарантированный вход), остальные — Limit (grid добор)
-        const isFirstOrder = i === 0;
-        const orderType = isFirstOrder ? 'Market' : 'Limit';
-
-        const orderRes = await submitOrder({
-          symbol: sig.pair,
-          side: sig.side,
-          orderType,
-          qty: qtyStr,
-          ...(orderType === 'Limit' ? { price: String(level.price) } : {}),
-        });
-
-        orderIds.push(orderRes.orderId);
-        qtyParts.push(qtyStr);
+      // Устанавливаем SL/TP на уровне ПОЗИЦИИ
+      // Retry с задержкой: market ордер может ещё не создать позицию на Bybit
+      let slTpSet = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          await modifyPosition(sig.pair, String(sig.sl), String(sig.tp));
+          log.info('Position SL/TP set', { symbol: sig.pair, sl: sig.sl, tp: sig.tp, attempt });
+          slTpSet = true;
+          break;
+        } catch (slErr) {
+          log.warn(`SL/TP attempt ${attempt + 1}/3 failed`, {
+            symbol: sig.pair,
+            error: (slErr as Error).message,
+          });
+        }
       }
-
-      totalFilledQtyStr = qtyParts.join('+');
-
-      // Устанавливаем SL/TP на уровне ПОЗИЦИИ (покрывает весь объём, включая будущие grid fills)
-      try {
-        await modifyPosition(sig.pair, String(sig.sl), String(sig.tp));
-        log.info('Position SL/TP set', { symbol: sig.pair, sl: sig.sl, tp: sig.tp });
-      } catch (slErr) {
-        // Если позиция ещё не открыта (лимитки не заполнены), modifyPosition вернёт ошибку.
-        // Это нормально — position-manager проверит SL на следующем цикле через SL-Guard.
-        log.warn('Could not set position SL/TP (position may not be filled yet)', {
+      if (!slTpSet) {
+        log.error('CRITICAL: Failed to set SL/TP after 3 attempts — SL-Guard must handle', {
           symbol: sig.pair,
-          error: (slErr as Error).message,
+          sl: sig.sl,
+          tp: sig.tp,
         });
       }
 
       state.logEvent('order_opened', {
         symbol: sig.pair,
         side: sig.side,
-        qty: totalFilledQtyStr,
-        gridLevels: gridLevels.length,
-        gridPrices: gridLevels.map((l) => l.price),
+        qty: qtyStr,
         entry: sig.entryPrice,
         sl: sig.sl,
         tp: sig.tp,
-        orderType: 'Limit',
+        orderType: 'Market',
         confluenceScore: sig.confluence.total,
         confluenceSignal: sig.confluence.signal,
         confidence: sig.confidence,
         regime: sig.regime,
         reason: sig.reason,
-        orderIds,
+        orderId,
       });
 
       logDecision(
@@ -320,9 +328,8 @@ export async function executeSignals(
         `OPEN_${sig.side.toUpperCase()}`,
         [
           sig.reason,
-          `Grid ${gridLevels.length} lvl: ${gridLevels.map((l) => l.price).join(' / ')}`,
           `Entry: ${sig.entryPrice}, SL: ${sig.sl}, TP: ${sig.tp}, R:R: ${sig.rr}`,
-          `Qty: ${totalFilledQtyStr} (×${config.gridVolumeMultiplier})`,
+          `Qty: ${qtyStr}`,
         ],
         {
           confluenceScore: sig.confluence.total,
@@ -333,31 +340,29 @@ export async function executeSignals(
           entry: sig.entryPrice,
           sl: sig.sl,
           tp: sig.tp,
-          qty: totalFilledQtyStr,
-          gridLevels: gridLevels.length,
+          qty: qtyStr,
           rr: sig.rr,
-          orderIds,
+          orderId,
         },
       );
 
-      log.info('Grid orders executed', {
+      log.info('Market order executed', {
         symbol: sig.pair,
         side: sig.side,
-        gridLevels: gridLevels.length,
-        qty: totalFilledQtyStr,
-        orderIds,
+        qty: qtyStr,
+        orderId,
       });
 
       // Помечаем экосистему как занятую и записываем cooldown
       if (ecosystem) openEcosystems.add(ecosystem);
+      if (sig.recentCloses) acceptedCloses.set(sig.pair, sig.recentCloses);
       state.recordPairTrade(sig.pair);
 
       results.push({
         ...sig,
         action: 'EXECUTED',
-        orderId: orderIds[0],
-        orderIds,
-        qty: totalFilledQtyStr,
+        orderId,
+        qty: qtyStr,
       });
     } catch (err) {
       const errMsg = (err as Error).message;

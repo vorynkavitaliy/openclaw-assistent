@@ -9,9 +9,9 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { createLogger } from './logger.js';
-import { sendTelegramWithId, editTelegramMessage } from './telegram.js';
+import { sendTelegram, sendTelegramWithId, editTelegramMessage } from './telegram.js';
 
 const log = createLogger('claude-cli');
 
@@ -26,7 +26,21 @@ const FULL_PATH = `${NODE_PATH}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bi
 const ALLOWED_TOOLS = 'Bash,Read,Glob,Grep,WebFetch,WebSearch';
 
 // Системный промпт для бота — Claude как read-only ассистент
-const BOT_SYSTEM_PROMPT = `Ты — ассистент крипто-трейдера в Telegram. Отвечай на русском, кратко и по делу.
+const BOT_SYSTEM_PROMPT = `Ты — ассистент крипто-трейдера на PROP FIRM (HyroTrader $10k аккаунт). Отвечай на русском, кратко и по делу.
+
+ТВОЯ СИСТЕМА МОТИВАЦИИ (XP):
+У торгового бота есть геймификация — система очков XP за качество сделок:
+- 🌱 Новичок (0 XP) → 📈 Трейдер (25 XP) → ⭐ Мастер (60 XP) → 👑 Легенда (100 XP)
+- Прибыльная сделка: +10 XP за $10 | Целевой профит ($8-20): +5 бонус
+- Win streak: +5 за серию | SL дисциплина: +3 | Крупный убыток >$30: -10 штраф
+- Дневная цель: +$45 (5 сделок × $9). Достижение цели: +25 XP бонус!
+- XP и уровень хранятся в data/state.json (поле daily.xp, daily.xpHistory)
+
+ФИЛЬТРЫ КАЧЕСТВА:
+- Торговля только 05:00-21:00 UTC (блок Asia dead zone 21-05 UTC)
+- Максимум 6 сделок в день (качество > количество)
+- Минимальная уверенность 45% (отсекает мусорные сигналы)
+- Cooldown 4ч между сделками на одну пару
 
 ДОСТУПНЫЕ КОМАНДЫ (bash скрипты):
 1. bash scripts/crypto_report_full.sh — полный отчёт (баланс, позиции, P&L, сигналы)
@@ -34,7 +48,7 @@ const BOT_SYSTEM_PROMPT = `Ты — ассистент крипто-трейде
 3. npx tsx src/trading/crypto/report.ts --format text --no-send — отчёт без отправки в TG
 4. npx tsx src/trading/crypto/journal-cli.ts --summary — дневник решений (сводка)
 5. npx tsx src/trading/crypto/journal-cli.ts --last — последнее решение
-6. cat data/state.json — текущее состояние (баланс, позиции, daily stats)
+6. cat data/state.json — текущее состояние (баланс, позиции, daily stats, XP)
 7. cat data/health.json — healthcheck последнего цикла
 8. tail -50 data/monitor.log — последние логи мониторинга
 9. tail -20 data/sl-guard.log — логи SL-guard
@@ -55,10 +69,56 @@ const BOT_SYSTEM_PROMPT = `Ты — ассистент крипто-трейде
 const ROOT_CREDS = '/root/.claude/.credentials.json';
 const BOT_CREDS = '/home/claudebot/.claude/.credentials.json';
 
+/** Проверяет не протух ли токен, пытается обновить через `claude auth status` */
+function refreshTokenIfNeeded(): void {
+  try {
+    if (!existsSync(ROOT_CREDS)) return;
+    const creds = JSON.parse(readFileSync(ROOT_CREDS, 'utf-8')) as Record<string, unknown>;
+    const oauth = creds?.claudeAiOauth as Record<string, unknown> | undefined;
+    const expiresAt = oauth?.expiresAt as number | undefined;
+    if (!expiresAt) return;
+
+    const msUntilExpiry = expiresAt - Date.now();
+    const REFRESH_THRESHOLD_MS = 30 * 60_000; // 30 минут до истечения
+
+    if (msUntilExpiry > REFRESH_THRESHOLD_MS) return; // Токен ещё свежий
+
+    log.info('Token expiring soon, refreshing', {
+      expiresIn: `${Math.round(msUntilExpiry / 60_000)}min`,
+    });
+
+    // `claude auth status` обновляет токен через refresh token
+    const result = spawnSync(
+      '/usr/sbin/runuser',
+      ['-u', 'claudebot', '--', 'bash', '-c', 'HOME=/home/claudebot claude auth status'],
+      { timeout: 15_000, stdio: 'pipe', env: { HOME: '/home/claudebot', PATH: FULL_PATH } },
+    );
+
+    if (result.status === 0) {
+      // Копируем обновлённый токен от claudebot обратно к root
+      if (existsSync(BOT_CREDS)) {
+        copyFileSync(BOT_CREDS, ROOT_CREDS);
+        log.info('Token refreshed successfully');
+        sendTelegram('🔑 Claude OAuth токен обновлён. Бот работает в штатном режиме.').catch(
+          () => {},
+        );
+      }
+    } else {
+      log.warn('Token refresh failed', { stderr: result.stderr?.toString().slice(0, 200) });
+      sendTelegram('⚠️ Claude OAuth токен НЕ удалось обновить. Требуется ручной вход.').catch(
+        () => {},
+      );
+    }
+  } catch (err) {
+    log.warn('Token refresh check failed', { error: (err as Error).message });
+  }
+}
+
 /** Синхронизирует OAuth credentials root → claudebot перед каждым вызовом (только от root) */
 function syncCredentials(): void {
   try {
     if (process.getuid?.() !== 0) return; // только root может копировать
+    refreshTokenIfNeeded();
     if (!existsSync(ROOT_CREDS)) return;
     copyFileSync(ROOT_CREDS, BOT_CREDS);
     spawnSync('chown', ['claudebot:claudebot', BOT_CREDS], { stdio: 'ignore' });
@@ -129,6 +189,7 @@ export interface ClaudeCliOptions {
   timeoutMs?: number;
   stream?: boolean;
   useSession?: boolean;
+  systemPrompt?: string; // Кастомный system prompt (по умолчанию BOT_SYSTEM_PROMPT)
 }
 
 export async function runClaudeCli(prompt: string, options?: ClaudeCliOptions): Promise<string> {
@@ -148,7 +209,9 @@ export async function runClaudeCli(prompt: string, options?: ClaudeCliOptions): 
       '--model claude-opus-4-6',
       '--max-budget-usd 0.50',
       `--tools ${ALLOWED_TOOLS}`,
-      continueFlag ? continueFlag : `--system-prompt ${shellEscape(BOT_SYSTEM_PROMPT)}`,
+      continueFlag
+        ? continueFlag
+        : `--system-prompt ${shellEscape(options?.systemPrompt ?? BOT_SYSTEM_PROMPT)}`,
     ]
       .filter(Boolean)
       .join(' '),
@@ -173,7 +236,7 @@ export async function runClaudeCli(prompt: string, options?: ClaudeCliOptions): 
 
   const statusMsgId = stream ? await sendTelegramWithId('🧠 Claude Code думает...') : null;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     // Если уже claudebot — запускаем напрямую, иначе через runuser
     const proc: ChildProcess = isClaudebot
       ? spawn('bash', ['-c', claudeCmd], {
@@ -313,7 +376,7 @@ export async function runClaudeCli(prompt: string, options?: ClaudeCliOptions): 
       cleanup();
       const msg = `Таймаут: Claude Code не ответил за ${Math.round(timeoutMs / 60_000)} минут.`;
       if (statusMsgId) editTelegramMessage(statusMsgId, msg).catch(() => {});
-      resolve(msg);
+      reject(new Error(msg));
     }, timeoutMs);
 
     function cleanup(): void {

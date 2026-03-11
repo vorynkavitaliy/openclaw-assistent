@@ -1,4 +1,11 @@
-import type { MACDResult, MarketAnalysis, OHLC, StochRSIResult } from './types.js';
+import type {
+  BollingerBands,
+  IchimokuCloud,
+  MACDResult,
+  MarketAnalysis,
+  OHLC,
+  StochRSIResult,
+} from './types.js';
 
 export function calculateEma(prices: number[], period: number): number[] {
   if (prices.length < period) return [];
@@ -276,6 +283,127 @@ export function calculateBBWidth(closes: number[], period: number = 20, mult: nu
   return sma > 0 ? Math.round(((upper - lower) / sma) * 10000) / 100 : 0;
 }
 
+/**
+ * On-Balance Volume — подтверждение тренда объёмом.
+ * Рост OBV при росте цены = тренд подтверждён.
+ * Расхождение OBV и цены = потенциальный разворот.
+ * Возвращает нормализованное значение (текущий OBV vs SMA(20) OBV).
+ */
+export function calculateOBV(candles: OHLC[]): number {
+  if (candles.length < 2) return 0;
+
+  let obv = 0;
+  const obvSeries: number[] = [0];
+
+  for (let i = 1; i < candles.length; i++) {
+    if (candles[i]!.close > candles[i - 1]!.close) {
+      obv += candles[i]!.volume;
+    } else if (candles[i]!.close < candles[i - 1]!.close) {
+      obv -= candles[i]!.volume;
+    }
+    obvSeries.push(obv);
+  }
+
+  // Нормализация: текущий OBV vs SMA(20) — позитивный = растёт, негативный = падает
+  const period = Math.min(20, obvSeries.length);
+  const recent = obvSeries.slice(-period);
+  const avg = recent.reduce((s, v) => s + v, 0) / period;
+  if (avg === 0) return 0;
+
+  return Math.round(((obv - avg) / Math.abs(avg)) * 100) / 100;
+}
+
+/**
+ * Полные Bollinger Bands: upper, lower, middle, width, percentB, squeeze.
+ */
+export function calculateBollingerBands(
+  closes: number[],
+  period: number = 20,
+  mult: number = 2,
+): BollingerBands | null {
+  if (closes.length < period) return null;
+
+  const recentCloses = closes.slice(-period);
+  const sma = recentCloses.reduce((a, b) => a + b, 0) / period;
+
+  let variance = 0;
+  for (const c of recentCloses) {
+    variance += (c - sma) ** 2;
+  }
+  const stdDev = Math.sqrt(variance / period);
+  const upper = sma + mult * stdDev;
+  const lower = sma - mult * stdDev;
+  const currentClose = closes[closes.length - 1]!;
+
+  const width = sma > 0 ? ((upper - lower) / sma) * 100 : 0;
+  const range = upper - lower;
+  const percentB = range > 0 ? ((currentClose - lower) / range) * 100 : 50;
+
+  return {
+    upper: parseFloat(upper.toPrecision(8)),
+    lower: parseFloat(lower.toPrecision(8)),
+    middle: parseFloat(sma.toPrecision(8)),
+    width: Math.round(width * 100) / 100,
+    percentB: Math.round(percentB * 100) / 100,
+    squeeze: width < 2,
+  };
+}
+
+/**
+ * Ichimoku Cloud: Tenkan(9), Kijun(26), Senkou A/B, price vs cloud.
+ * Требуется минимум 52 свечи.
+ */
+export function calculateIchimoku(candles: OHLC[]): IchimokuCloud | null {
+  if (candles.length < 52) return null;
+
+  const highLow = (start: number, end: number): number => {
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (let i = start; i < end; i++) {
+      if (candles[i]!.high > hi) hi = candles[i]!.high;
+      if (candles[i]!.low < lo) lo = candles[i]!.low;
+    }
+    return (hi + lo) / 2;
+  };
+
+  const len = candles.length;
+  const tenkan = highLow(len - 9, len); // Conversion Line (9)
+  const kijun = highLow(len - 26, len); // Base Line (26)
+
+  // Senkou A: (tenkan + kijun) / 2, сдвинут на 26 вперёд
+  // Для текущего облака: берём значения 26 баров назад
+  const tenkan26 = highLow(len - 9 - 26, len - 26);
+  const kijun26 = highLow(len - 26 - 26, len - 26);
+  const senkouA = (tenkan26 + kijun26) / 2;
+
+  // Senkou B: high-low(52) / 2, сдвинут на 26 вперёд
+  const senkouB = highLow(len - 52 - 26, len - 26);
+
+  const currentPrice = candles[len - 1]!.close;
+  const cloudTop = Math.max(senkouA, senkouB);
+  const cloudBottom = Math.min(senkouA, senkouB);
+
+  // TK cross: текущее положение tenkan vs kijun
+  let tkCross: 'BULLISH' | 'BEARISH' | 'NONE' = 'NONE';
+  if (len >= 2) {
+    const prevTenkan = highLow(len - 10, len - 1);
+    const prevKijun = highLow(len - 27, len - 1);
+    if (prevTenkan <= prevKijun && tenkan > kijun) tkCross = 'BULLISH';
+    else if (prevTenkan >= prevKijun && tenkan < kijun) tkCross = 'BEARISH';
+  }
+
+  return {
+    tenkan: parseFloat(tenkan.toPrecision(8)),
+    kijun: parseFloat(kijun.toPrecision(8)),
+    senkouA: parseFloat(senkouA.toPrecision(8)),
+    senkouB: parseFloat(senkouB.toPrecision(8)),
+    priceAboveCloud: currentPrice > cloudTop,
+    priceBelowCloud: currentPrice < cloudBottom,
+    cloudBullish: senkouA > senkouB,
+    tkCross,
+  };
+}
+
 export function calculateAtr(
   highs: number[],
   lows: number[],
@@ -421,18 +549,53 @@ export function buildMarketAnalysis(
   const ema200 = calculateEma(closes, 200);
   const ema50 = calculateEma(closes, 50);
   const ema20 = calculateEma(closes, 20);
+  const ema21 = calculateEma(closes, 21);
+  const ema9 = calculateEma(closes, 9);
+  const ema3 = calculateEma(closes, 3);
   const rsi14 = calculateRsi(closes, 14);
   const atr14 = calculateAtr(highs, lows, closes, 14);
   const levels = calculateSupportResistance(highs, lows);
+  const obv = calculateOBV(candles);
+  const bb = calculateBollingerBands(closes);
+  const ichimoku = calculateIchimoku(candles);
 
   const currentPrice = closes[closes.length - 1]!;
   const lastBar = candles[candles.length - 1]!;
+
+  // Rate of Change за 6 свечей: ((close - close6ago) / close6ago) * 100
+  const close6ago = closes.length > 6 ? closes[closes.length - 7]! : closes[0]!;
+  const roc6 = Math.round(((currentPrice - close6ago) / close6ago) * 10000) / 100;
+
+  // ROC2 — импульс за 2 свечи (30 мин на M15): реакция за 15-30 мин
+  const close2ago = closes.length > 2 ? closes[closes.length - 3]! : closes[0]!;
+  const roc2 = Math.round(((currentPrice - close2ago) / close2ago) * 10000) / 100;
+
+  // Impulse detector: сила текущей свечи относительно ATR
+  // Body > 1.5×ATR + volume > 1.5× среднего = сильный импульс
+  const body = lastBar.close - lastBar.open; // положительный = bullish, отрицательный = bearish
+  const absBody = Math.abs(body);
+  const avgVolume =
+    candles.length >= 20
+      ? candles.slice(-20).reduce((s, c) => s + c.volume, 0) / 20
+      : lastBar.volume;
+  const volRatio = avgVolume > 0 ? lastBar.volume / avgVolume : 1;
+  // impulse: знак = направление, величина = сила (0 если слабая свеча)
+  let impulse = 0;
+  if (atr14 > 0 && absBody > atr14 * 1.0 && volRatio > 1.2) {
+    // Нормализуем: body/ATR * volRatio, cap на 5
+    const rawImpulse = (absBody / atr14) * Math.min(volRatio, 3);
+    impulse = Math.round(Math.min(rawImpulse, 5) * 100) / 100;
+    if (body < 0) impulse = -impulse;
+  }
 
   // Динамическое округление: toPrecision(8) сохраняет точность для любых ценовых уровней
   const roundSig = (v: number): number => parseFloat(v.toPrecision(8));
   const ema200Val = ema200.length > 0 ? roundSig(ema200[ema200.length - 1]!) : null;
   const ema50Val = ema50.length > 0 ? roundSig(ema50[ema50.length - 1]!) : null;
   const ema20Val = ema20.length > 0 ? roundSig(ema20[ema20.length - 1]!) : null;
+  const ema21Val = ema21.length > 0 ? roundSig(ema21[ema21.length - 1]!) : null;
+  const ema9Val = ema9.length > 0 ? roundSig(ema9[ema9.length - 1]!) : null;
+  const ema3Val = ema3.length > 0 ? roundSig(ema3[ema3.length - 1]!) : null;
 
   return {
     pair: params.pair,
@@ -441,7 +604,22 @@ export function buildMarketAnalysis(
     source: params.source,
     currentPrice: roundSig(currentPrice),
     lastBar,
-    indicators: { ema200: ema200Val, ema50: ema50Val, ema20: ema20Val, rsi14, atr14 },
+    indicators: {
+      ema200: ema200Val,
+      ema50: ema50Val,
+      ema20: ema20Val,
+      ema21: ema21Val,
+      ema9: ema9Val,
+      ema3: ema3Val,
+      rsi14,
+      atr14,
+      roc6,
+      roc2,
+      impulse,
+      obv,
+      ...(bb !== null ? { bb } : {}),
+      ...(ichimoku !== null ? { ichimoku } : {}),
+    },
     levels,
     bias: {
       emaTrend: getEmaTrend(ema50Val, ema200Val),

@@ -14,18 +14,21 @@ import { getKlines } from './bybit-client.js';
 import config from './config.js';
 import { roundPrice } from './symbol-specs.js';
 
-function getRegimeRR(regime: string): number {
+// Динамический R:R: в сильном тренде целим дальше, в боковике — быстрее забираем.
+// strength = min(|confluenceScore| / 75, 1), итоговый RR = baseRR + (maxRR - baseRR) * strength
+function getRegimeRR(regime: string, confluenceScore: number): number {
+  const strength = Math.min(Math.abs(confluenceScore) / 75, 1);
   switch (regime as MarketRegime) {
     case 'STRONG_TREND':
-      return 2.5;
+      return 2.0 + (3.0 - 2.0) * strength; // 2.0–3.0R
     case 'WEAK_TREND':
-      return 2.0;
+      return 1.5 + (2.0 - 1.5) * strength; // 1.5–2.0R
     case 'RANGING':
-      return 1.5;
+      return 1.2 + (1.5 - 1.2) * strength; // 1.2–1.5R
     case 'VOLATILE':
-      return 1.8;
+      return 1.5 + (2.0 - 1.5) * strength; // 1.5–2.0R
     case 'CHOPPY':
-      return 1.8;
+      return 1.2 + (1.5 - 1.2) * strength; // 1.2–1.5R
   }
 }
 
@@ -284,10 +287,6 @@ function buildInputFromCandles(
   };
 }
 
-/**
- * Grid-симуляция: выставляем grid уровней, считаем сколько заполнились,
- * вычисляем средний вход и симулируем выход по SL/TP от средней.
- */
 function simulateTrade(
   pair: string,
   side: 'Buy' | 'Sell',
@@ -298,40 +297,12 @@ function simulateTrade(
   futureCandles: OHLC[],
   confluence: ConfluenceScore,
   regime: string,
-  atr: number,
 ): BacktestTrade {
-  // Grid уровни
-  const gridLevels = config.gridLevels;
-  const spacing = atr * config.gridSpacingAtr;
-  const fractions = gridLevels === 2 ? [0.6, 0.4] : gridLevels >= 3 ? [0.5, 0.3, 0.2] : [1.0];
-
-  const gridPrices: number[] = [];
-  for (let i = 0; i < Math.min(gridLevels, fractions.length); i++) {
-    const offset = spacing * i;
-    gridPrices.push(side === 'Buy' ? entry - offset : entry + offset);
-  }
-
-  // Симулируем заполнение grid + выход
-  const filled: { price: number; fraction: number }[] = [];
-  // Первый уровень (entry) считается заполненным сразу
-  filled.push({ price: gridPrices[0]!, fraction: fractions[0]! });
-
   let exitPrice = entry;
   let exitTime = entryTime;
   let result: 'WIN' | 'LOSS' | 'OPEN' = 'OPEN';
 
   for (const candle of futureCandles) {
-    // Проверяем заполнение оставшихся grid-уровней
-    for (let i = filled.length; i < gridPrices.length; i++) {
-      const gp = gridPrices[i]!;
-      if (side === 'Buy' && candle.low <= gp) {
-        filled.push({ price: gp, fraction: fractions[i]! });
-      } else if (side === 'Sell' && candle.high >= gp) {
-        filled.push({ price: gp, fraction: fractions[i]! });
-      }
-    }
-
-    // SL остаётся фиксированный (от первого уровня)
     if (side === 'Buy') {
       if (candle.low <= sl) {
         exitPrice = sl;
@@ -361,29 +332,22 @@ function simulateTrade(
     }
   }
 
-  // Если сделка не закрылась, закрываем по последней цене
   if (result === 'OPEN' && futureCandles.length > 0) {
     const lastCandle = futureCandles[futureCandles.length - 1]!;
     exitPrice = lastCandle.close;
     exitTime = lastCandle.time;
   }
 
-  // P&L считаем от среднего входа с учётом grid multiplier
-  const totalFrac = filled.reduce((s, f) => s + f.fraction, 0);
-  const avgEntry = filled.reduce((s, f) => s + f.price * f.fraction, 0) / totalFrac;
-  const volumeMultiplier = totalFrac * config.gridVolumeMultiplier;
+  const rawPnl = side === 'Buy' ? exitPrice - entry : entry - exitPrice;
+  const pnlPercent = (rawPnl / entry) * 100;
 
-  const rawPnl = side === 'Buy' ? exitPrice - avgEntry : avgEntry - exitPrice;
-  const pnlPercent = (rawPnl / avgEntry) * 100 * volumeMultiplier;
-
-  // R-множитель: сколько R заработали/потеряли (1R = расстояние до SL)
-  const riskPerUnit = Math.abs(avgEntry - sl);
+  const riskPerUnit = Math.abs(entry - sl);
   const rMultiple = riskPerUnit > 0 ? rawPnl / riskPerUnit : 0;
 
   return {
     pair,
     side,
-    entryPrice: roundPrice(avgEntry, pair),
+    entryPrice: roundPrice(entry, pair),
     sl,
     tp,
     entryTime,
@@ -504,8 +468,8 @@ async function backtestPair(
     const entry = roundPrice(price, pair);
     const sl = roundPrice(side === 'Buy' ? entry - slDistance : entry + slDistance, pair);
 
-    // Динамический R:R по режиму
-    const rr = getRegimeRR(regime);
+    // Динамический R:R по режиму и силе confluence score
+    const rr = getRegimeRR(regime, confluence.total);
     const tp = roundPrice(side === 'Buy' ? entry + slDistance * rr : entry - slDistance * rr, pair);
 
     if (collectSignals) {
@@ -536,7 +500,6 @@ async function backtestPair(
       futureCandles,
       confluence,
       regime,
-      atr,
     );
 
     trades.push(trade);

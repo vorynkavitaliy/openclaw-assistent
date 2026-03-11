@@ -174,17 +174,17 @@ function countRecentCrosses(
  * Возвращает минимальный confluence score для входа в зависимости от режима.
  */
 export function getRegimeThreshold(regime: MarketRegime): number {
-  // Сниженные пороги: больше сигналов проходят к Claude Code для анализа
+  // Умеренные пороги: пропускаем кандидатов к Claude, но не мусор
   switch (regime) {
     case 'STRONG_TREND':
-      return 15;
+      return 12;
     case 'WEAK_TREND':
-      return 18;
+      return 15;
     case 'RANGING':
-      return 20;
+      return 17;
     case 'VOLATILE':
-      return 25;
+      return 20;
     case 'CHOPPY':
-      return 35; // Claude сам решит торговать ли в чоппи
+      return 28;
   }
 }

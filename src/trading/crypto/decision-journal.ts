@@ -49,7 +49,6 @@ export interface Decision {
     rr?: number;
     orderId?: string;
     orderIds?: string[];
-    gridLevels?: number;
   };
   outcome?: {
     pnl?: number;

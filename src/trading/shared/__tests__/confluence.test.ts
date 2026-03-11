@@ -7,6 +7,7 @@ import {
 import type { MarketAnalysis, MarketInfo, OHLC, OrderbookData, VolumeProfile } from '../types.js';
 
 function makeEntryTF(bias: 'BULLISH' | 'BEARISH' | 'UNKNOWN' = 'BULLISH'): MarketAnalysis {
+  const isBearish = bias === 'BEARISH';
   return {
     pair: 'BTCUSDT',
     timeframe: '15',
@@ -21,9 +22,21 @@ function makeEntryTF(bias: 'BULLISH' | 'BEARISH' | 'UNKNOWN' = 'BULLISH'): Marke
       close: 50000,
       volume: 100,
     },
-    indicators: { ema200: 48000, ema50: 49500, ema20: 49800, rsi14: 55, atr14: 200 },
+    indicators: {
+      ema200: isBearish ? 52000 : 48000,
+      ema50: isBearish ? 50500 : 49500,
+      ema20: isBearish ? 50200 : 49800,
+      ema21: isBearish ? 50250 : 49750,
+      ema9: isBearish ? 50100 : 49900, // Bearish: ema9 < ema21; Bullish: ema9 > ema21
+      ema3: isBearish ? 50050 : 49950,
+      rsi14: isBearish ? 45 : 55,
+      atr14: 200,
+      roc6: isBearish ? -0.5 : 0.5,
+      roc2: isBearish ? -0.2 : 0.2,
+      impulse: 0,
+    },
     levels: { support: 49500, resistance: 50500 },
-    bias: { emaTrend: bias, priceVsEma200: 'ABOVE', rsiZone: 'NEUTRAL' },
+    bias: { emaTrend: bias, priceVsEma200: isBearish ? 'BELOW' : 'ABOVE', rsiZone: 'NEUTRAL' },
     timestamp: new Date().toISOString(),
   };
 }
@@ -148,18 +161,19 @@ describe('calculateConfluenceScore', () => {
     expect(typeof result.regime).toBe('number');
   });
 
-  it('компоненты в диапазоне -10..+10', () => {
+  it('компоненты в допустимых диапазонах', () => {
     const input = makeBullishInput();
     const result = calculateConfluenceScore(input);
-    const components = [
-      result.trend,
+    // trend расширен до ±20, остальные ±10
+    expect(result.trend).toBeGreaterThanOrEqual(-20);
+    expect(result.trend).toBeLessThanOrEqual(20);
+    for (const c of [
       result.momentum,
       result.volume,
       result.structure,
       result.orderflow,
       result.regime,
-    ];
-    for (const c of components) {
+    ]) {
       expect(c).toBeGreaterThanOrEqual(-10);
       expect(c).toBeLessThanOrEqual(10);
     }
@@ -189,6 +203,55 @@ describe('calculateConfluenceScore', () => {
   });
 });
 
+describe('intraday bias correction', () => {
+  it('сильный bullish 24h (+5%) гасит bearish EMA тренд', () => {
+    const input = makeBullishInput();
+    input.trendTF = makeEntryTF('BEARISH');
+    input.zonesTF = makeEntryTF('BEARISH');
+    input.entryTF = makeEntryTF('BEARISH');
+    input.market = { ...makeMarket(), price24hPct: 5.0 };
+
+    const result = calculateConfluenceScore(input);
+    // С intraday bias bearish trend ослаблен → score ближе к нулю
+    expect(result.trend).toBeGreaterThan(-7); // Без коррекции было бы -10
+    expect(result.details.some((d) => d.includes('IntradayBias'))).toBe(true);
+  });
+
+  it('умеренный 24h (+3%) ослабляет bearish EMA', () => {
+    const input = makeBullishInput();
+    input.trendTF = makeEntryTF('BEARISH');
+    input.zonesTF = makeEntryTF('BEARISH');
+    input.entryTF = makeEntryTF('BEARISH');
+    input.market = { ...makeMarket(), price24hPct: 3.0 };
+
+    const result = calculateConfluenceScore(input);
+    // Bearish full alignment = -13 (EMA -10, fast EMA -3), 60% dampening: -13 * 0.4 = -5.2 → -5
+    expect(result.trend).toBe(-5);
+  });
+
+  it('малое 24h движение (<2%) не влияет на тренд', () => {
+    const input = makeBullishInput();
+    input.trendTF = makeEntryTF('BEARISH');
+    input.zonesTF = makeEntryTF('BEARISH');
+    input.entryTF = makeEntryTF('BEARISH');
+    input.market = { ...makeMarket(), price24hPct: 1.5 };
+
+    const result = calculateConfluenceScore(input);
+    expect(result.trend).toBe(-13); // Полный bearish alignment (EMA -10 + fast EMA -3) без коррекции
+  });
+
+  it('совпадающее направление (bearish EMA + bearish 24h) не корректируется', () => {
+    const input = makeBullishInput();
+    input.trendTF = makeEntryTF('BEARISH');
+    input.zonesTF = makeEntryTF('BEARISH');
+    input.entryTF = makeEntryTF('BEARISH');
+    input.market = { ...makeMarket(), price24hPct: -5.0 };
+
+    const result = calculateConfluenceScore(input);
+    expect(result.trend).toBe(-13); // Без коррекции — EMA и 24h оба bearish
+  });
+});
+
 describe('DEFAULT_CONFLUENCE_CONFIG', () => {
   it('веса суммируются до 1.0', () => {
     const cfg = DEFAULT_CONFLUENCE_CONFIG;
@@ -198,7 +261,8 @@ describe('DEFAULT_CONFLUENCE_CONFIG', () => {
       cfg.volumeWeight +
       cfg.structureWeight +
       cfg.orderflowWeight +
-      cfg.regimeWeight;
+      cfg.regimeWeight +
+      cfg.candlePatternsWeight;
     expect(sum).toBeCloseTo(1.0, 5);
   });
 

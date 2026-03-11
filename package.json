@@ -33,6 +33,7 @@
     "trade:crypto:sl-guard": "npx tsx src/trading/crypto/sl-guard.ts",
     "trade:crypto:backtest": "tsx src/trading/crypto/backtester.ts",
     "market:digest": "tsx src/market/digest.ts",
+    "market:news-analysis": "tsx src/market/news-analyst.ts",
     "bot": "node dist/bot.js",
     "bot:dev": "tsx src/bot.ts"
   },
@@ -49,7 +50,8 @@
   "homepage": "https://github.com/vorynkavitaliy/openclaw-assistent#readme",
   "dependencies": {
     "bybit-api": "^4.6.0",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "technicalindicators": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

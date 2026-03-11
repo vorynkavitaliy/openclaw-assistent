@@ -197,11 +197,19 @@ function formatTelegramReport(data: ReportData): string {
     const ddPct = (ddUsed / config.accountBalance) * 100;
     lines.push('');
     lines.push(`🏢 <b>HyroTrader 2-Step</b>`);
+    const targetDollars = ((config.accountBalance * target) / 100).toFixed(0);
+    if (pnlFromStart >= 0) {
+      lines.push(
+        `📈 Прибыль: <code>+$${pnlFromStart.toFixed(0)}</code> из $${targetDollars} нужных (+${pnlPct.toFixed(1)}% / ${target}%)`,
+      );
+    } else {
+      lines.push(
+        `📉 Убыток: <code>-$${Math.abs(pnlFromStart).toFixed(0)}</code> (${pnlPct.toFixed(1)}%)`,
+      );
+    }
+    const ddRemaining = ddLimit - ddUsed;
     lines.push(
-      `Прогресс: <code>${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%</code> / ${target}%`,
-    );
-    lines.push(
-      `DD: <code>${ddPct.toFixed(2)}%</code> / ${config.maxTotalDrawdownPct}% ($${ddUsed.toFixed(0)}/$${ddLimit.toFixed(0)})`,
+      `🛡 Запас до слива: <code>$${ddRemaining.toFixed(0)}</code> из $${ddLimit.toFixed(0)} (потеряно ${ddPct.toFixed(1)}%, лимит ${config.maxTotalDrawdownPct}%)`,
     );
   }
 

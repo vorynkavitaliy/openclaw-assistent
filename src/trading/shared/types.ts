@@ -30,8 +30,18 @@ export interface Indicators {
   ema200: number | null;
   ema50: number | null;
   ema20: number | null;
+  ema21: number | null;
+  ema9: number | null;
+  ema3: number | null;
   rsi14: number;
   atr14: number;
+  roc6: number; // Rate of Change за 6 свечей (%)
+  roc2: number; // Rate of Change за 2 свечи (30 мин на M15)
+  impulse: number; // Сила импульса последней свечи (0 = нет, >0 bullish, <0 bearish)
+  obv?: number;
+  bb?: BollingerBands;
+  ichimoku?: IchimokuCloud;
+  candlePatterns?: CandlestickPattern[];
 }
 
 export interface Levels {
@@ -161,6 +171,7 @@ export interface ConfluenceScore {
   signal: ConfluenceSignal;
   confidence: number; // 0..100
   details: string[];
+  candlePatterns?: number; // -10..+10
 }
 
 export interface VolumeProfile {
@@ -199,6 +210,32 @@ export interface StochRSIResult {
   d: number;
 }
 
+export interface BollingerBands {
+  upper: number;
+  lower: number;
+  middle: number; // SMA
+  width: number; // (upper - lower) / middle * 100
+  percentB: number; // (close - lower) / (upper - lower) * 100
+  squeeze: boolean; // width < 2%
+}
+
+export interface IchimokuCloud {
+  tenkan: number; // Conversion Line (9)
+  kijun: number; // Base Line (26)
+  senkouA: number; // Leading Span A
+  senkouB: number; // Leading Span B
+  priceAboveCloud: boolean;
+  priceBelowCloud: boolean;
+  cloudBullish: boolean; // senkouA > senkouB
+  tkCross: 'BULLISH' | 'BEARISH' | 'NONE'; // tenkan vs kijun
+}
+
+export interface CandlestickPattern {
+  name: string;
+  direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  strength: 1 | 2 | 3; // 1=weak, 2=moderate, 3=strong
+}
+
 export interface ConfluenceConfig {
   trendWeight: number;
   momentumWeight: number;
@@ -206,6 +243,7 @@ export interface ConfluenceConfig {
   structureWeight: number;
   orderflowWeight: number;
   regimeWeight: number;
+  candlePatternsWeight: number;
   entryThreshold: number; // min score для входа
   strongThreshold: number; // min score для auto-trade
 }
@@ -280,9 +318,7 @@ export interface TradingConfig extends BaseTradingConfig {
   minConfidence: number; // Minimum confidence % to enter (default 50)
   backtestMinConfidence: number; // Minimum confidence % for backtester (lower due to missing live data)
   pairCooldownMin: number; // Cooldown between trades on same pair (minutes)
-  gridLevels: number; // Grid entry: количество лимитных ордеров (1 = обычный, 2-3 = grid)
-  gridSpacingAtr: number; // Расстояние между grid-уровнями в долях ATR (0.3 = 30% ATR)
-  gridVolumeMultiplier: number; // Множитель общего объёма при grid входе (1.5 = +50%)
+  maxDailyTrades: number; // Maximum trades per day (prevents overtrading)
   // Prop firm settings
   propFirm: boolean; // Включён ли режим prop firm
   accountBalance: number; // Начальный баланс аккаунта (для расчёта лимитов)

@@ -40,7 +40,7 @@ interface BybitApiResponse {
 let _client: RestClientV5 | null = null;
 
 // Rate limiter: Bybit лимит 20 req/sec, оставляем запас
-const limiter: RateLimiter = createRateLimiter({ maxPerSecond: 18, maxConcurrent: 6 });
+const limiter: RateLimiter = createRateLimiter({ maxPerSecond: 19, maxConcurrent: 18 });
 
 // Circuit breaker: OPEN после 3 подряд 5xx/network ошибок, сброс через 5 мин
 const circuitBreaker: CircuitBreaker = createCircuitBreaker({

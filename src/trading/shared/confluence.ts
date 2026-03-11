@@ -1,11 +1,15 @@
 import {
+  calculateBollingerBands,
   calculateMACD,
+  calculateOBV,
   calculateRsi,
   calculateRsiSeries,
   calculateStochRSI,
 } from './indicators.js';
 import { analyzeOrderflow } from './orderflow.js';
+import { detectCandlestickPatterns, scoreCandlestickPatterns } from './candlestick-patterns.js';
 import type {
+  CandlestickPattern,
   ConfluenceConfig,
   ConfluenceScore,
   ConfluenceSignal,
@@ -20,12 +24,13 @@ import type {
 } from './types.js';
 
 export const DEFAULT_CONFLUENCE_CONFIG: ConfluenceConfig = {
-  trendWeight: 0.25,
-  momentumWeight: 0.15,
-  volumeWeight: 0.15,
-  structureWeight: 0.15,
-  orderflowWeight: 0.15,
-  regimeWeight: 0.15,
+  trendWeight: 0.22,
+  momentumWeight: 0.13,
+  volumeWeight: 0.13,
+  structureWeight: 0.13,
+  orderflowWeight: 0.13,
+  regimeWeight: 0.13,
+  candlePatternsWeight: 0.13,
   entryThreshold: 60,
   strongThreshold: 75,
 };
@@ -47,20 +52,34 @@ export interface ConfluenceInput {
 
 /**
  * Confluence Scoring Engine.
- * Оценивает качество торгового сигнала по 6 модулям: -10..+10 каждый.
+ * Оценивает качество торгового сигнала по 7 модулям: -10..+10 каждый.
  * Итоговый score: -100..+100.
+ *
+ * Модули: Trend(22%) + Momentum(13%) + Volume(13%) + Structure(13%)
+ *       + Orderflow(13%) + Regime(13%) + CandlePatterns(13%) = 100%
  */
 export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScore {
   const cfg = input.config ?? DEFAULT_CONFLUENCE_CONFIG;
   const details: string[] = [];
 
-  const trend = scoreTrend(input.trendTF, input.zonesTF, input.entryTF, details);
+  const rawTrend = scoreTrend(input.trendTF, input.zonesTF, input.entryTF, details);
+  const trend = applyIntradayBias(rawTrend, input.market.price24hPct, details);
   // Передаём направление тренда чтобы RSI-зоны оценивались симметрично
   const trendDirection: 'long' | 'short' | 'neutral' =
     trend > 0 ? 'long' : trend < 0 ? 'short' : 'neutral';
-  const momentum = scoreMomentum(input.entryCandles, trendDirection, details);
-  const volume = scoreVolume(input.volumeProfile, trendDirection, details);
-  const structure = scoreStructure(
+  const momentum = scoreMomentumEnhanced(
+    input.entryCandles,
+    trendDirection,
+    input.entryTF,
+    details,
+  );
+  const volume = scoreVolumeEnhanced(
+    input.volumeProfile,
+    input.entryCandles,
+    trendDirection,
+    details,
+  );
+  const structure = scoreStructureEnhanced(
     input.entryTF,
     input.volumeProfile,
     input.market,
@@ -72,9 +91,13 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     input.oiHistory,
     input.fundingHistory,
     input.market.lastPrice,
+    trendDirection,
     details,
   );
   const regime = scoreRegime(input.regime, details);
+
+  // Module 7: Candlestick Patterns
+  const candlePatterns = scoreCandlePatterns(input.entryCandles, trendDirection, details);
 
   const raw =
     trend * cfg.trendWeight +
@@ -82,7 +105,8 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     volume * cfg.volumeWeight +
     structure * cfg.structureWeight +
     orderflow * cfg.orderflowWeight +
-    regime * cfg.regimeWeight;
+    regime * cfg.regimeWeight +
+    candlePatterns * cfg.candlePatternsWeight;
 
   // Conflict filter: тренд и моментум прямо противоположны — уменьшаем abs(score)
   // Penalty всегда двигает score к нулю (снижает уверенность в направлении)
@@ -100,13 +124,9 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
   const clamped = Math.max(-100, Math.min(100, total));
 
   const signal = getSignal(clamped);
-  // Confidence: абсолютный score нормализован к реалистичному максимуму (75)
-  // Score 75 → 100%, score 37 → 50%, score 22 → 29%
-  const REALISTIC_MAX_SCORE = 75;
-  const confidence = Math.max(
-    0,
-    Math.min(100, Math.round((Math.abs(clamped) / REALISTIC_MAX_SCORE) * 100)),
-  );
+  // Adaptive confidence ceiling: в сильном тренде легче набрать confidence
+  const ceiling = getConfidenceCeiling(input.regime);
+  const confidence = Math.max(0, Math.min(100, Math.round((Math.abs(clamped) / ceiling) * 100)));
 
   return {
     total: clamped,
@@ -116,10 +136,86 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     structure,
     orderflow,
     regime,
+    candlePatterns,
     signal,
     confidence,
     details,
   };
+}
+
+/**
+ * Adaptive confidence ceiling по режиму рынка.
+ * В сильном тренде набрать высокий score проще → ceiling ниже → confidence выше.
+ * В choppy набрать score сложно → ceiling выше → confidence консервативнее.
+ */
+function getConfidenceCeiling(regime: MarketRegime): number {
+  switch (regime) {
+    case 'STRONG_TREND':
+      return 55; // Score 55 → 100% confidence
+    case 'WEAK_TREND':
+      return 65;
+    case 'VOLATILE':
+      return 60; // Можно торговать, но осторожнее
+    case 'RANGING':
+      return 70;
+    case 'CHOPPY':
+      return 80; // Очень консервативный
+  }
+}
+
+// ─── Intraday Bias Correction ────────────────────────────────────
+
+/**
+ * Корректирует EMA-based trend score на основе 24h price change.
+ * Решает проблему: EMA50/200 реагируют на дневные/недельные движения,
+ * но рынок может развернуться внутри дня (+5% rally при bearish EMA).
+ *
+ * Логика:
+ * - price24h и trend в одну сторону → без изменений (EMA подтверждён)
+ * - price24h противоречит trend при |change| >= 2% → гасим стейл сигнал
+ * - |change| >= 4% → сильная коррекция, может перевернуть тренд
+ */
+function applyIntradayBias(trendScore: number, price24hPct: number, details: string[]): number {
+  const absPct = Math.abs(price24hPct);
+
+  // Незначительное движение — не корректируем
+  if (absPct < 2) return trendScore;
+
+  // Тренд и 24h движение совпадают — без коррекции
+  if ((trendScore > 0 && price24hPct > 0) || (trendScore < 0 && price24hPct < 0)) {
+    return trendScore;
+  }
+
+  // Тренд нейтральный (0) — дадим intraday направление
+  if (trendScore === 0) {
+    const bias = absPct >= 4 ? 4 : 2;
+    const adjusted = price24hPct > 0 ? bias : -bias;
+    details.push(
+      `IntradayBias: нет EMA-тренда, 24h ${price24hPct > 0 ? '+' : ''}${price24hPct.toFixed(1)}% → bias ${adjusted > 0 ? '+' : ''}${adjusted}`,
+    );
+    return adjusted;
+  }
+
+  // Конфликт: EMA и 24h движение в разные стороны
+  // Мягкая коррекция (2-4%): гасим trend на 50-70%
+  // Сильная коррекция (4%+): гасим полностью + небольшой bias в сторону 24h
+  let adjusted: number;
+  if (absPct >= 4) {
+    // Сильное внутридневное движение — EMA стейл, перевешиваем
+    adjusted = price24hPct > 0 ? Math.max(trendScore + 6, 2) : Math.min(trendScore - 6, -2);
+    details.push(
+      `IntradayBias: сильный ${price24hPct > 0 ? '+' : ''}${price24hPct.toFixed(1)}% vs EMA(${trendScore}) → скорректирован до ${adjusted}`,
+    );
+  } else {
+    // Умеренное движение (2-4%) — гасим EMA сигнал на ~60%
+    const dampFactor = 0.4;
+    adjusted = Math.round(trendScore * dampFactor);
+    details.push(
+      `IntradayBias: ${price24hPct > 0 ? '+' : ''}${price24hPct.toFixed(1)}% против EMA(${trendScore}) → ослаблен до ${adjusted}`,
+    );
+  }
+
+  return Math.max(-10, Math.min(10, adjusted));
 }
 
 // ─── Module 1: Trend Score (weight 25%) ──────────────────────────
@@ -163,14 +259,59 @@ function scoreTrend(
     details.push('Trend: нет ясного направления');
   }
 
-  return score;
+  // Fast EMA (9/21) — ранний сигнал разворота (до того как EMA50/200 выровняются)
+  const ema9 = entryTF.indicators.ema9;
+  const ema21 = entryTF.indicators.ema21;
+  if (ema9 != null && ema21 != null && ema21 !== 0) {
+    if (ema9 > ema21) {
+      score += 3;
+      details.push(
+        `FastEMA: bullish (EMA9=${ema9.toPrecision(5)} > EMA21=${ema21.toPrecision(5)})`,
+      );
+    } else if (ema9 < ema21) {
+      score -= 3;
+      details.push(
+        `FastEMA: bearish (EMA9=${ema9.toPrecision(5)} < EMA21=${ema21.toPrecision(5)})`,
+      );
+    }
+  }
+
+  // ROC2 — быстрый импульс за 30 мин (2 M15 свечи) — самая быстрая реакция
+  const roc2 = entryTF.indicators.roc2;
+  if (roc2 > 0.5) {
+    score += 3;
+    details.push(`ROC2: bullish импульс +${roc2.toFixed(2)}% за 30мин`);
+  } else if (roc2 < -0.5) {
+    score -= 3;
+    details.push(`ROC2: bearish импульс ${roc2.toFixed(2)}% за 30мин`);
+  }
+
+  // Impulse detector — текущая свеча с большим телом + объём
+  const imp = entryTF.indicators.impulse;
+  if (imp > 1.5) {
+    score += 4;
+    details.push(`IMPULSE: сильный bullish (${imp.toFixed(1)}) — большое тело + объём`);
+  } else if (imp < -1.5) {
+    score -= 4;
+    details.push(`IMPULSE: сильный bearish (${imp.toFixed(1)}) — большое тело + объём`);
+  } else if (imp > 0.5) {
+    score += 2;
+    details.push(`IMPULSE: умеренный bullish (${imp.toFixed(1)})`);
+  } else if (imp < -0.5) {
+    score -= 2;
+    details.push(`IMPULSE: умеренный bearish (${imp.toFixed(1)})`);
+  }
+
+  // Clamp trend score to -20..+20 (расширен для fast EMA + ROC2 + impulse)
+  return Math.max(-20, Math.min(20, score));
 }
 
-// ─── Module 2: Momentum Score (weight 15%) ───────────────────────
+// ─── Module 2: Momentum Score (weight 13%) — enhanced with BB squeeze ───
 
-function scoreMomentum(
+function scoreMomentumEnhanced(
   entryCandles: OHLC[],
   direction: 'long' | 'short' | 'neutral',
+  entryTF: MarketAnalysis,
   details: string[],
 ): number {
   if (entryCandles.length < 30) {
@@ -249,6 +390,25 @@ function scoreMomentum(
     details.push('Momentum: bearish RSI divergence (цена ↑, RSI ↓)');
   }
 
+  // BB Squeeze: Bollinger Bands сжатие → ожидаем сильное движение
+  const bb = entryTF.indicators.bb ?? calculateBollingerBands(closes);
+  if (bb) {
+    if (bb.squeeze) {
+      // Squeeze → слабый bias в сторону тренда (ожидаем breakout)
+      const squeezeBias = direction === 'long' ? 2 : direction === 'short' ? -2 : 0;
+      score += squeezeBias;
+      details.push(`Momentum: BB squeeze (width=${bb.width.toFixed(1)}%) → ожидаем breakout`);
+    }
+    // %B показывает где цена внутри полос (0=lower, 100=upper)
+    if (bb.percentB > 90 && direction === 'long') {
+      score -= 2; // Цена у верхней полосы — опасно для long
+      details.push(`Momentum: BB %B=${bb.percentB.toFixed(0)} (у верхней полосы)`);
+    } else if (bb.percentB < 10 && direction === 'short') {
+      score += 2; // Цена у нижней полосы — опасно для short
+      details.push(`Momentum: BB %B=${bb.percentB.toFixed(0)} (у нижней полосы)`);
+    }
+  }
+
   return Math.max(-10, Math.min(10, score));
 }
 
@@ -291,10 +451,11 @@ function detectRsiDivergence(
   return 'NONE';
 }
 
-// ─── Module 3: Volume Score (weight 15%) ─────────────────────────
+// ─── Module 3: Volume Score (weight 13%) — enhanced with OBV ────
 
-function scoreVolume(
+function scoreVolumeEnhanced(
   volumeProfile: VolumeProfile | null,
+  entryCandles: OHLC[],
   direction: 'long' | 'short' | 'neutral',
   details: string[],
 ): number {
@@ -324,13 +485,11 @@ function scoreVolume(
   }
 
   // Volume delta — оценка по направлению тренда
-  // Buy pressure (delta > 0) подтверждает LONG, sell pressure (delta < 0) подтверждает SHORT
   const avgVol = volumeProfile.avgCandleVolumeUsd;
   const deltaPct = avgVol > 0 ? (Math.abs(delta) / avgVol) * 100 : 0;
   const deltaPoints = Math.min(5, Math.round(deltaPct / 5));
 
   if (direction === 'long') {
-    // Для LONG: buy pressure = подтверждение (+), sell pressure = против (-)
     score += delta > 0 ? deltaPoints : -deltaPoints;
     if (deltaPct > 30) {
       details.push(
@@ -338,8 +497,6 @@ function scoreVolume(
       );
     }
   } else if (direction === 'short') {
-    // Для SHORT: sell pressure = подтверждение (+), buy pressure = против (-)
-    // Score идёт в отрицательную сторону для SHORT (отрицательный = bearish)
     score -= delta < 0 ? deltaPoints : -deltaPoints;
     if (deltaPct > 30) {
       details.push(
@@ -347,7 +504,6 @@ function scoreVolume(
       );
     }
   } else {
-    // Neutral: старая логика
     if (delta > 0) {
       score += deltaPoints;
     } else if (delta < 0) {
@@ -355,12 +511,35 @@ function scoreVolume(
     }
   }
 
+  // OBV: подтверждение тренда объёмом
+  // Растущий OBV при long → подтверждение, падающий OBV → предупреждение
+  if (entryCandles.length >= 20) {
+    const obv = calculateOBV(entryCandles);
+    if (direction === 'long') {
+      if (obv > 0.5) {
+        score += 2;
+        details.push(`Volume: OBV растёт (+${obv.toFixed(1)}%) — подтверждает long`);
+      } else if (obv < -0.5) {
+        score -= 2;
+        details.push(`Volume: OBV падает (${obv.toFixed(1)}%) — против long`);
+      }
+    } else if (direction === 'short') {
+      if (obv < -0.5) {
+        score -= 2; // Negative = bearish подтверждение
+        details.push(`Volume: OBV падает (${obv.toFixed(1)}%) — подтверждает short`);
+      } else if (obv > 0.5) {
+        score += 2;
+        details.push(`Volume: OBV растёт (+${obv.toFixed(1)}%) — против short`);
+      }
+    }
+  }
+
   return Math.max(-10, Math.min(10, score));
 }
 
-// ─── Module 4: Structure Score (weight 15%) ──────────────────────
+// ─── Module 4: Structure Score (weight 13%) — enhanced with Ichimoku ─
 
-function scoreStructure(
+function scoreStructureEnhanced(
   entryTF: MarketAnalysis,
   volumeProfile: VolumeProfile | null,
   market: MarketInfo,
@@ -378,9 +557,8 @@ function scoreStructure(
   const distToResistance = ((resistance - price) / price) * 100;
 
   if (direction === 'short') {
-    // SHORT: у resistance хорошо (точка входа), у support плохо (цель далеко)
     if (distToResistance < 1.0) {
-      score -= 5; // bearish = negative score
+      score -= 5;
       details.push(
         `Structure: цена у resistance (${distToResistance.toFixed(1)}%) — хорошо для short`,
       );
@@ -388,13 +566,12 @@ function scoreStructure(
       score -= 3;
     }
     if (distToSupport < 1.0) {
-      score += 5; // near support = плохо для short (цель рядом)
+      score += 5;
       details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%) — плохо для short`);
     } else if (distToSupport < 2.0) {
       score += 3;
     }
   } else {
-    // LONG / NEUTRAL: у support хорошо, у resistance плохо
     if (distToSupport < 1.0) {
       score += 5;
       details.push(`Structure: цена у support (${distToSupport.toFixed(1)}%)`);
@@ -409,7 +586,7 @@ function scoreStructure(
     }
   }
 
-  // VWAP confluence (только если есть volume profile)
+  // VWAP confluence
   if (volumeProfile) {
     const distToVwap = (Math.abs(price - volumeProfile.vwap) / price) * 100;
     if (distToVwap < 0.3) {
@@ -417,7 +594,6 @@ function scoreStructure(
       details.push('Structure: цена у VWAP');
     }
 
-    // High volume nodes nearby
     for (const node of volumeProfile.highVolumeNodes) {
       const dist = (Math.abs(price - node) / price) * 100;
       if (dist < 0.5) {
@@ -428,7 +604,38 @@ function scoreStructure(
     }
   }
 
-  return Math.max(-10, Math.min(10, score));
+  // Ichimoku Cloud: мощный trend/structure фильтр
+  const ichimoku = entryTF.indicators.ichimoku;
+  if (ichimoku) {
+    if (direction === 'long') {
+      if (ichimoku.priceAboveCloud) {
+        score += 3;
+        details.push('Structure: Ichimoku — цена над облаком (bullish)');
+      } else if (ichimoku.priceBelowCloud) {
+        score -= 3;
+        details.push('Structure: Ichimoku — цена под облаком (bearish for long)');
+      }
+    } else if (direction === 'short') {
+      if (ichimoku.priceBelowCloud) {
+        score -= 3;
+        details.push('Structure: Ichimoku — цена под облаком (bearish)');
+      } else if (ichimoku.priceAboveCloud) {
+        score += 3;
+        details.push('Structure: Ichimoku — цена над облаком (bullish for short = risky)');
+      }
+    }
+    // TK Cross: быстрый сигнал подтверждения
+    if (ichimoku.tkCross === 'BULLISH' && direction === 'long') {
+      score += 2;
+      details.push('Structure: Ichimoku TK bullish cross');
+    } else if (ichimoku.tkCross === 'BEARISH' && direction === 'short') {
+      score -= 2;
+      details.push('Structure: Ichimoku TK bearish cross');
+    }
+  }
+
+  // Расширяем clamp: S/R(±5) + VWAP(+2) + node(+2) + Ichimoku(±5) = потенциал ±14
+  return Math.max(-15, Math.min(15, score));
 }
 
 // ─── Module 5: Orderflow Score (weight 15%) ──────────────────────
@@ -438,6 +645,7 @@ function scoreOrderflow(
   oiHistory: OIDataPoint[],
   fundingHistory: FundingDataPoint[],
   currentPrice: number,
+  trendBias: 'long' | 'short' | 'neutral',
   details: string[],
 ): number {
   const analysis = analyzeOrderflow(orderbook, oiHistory, fundingHistory, currentPrice);
@@ -452,12 +660,29 @@ function scoreOrderflow(
     details.push(`Orderflow: ask-heavy imbalance (${analysis.obImbalance})`);
   }
 
-  // OI trend
+  // OI trend — direction-aware:
+  // Rising OI подтверждает текущий тренд (новые позиции в сторону движения)
+  // Falling OI = позиции закрываются, тренд слабеет (→ 0)
   if (analysis.oiTrend === 'RISING') {
-    score += 3;
-    details.push(`Orderflow: OI rising (${analysis.oiDelta24h}%/24h)`);
+    if (trendBias === 'long') {
+      score += 3; // Новые лонги подтверждают bullish тренд
+      details.push(`Orderflow: OI rising (${analysis.oiDelta24h}%/24h) — confirms long`);
+    } else if (trendBias === 'short') {
+      score -= 3; // Новые шорты подтверждают bearish тренд
+      details.push(`Orderflow: OI rising (${analysis.oiDelta24h}%/24h) — confirms short`);
+    } else {
+      score += 1; // Нейтральный тренд: слабый позитив (активность растёт)
+      details.push(`Orderflow: OI rising (${analysis.oiDelta24h}%/24h)`);
+    }
   } else if (analysis.oiTrend === 'FALLING') {
-    score -= 2;
+    // Позиции закрываются — тренд теряет силу независимо от направления
+    // Небольшой штраф к нулю (для long = -1, для short = +1, для neutral = 0)
+    if (trendBias === 'long') {
+      score -= 1;
+    } else if (trendBias === 'short') {
+      score += 1;
+    }
+    details.push(`Orderflow: OI falling (${analysis.oiDelta24h}%/24h) — тренд слабеет`);
   }
 
   // Funding (contrarian: negative funding + bullish = good for longs)
@@ -493,6 +718,23 @@ function scoreRegime(regime: MarketRegime, details: string[]): number {
       details.push('Regime: CHOPPY (avoid trading)');
       return -10;
   }
+}
+
+// ─── Module 7: Candlestick Patterns Score (weight 13%) ──────────
+
+function scoreCandlePatterns(
+  entryCandles: OHLC[],
+  direction: 'long' | 'short' | 'neutral',
+  details: string[],
+): number {
+  if (entryCandles.length < 5) return 0;
+
+  const patterns: CandlestickPattern[] = detectCandlestickPatterns(entryCandles);
+  if (patterns.length === 0) return 0;
+
+  const result = scoreCandlestickPatterns(patterns, direction);
+  details.push(...result.details);
+  return result.score;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

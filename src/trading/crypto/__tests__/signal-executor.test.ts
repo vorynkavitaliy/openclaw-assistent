@@ -15,6 +15,8 @@ vi.mock('../state.js', () => ({
   get: vi.fn(),
   calcPositionSize: vi.fn(),
   logEvent: vi.fn(),
+  recordPairTrade: vi.fn(),
+  isPairCooldownActive: vi.fn(() => false),
 }));
 
 vi.mock('../decision-journal.js', () => ({
@@ -257,7 +259,7 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
     const signals = [makeSignal({ pair: 'BTCUSDT' })];
     const results = await executeSignals(signals, 'cycle-1', false);
 
-    // BTCUSDT не в экосистеме — дойдёт до submitOrder (grid = 3 ордера)
+    // BTCUSDT не в экосистеме — дойдёт до submitOrder (1 Market ордер)
     expect(mockSubmitOrder).toHaveBeenCalled();
     expect(results[0]?.action).toBe('EXECUTED');
   });
@@ -265,8 +267,8 @@ describe('executeSignals — SKIP ecosystem occupied', () => {
 
 describe('executeSignals — SKIP risk too high', () => {
   it('пропускает сигнал если риск превышает maxRiskPerTrade', async () => {
-    // qty = 0.5, grid ×1.5 = 0.75, slDist = 1000, risk = 750 > maxRiskPerTrade(300)
-    // notional = 50000 * 0.75 = 37500 < maxNotional (10000*5=50000) — проходит
+    // qty = 0.5, slDist = 1000, risk = 500 > maxRiskPerTrade(200)
+    // notional = 50000 * 0.5 = 25000 < maxNotional (10000*5=50000) — проходит
     mockCalcPositionSize.mockReturnValue(0.5);
 
     const signals = [makeSignal({ entryPrice: 50000, sl: 49000 })];
@@ -335,23 +337,21 @@ describe('executeSignals — SKIP invalid SL/TP', () => {
 });
 
 describe('executeSignals — успешное исполнение', () => {
-  it('успешно исполняет grid ордера и возвращает EXECUTED', async () => {
+  it('успешно исполняет Market ордер и возвращает EXECUTED', async () => {
     const signals = [makeSignal()];
     const results = await executeSignals(signals, 'cycle-1', false);
 
     expect(results).toHaveLength(1);
     expect(results[0]?.action).toBe('EXECUTED');
     expect(results[0]?.orderId).toBe('order-123');
-    expect(results[0]?.orderIds).toHaveLength(3); // grid = 3 уровня
     expect(mockSetLeverage).toHaveBeenCalledWith('BTCUSDT', 3);
-    // Grid: 3 ордера (50%/30%/20% от totalQty)
-    expect(mockSubmitOrder).toHaveBeenCalledTimes(3);
-    // Ордера без SL/TP — SL/TP ставится на позицию отдельно через modifyPosition
+    // Один Market ордер
+    expect(mockSubmitOrder).toHaveBeenCalledTimes(1);
     expect(mockSubmitOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         symbol: 'BTCUSDT',
         side: 'Buy',
-        orderType: 'Limit',
+        orderType: 'Market',
       }),
     );
     // SL/TP на позицию через отдельный вызов
@@ -378,8 +378,8 @@ describe('executeSignals — успешное исполнение', () => {
     expect(results).toHaveLength(2);
     expect(results[0]?.action).toBe('EXECUTED');
     expect(results[1]?.action).toBe('EXECUTED');
-    // 2 сигнала × 3 grid уровня = 6 вызовов submitOrder
-    expect(mockSubmitOrder).toHaveBeenCalledTimes(6);
+    // 2 сигнала × 1 Market ордер каждый = 2 вызова submitOrder
+    expect(mockSubmitOrder).toHaveBeenCalledTimes(2);
   });
 });
 

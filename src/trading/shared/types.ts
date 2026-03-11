@@ -133,6 +133,63 @@ export interface TradeSignal {
   timeframe: string;
 }
 
+// ─── Smart Money Concepts ────────────────────────────────────────
+
+export interface OrderBlock {
+  type: 'BULLISH' | 'BEARISH';
+  high: number;
+  low: number;
+  origin: number;
+  index: number;
+  timeISO: string;
+  mitigated: boolean;
+  strength: number;
+}
+
+export interface FairValueGap {
+  type: 'BULLISH' | 'BEARISH';
+  top: number;
+  bottom: number;
+  midpoint: number;
+  index: number;
+  timeISO: string;
+  filled: boolean;
+  size: number;
+}
+
+export interface StructureBreak {
+  type: 'BOS' | 'CHOCH';
+  direction: 'BULLISH' | 'BEARISH';
+  level: number;
+  index: number;
+  timeISO: string;
+  confirmed: boolean;
+}
+
+export interface LiquiditySweep {
+  type: 'HIGH_SWEEP' | 'LOW_SWEEP';
+  level: number;
+  sweepHigh: number;
+  sweepLow: number;
+  index: number;
+  timeISO: string;
+  recovered: boolean;
+}
+
+export interface SmcAnalysis {
+  orderBlocks: OrderBlock[];
+  fairValueGaps: FairValueGap[];
+  structureBreaks: StructureBreak[];
+  liquiditySweeps: LiquiditySweep[];
+  trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  lastBos: StructureBreak | null;
+  lastChoch: StructureBreak | null;
+  nearestBullishOB: OrderBlock | null;
+  nearestBearishOB: OrderBlock | null;
+  nearestBullishFVG: FairValueGap | null;
+  nearestBearishFVG: FairValueGap | null;
+}
+
 // ─── Confluence Scoring System ───────────────────────────────────
 
 export interface OrderbookData {
@@ -172,6 +229,8 @@ export interface ConfluenceScore {
   confidence: number; // 0..100
   details: string[];
   candlePatterns?: number; // -10..+10
+  smc?: number; // -10..+10
+  smcAnalysis?: SmcAnalysis | undefined;
 }
 
 export interface VolumeProfile {
@@ -244,6 +303,7 @@ export interface ConfluenceConfig {
   orderflowWeight: number;
   regimeWeight: number;
   candlePatternsWeight: number;
+  smcWeight: number;
   entryThreshold: number; // min score для входа
   strongThreshold: number; // min score для auto-trade
 }

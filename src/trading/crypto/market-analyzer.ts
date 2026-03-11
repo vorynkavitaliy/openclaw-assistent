@@ -2,6 +2,7 @@ import { createLogger } from '../../utils/logger.js';
 import { calculateConfluenceScore, type ConfluenceInput } from '../shared/confluence.js';
 import { detectMarketRegime, getRegimeThreshold } from '../shared/regime.js';
 import type { ConfluenceScore } from '../shared/types.js';
+import { analyzeSMC } from '../shared/smart-money.js';
 import { buildVolumeProfile } from '../shared/volume-analysis.js';
 import {
   getFundingHistory,
@@ -307,6 +308,9 @@ async function analyzePairV2(
   // Market regime from H4 candles
   const regime = h4Candles.length >= 50 ? detectMarketRegime(h4Candles) : 'RANGING';
 
+  // Smart Money Concepts analysis
+  const smcAnalysis = m15Candles.length >= 30 ? analyzeSMC(m15Candles, market.lastPrice) : null;
+
   // Confluence scoring (precisionTF=null — M5 не загружаем для экономии API запросов)
   const input: ConfluenceInput = {
     trendTF: d1 ?? h4,
@@ -320,6 +324,7 @@ async function analyzePairV2(
     volumeProfile,
     regime,
     market,
+    smcAnalysis,
   };
   const confluence = calculateConfluenceScore(input);
 
@@ -415,6 +420,59 @@ async function analyzePairV2(
   const price = market.lastPrice;
 
   if (atr === 0 || price === 0) return null;
+
+  // H4 RSI extreme filter: не шортить в oversold, не лонгить в overbought на старшем ТФ
+  const h4Rsi = h4?.indicators.rsi14 ?? 50;
+  if (side === 'Sell' && h4Rsi < 33) {
+    logDecision(cycleId, 'skip', pair, 'H4_RSI_OVERSOLD', [
+      `Short при H4 RSI=${h4Rsi.toFixed(1)} (oversold < 33) — высокий риск отскока`,
+    ]);
+    return null;
+  }
+  if (side === 'Buy' && h4Rsi > 67) {
+    logDecision(cycleId, 'skip', pair, 'H4_RSI_OVERBOUGHT', [
+      `Long при H4 RSI=${h4Rsi.toFixed(1)} (overbought > 67) — высокий риск отката`,
+    ]);
+    return null;
+  }
+
+  // 24h Low/High proximity filter: не шортить у дна дня, не лонгить у вершины
+  const distTo24hLow = ((price - market.low24h) / price) * 100;
+  const distTo24hHigh = ((market.high24h - price) / price) * 100;
+  if (side === 'Sell' && distTo24hLow < 1.0) {
+    logDecision(cycleId, 'skip', pair, 'NEAR_24H_LOW', [
+      `Short при цене ${distTo24hLow.toFixed(2)}% от 24h low (${market.low24h}) — риск отскока от дна`,
+    ]);
+    return null;
+  }
+  if (side === 'Buy' && distTo24hHigh < 1.0) {
+    logDecision(cycleId, 'skip', pair, 'NEAR_24H_HIGH', [
+      `Long при цене ${distTo24hHigh.toFixed(2)}% от 24h high (${market.high24h}) — риск отката от вершины`,
+    ]);
+    return null;
+  }
+
+  // SMC Entry Gate: не входим ВНУТРИ antagonist Order Block
+  if (smcAnalysis) {
+    if (side === 'Buy' && smcAnalysis.nearestBearishOB) {
+      const ob = smcAnalysis.nearestBearishOB;
+      if (price >= ob.low && price <= ob.high) {
+        logDecision(cycleId, 'skip', pair, 'SMC_INSIDE_BEARISH_OB', [
+          `Long внутри Bearish OB [${ob.low}–${ob.high}] — институциональная зона продажи`,
+        ]);
+        return null;
+      }
+    }
+    if (side === 'Sell' && smcAnalysis.nearestBullishOB) {
+      const ob = smcAnalysis.nearestBullishOB;
+      if (price >= ob.low && price <= ob.high) {
+        logDecision(cycleId, 'skip', pair, 'SMC_INSIDE_BULLISH_OB', [
+          `Short внутри Bullish OB [${ob.low}–${ob.high}] — институциональная зона покупки`,
+        ]);
+        return null;
+      }
+    }
+  }
 
   // Жёсткий intraday фильтр: не торгуем ПРОТИВ дневного движения > 3%
   // Если пара +3%+ за 24ч — не шортим. Если -3%+ — не лонгим

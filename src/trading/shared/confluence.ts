@@ -20,17 +20,19 @@ import type {
   OIDataPoint,
   OHLC,
   OrderbookData,
+  SmcAnalysis,
   VolumeProfile,
 } from './types.js';
 
 export const DEFAULT_CONFLUENCE_CONFIG: ConfluenceConfig = {
-  trendWeight: 0.22,
-  momentumWeight: 0.13,
-  volumeWeight: 0.13,
-  structureWeight: 0.13,
-  orderflowWeight: 0.13,
-  regimeWeight: 0.13,
-  candlePatternsWeight: 0.13,
+  trendWeight: 0.2,
+  momentumWeight: 0.12,
+  volumeWeight: 0.12,
+  structureWeight: 0.12,
+  orderflowWeight: 0.12,
+  regimeWeight: 0.12,
+  candlePatternsWeight: 0.1,
+  smcWeight: 0.1,
   entryThreshold: 60,
   strongThreshold: 75,
 };
@@ -47,6 +49,7 @@ export interface ConfluenceInput {
   volumeProfile: VolumeProfile | null;
   regime: MarketRegime;
   market: MarketInfo;
+  smcAnalysis?: SmcAnalysis | null;
   config?: ConfluenceConfig;
 }
 
@@ -94,10 +97,16 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     trendDirection,
     details,
   );
-  const regime = scoreRegime(input.regime, details);
+  const entryRsi = input.entryTF.indicators.rsi14;
+  const regime = scoreRegime(input.regime, entryRsi, trendDirection, details);
 
   // Module 7: Candlestick Patterns
   const candlePatterns = scoreCandlePatterns(input.entryCandles, trendDirection, details);
+
+  // Module 8: Smart Money Concepts
+  const smc = input.smcAnalysis
+    ? scoreSmcModule(input.smcAnalysis, input.market.lastPrice, trendDirection, details)
+    : 0;
 
   const raw =
     trend * cfg.trendWeight +
@@ -106,7 +115,8 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     structure * cfg.structureWeight +
     orderflow * cfg.orderflowWeight +
     regime * cfg.regimeWeight +
-    candlePatterns * cfg.candlePatternsWeight;
+    candlePatterns * cfg.candlePatternsWeight +
+    smc * cfg.smcWeight;
 
   // Conflict filter: тренд и моментум прямо противоположны — уменьшаем abs(score)
   // Penalty всегда двигает score к нулю (снижает уверенность в направлении)
@@ -137,6 +147,8 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
     orderflow,
     regime,
     candlePatterns,
+    smc,
+    smcAnalysis: input.smcAnalysis ?? undefined,
     signal,
     confidence,
     details,
@@ -151,11 +163,11 @@ export function calculateConfluenceScore(input: ConfluenceInput): ConfluenceScor
 function getConfidenceCeiling(regime: MarketRegime): number {
   switch (regime) {
     case 'STRONG_TREND':
-      return 55; // Score 55 → 100% confidence
+      return 65; // Было 55 — убрана инфляция confidence
     case 'WEAK_TREND':
-      return 65;
+      return 70;
     case 'VOLATILE':
-      return 60; // Можно торговать, но осторожнее
+      return 65;
     case 'RANGING':
       return 70;
     case 'CHOPPY':
@@ -700,24 +712,52 @@ function scoreOrderflow(
 
 // ─── Module 6: Regime Score (weight 15%) ─────────────────────────
 
-function scoreRegime(regime: MarketRegime, details: string[]): number {
+function scoreRegime(
+  regime: MarketRegime,
+  rsi: number,
+  direction: 'long' | 'short' | 'neutral',
+  details: string[],
+): number {
+  let score: number;
   switch (regime) {
     case 'STRONG_TREND':
-      details.push('Regime: STRONG_TREND (favorable)');
-      return 8;
+      score = 8;
+      break;
     case 'WEAK_TREND':
-      details.push('Regime: WEAK_TREND');
-      return 4;
+      score = 4;
+      break;
     case 'RANGING':
-      details.push('Regime: RANGING (S/R bounce only)');
-      return 2;
+      score = 2;
+      break;
     case 'VOLATILE':
-      details.push('Regime: VOLATILE (caution)');
-      return -5;
+      score = -5;
+      break;
     case 'CHOPPY':
-      details.push('Regime: CHOPPY (avoid trading)');
-      return -10;
+      score = -10;
+      break;
   }
+
+  // RSI exhaustion: тренд на исходе — снижаем бонус режима
+  // Short при RSI < 35 или Long при RSI > 65 = тренд перегрет, меньше потенциала
+  if (regime === 'STRONG_TREND' || regime === 'WEAK_TREND') {
+    const exhausted = (direction === 'short' && rsi < 35) || (direction === 'long' && rsi > 65);
+    if (exhausted) {
+      const penalty = regime === 'STRONG_TREND' ? -6 : -3;
+      score += penalty;
+      details.push(`Regime: ${regime} но RSI=${rsi.toFixed(0)} экстремум (тренд устал) → ${score}`);
+      return Math.max(-10, Math.min(10, score));
+    }
+  }
+
+  const labels: Record<MarketRegime, string> = {
+    STRONG_TREND: 'STRONG_TREND (favorable)',
+    WEAK_TREND: 'WEAK_TREND',
+    RANGING: 'RANGING (S/R bounce only)',
+    VOLATILE: 'VOLATILE (caution)',
+    CHOPPY: 'CHOPPY (avoid trading)',
+  };
+  details.push(`Regime: ${labels[regime]}`);
+  return score;
 }
 
 // ─── Module 7: Candlestick Patterns Score (weight 13%) ──────────
@@ -735,6 +775,99 @@ function scoreCandlePatterns(
   const result = scoreCandlestickPatterns(patterns, direction);
   details.push(...result.details);
   return result.score;
+}
+
+// ─── Module 8: Smart Money Concepts Score (weight 10%) ──────────
+
+function scoreSmcModule(
+  smc: SmcAnalysis,
+  currentPrice: number,
+  direction: 'long' | 'short' | 'neutral',
+  details: string[],
+): number {
+  let score = 0;
+
+  // Order Blocks (±4 max)
+  if (smc.nearestBullishOB && currentPrice > 0) {
+    const distPct = ((currentPrice - smc.nearestBullishOB.high) / currentPrice) * 100;
+    if (distPct >= 0 && distPct < 0.5) {
+      score += direction === 'long' ? 4 : -2;
+      details.push(
+        `SMC: у Bullish OB (${distPct.toFixed(2)}%) — ${direction === 'long' ? 'поддержка' : 'ловушка для short'}`,
+      );
+    } else if (distPct >= 0 && distPct < 1.5) {
+      score += direction === 'long' ? 2 : 0;
+    }
+  }
+  if (smc.nearestBearishOB && currentPrice > 0) {
+    const distPct = ((smc.nearestBearishOB.low - currentPrice) / currentPrice) * 100;
+    if (distPct >= 0 && distPct < 0.5) {
+      score += direction === 'short' ? -4 : 2;
+      details.push(
+        `SMC: у Bearish OB (${distPct.toFixed(2)}%) — ${direction === 'short' ? 'сопротивление' : 'ловушка для long'}`,
+      );
+    } else if (distPct >= 0 && distPct < 1.5) {
+      score += direction === 'short' ? -2 : 0;
+    }
+  }
+
+  // FVG (±3 max)
+  if (smc.nearestBullishFVG && currentPrice > 0) {
+    const distPct = ((currentPrice - smc.nearestBullishFVG.top) / currentPrice) * 100;
+    if (distPct >= 0 && distPct < 1.0) {
+      score += direction === 'long' ? 3 : -1;
+      details.push(`SMC: Bullish FVG рядом (${distPct.toFixed(2)}%)`);
+    }
+  }
+  if (smc.nearestBearishFVG && currentPrice > 0) {
+    const distPct = ((smc.nearestBearishFVG.bottom - currentPrice) / currentPrice) * 100;
+    if (distPct >= 0 && distPct < 1.0) {
+      score += direction === 'short' ? -3 : 1;
+      details.push(`SMC: Bearish FVG рядом (${distPct.toFixed(2)}%)`);
+    }
+  }
+
+  // BOS/CHoCH (±4 max)
+  if (smc.lastChoch) {
+    const recency = smc.lastChoch.index;
+    const isRecent = recency >= (smc.structureBreaks[0]?.index ?? 0) - 10;
+    if (isRecent) {
+      if (smc.lastChoch.direction === 'BULLISH') {
+        score += direction === 'long' ? 4 : -2;
+        details.push('SMC: CHoCH Bullish (разворот вверх)');
+      } else {
+        score += direction === 'short' ? -4 : 2;
+        details.push('SMC: CHoCH Bearish (разворот вниз)');
+      }
+    }
+  } else if (smc.lastBos) {
+    if (smc.lastBos.direction === 'BULLISH') {
+      score += direction === 'long' ? 3 : -1;
+      details.push('SMC: BOS Bullish (продолжение)');
+    } else {
+      score += direction === 'short' ? -3 : 1;
+      details.push('SMC: BOS Bearish (продолжение)');
+    }
+  }
+
+  // Liquidity Sweeps (±2 max)
+  for (const sweep of smc.liquiditySweeps.slice(0, 1)) {
+    if (sweep.recovered) {
+      if (sweep.type === 'LOW_SWEEP') {
+        score += direction === 'long' ? 2 : -1;
+        details.push('SMC: Low sweep recovered (институциональная покупка)');
+      } else {
+        score += direction === 'short' ? -2 : 1;
+        details.push('SMC: High sweep recovered (институциональная продажа)');
+      }
+    }
+  }
+
+  // SMC Trend alignment (±1)
+  if (smc.trend === 'BULLISH' && direction === 'long') score += 1;
+  else if (smc.trend === 'BEARISH' && direction === 'short') score -= 1;
+
+  return Math.max(-10, Math.min(10, score));
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

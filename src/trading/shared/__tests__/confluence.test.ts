@@ -262,7 +262,8 @@ describe('DEFAULT_CONFLUENCE_CONFIG', () => {
       cfg.structureWeight +
       cfg.orderflowWeight +
       cfg.regimeWeight +
-      cfg.candlePatternsWeight;
+      cfg.candlePatternsWeight +
+      cfg.smcWeight;
     expect(sum).toBeCloseTo(1.0, 5);
   });
 

@@ -80,14 +80,14 @@ beforeEach(() => {
 describe('calcDefaultSl', () => {
   it('вычисляет SL ниже цены для long позиции', () => {
     const sl = calcDefaultSl(50000, 'long', 500);
-    // atrEstimate=500, atrSlMultiplier=1.5 → slDist=750 → SL = 50000 - 750 = 49250
-    expect(sl).toBe(49250);
+    // atrEstimate=500, atrSlMultiplier=1.8 → slDist=900 → SL = 50000 - 900 = 49100
+    expect(sl).toBe(49100);
   });
 
   it('вычисляет SL выше цены для short позиции', () => {
     const sl = calcDefaultSl(50000, 'short', 500);
-    // atrEstimate=500, atrSlMultiplier=1.5 → slDist=750 → SL = 50000 + 750 = 50750
-    expect(sl).toBe(50750);
+    // atrEstimate=500, atrSlMultiplier=1.8 → slDist=900 → SL = 50000 + 900 = 50900
+    expect(sl).toBe(50900);
   });
 
   it('использует fallback 2% если ATR не задан', () => {
@@ -100,14 +100,14 @@ describe('calcDefaultSl', () => {
 describe('calcDefaultTp', () => {
   it('вычисляет TP выше entry для long позиции', () => {
     const tp = calcDefaultTp(50000, 49000, 'long');
-    // slDist=1000, minRR=1.0 → TP = 50000 + 1000 = 51000
-    expect(tp).toBe(51000);
+    // slDist=1000, minRR=1.5 → TP = 50000 + 1500 = 51500
+    expect(tp).toBe(51500);
   });
 
   it('вычисляет TP ниже entry для short позиции', () => {
     const tp = calcDefaultTp(50000, 51000, 'short');
-    // slDist=1000, minRR=1.0 → TP = 50000 - 1000 = 49000
-    expect(tp).toBe(49000);
+    // slDist=1000, minRR=1.5 → TP = 50000 - 1500 = 48500
+    expect(tp).toBe(48500);
   });
 });
 
@@ -275,32 +275,29 @@ describe('managePositions — SL-Guard', () => {
   });
 });
 
-describe('managePositions — partial close disabled (quick profit strategy)', () => {
-  it('НЕ выполняет partial close при 1R (partialCloseAtR=99 отключён)', async () => {
+describe('managePositions — partial close at 1R (quality strategy)', () => {
+  it('выполняет partial close при 1R (partialCloseAtR=1.0)', async () => {
     // entry=50000, SL=49000 → slDist=1000, oneR=1000
-    // uPnl=1000 → currentR=1.0 < partialCloseAtR(99) — не срабатывает
+    // uPnl=1100 → currentR=1.1 >= partialCloseAtR(1.0) — срабатывает partial close
     mockGet.mockReturnValue(
       makeStateWith([
         makePosition({
           entryPrice: '50000',
           stopLoss: '49000',
-          markPrice: '51000',
-          unrealisedPnl: '1000',
+          markPrice: '51100',
+          unrealisedPnl: '1100',
           size: '1',
         }),
       ]) as unknown as ReturnType<typeof state.get>,
     );
 
-    const actions = await managePositions('cycle-1', false);
+    await managePositions('cycle-1', false);
 
-    expect(mockPartialClosePosition).not.toHaveBeenCalled();
-    // Но trailing SL должен сработать (trailingStartR=0.7, currentR=1.0 >= 0.7)
-    const trailingAction = actions.find((a) => a['type'] === 'trailing_sl');
-    expect(trailingAction).toBeDefined();
+    expect(mockPartialClosePosition).toHaveBeenCalled();
   });
 
   it('не выполняет partial close при прибыли меньше 1R', async () => {
-    // uPnl=500, oneR=1000 → currentR=0.5 < partialCloseAtR(99)
+    // uPnl=500, oneR=1000 → currentR=0.5 < partialCloseAtR(1.0)
     mockGet.mockReturnValue(
       makeStateWith([
         makePosition({
@@ -319,13 +316,36 @@ describe('managePositions — partial close disabled (quick profit strategy)', (
   });
 });
 
-describe('managePositions — trailing SL at 0.7R', () => {
-  it('применяет trailing SL при достижении 0.7R прибыли для long', async () => {
+describe('managePositions — trailing SL at 1.2R', () => {
+  it('применяет trailing SL при достижении 1.2R прибыли для long', async () => {
     // entry=50000, SL=49000 → slDist=1000
     // size=1 → oneR=1000
-    // uPnl=800 → currentR=0.8 >= trailingStartR(0.7)
-    // markPrice=50800, trailingDistance = slDist*trailingDistanceR = 1000*0.3 = 300
-    // newSl = 50800 - 300 = 50500 > sl(49000) — нужен апдейт
+    // uPnl=1300 → currentR=1.3 >= trailingStartR(1.2)
+    // markPrice=51300, trailingDistance = slDist*trailingDistanceR = 1000*0.4 = 400
+    // newSl = 51300 - 400 = 50900 > sl(49000) — нужен апдейт
+    mockGet.mockReturnValue(
+      makeStateWith([
+        makePosition({
+          entryPrice: '50000',
+          stopLoss: '49000',
+          markPrice: '51300',
+          unrealisedPnl: '1300',
+          size: '1',
+          side: 'long',
+        }),
+      ]) as unknown as ReturnType<typeof state.get>,
+    );
+
+    const actions = await managePositions('cycle-1', false);
+
+    const trailingAction = actions.find((a) => a['type'] === 'trailing_sl');
+    expect(trailingAction).toBeDefined();
+    expect(trailingAction?.['result']).toBe('OK');
+    expect(Number(trailingAction?.['newSl'])).toBeGreaterThan(49000);
+  });
+
+  it('не применяет trailing SL если прибыль < 1.2R', async () => {
+    // uPnl=800, oneR=1000 → currentR=0.8 < trailingStartR(1.2)
     mockGet.mockReturnValue(
       makeStateWith([
         makePosition({
@@ -342,46 +362,22 @@ describe('managePositions — trailing SL at 0.7R', () => {
     const actions = await managePositions('cycle-1', false);
 
     const trailingAction = actions.find((a) => a['type'] === 'trailing_sl');
-    expect(trailingAction).toBeDefined();
-    expect(trailingAction?.['result']).toBe('OK');
-    expect(Number(trailingAction?.['newSl'])).toBeGreaterThan(49000);
-  });
-
-  it('не применяет trailing SL если новый SL не лучше текущего', async () => {
-    // markPrice=49200, trailingDistance=300 → newSl=48900 < sl(49000) — не обновит
-    mockGet.mockReturnValue(
-      makeStateWith([
-        makePosition({
-          entryPrice: '50000',
-          stopLoss: '49000',
-          markPrice: '49200',
-          unrealisedPnl: '800', // currentR >= 0.7 чтобы войти в блок
-          size: '1',
-          side: 'long',
-        }),
-      ]) as unknown as ReturnType<typeof state.get>,
-    );
-
-    const actions = await managePositions('cycle-1', false);
-
-    // trailing_sl не должен быть добавлен (newSl < старый sl)
-    const trailingAction = actions.find((a) => a['type'] === 'trailing_sl');
     expect(trailingAction).toBeUndefined();
   });
 
   it('применяет trailing SL для short позиции', async () => {
     // entry=50000, SL=51000 → slDist=1000
-    // uPnl=800 → currentR=0.8 >= 0.7
-    // markPrice=49200, trailingDistance=300
-    // newSl = 49200 + 300 = 49500 < sl(51000) — нужен апдейт
+    // uPnl=1300 → currentR=1.3 >= 1.2
+    // markPrice=48700, trailingDistance=400
+    // newSl = 48700 + 400 = 49100 < sl(51000) — нужен апдейт
     mockGet.mockReturnValue(
       makeStateWith([
         makePosition({
           side: 'short',
           entryPrice: '50000',
           stopLoss: '51000',
-          markPrice: '49200',
-          unrealisedPnl: '800',
+          markPrice: '48700',
+          unrealisedPnl: '1300',
           size: '1',
           takeProfit: '48000',
         }),

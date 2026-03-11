@@ -48,30 +48,30 @@ const config: TradingConfig = {
   reportIntervalMin: 60,
   reportOffsetMin: 10,
 
-  riskPerTrade: 0.01, // 1% от баланса на сделку (~$100 при $10k)
+  riskPerTrade: 0.015, // 1.5% от баланса (~$150 при $10k): меньше сделок, крупнее размер
   maxDailyLoss: ACCOUNT_BALANCE * 0.04, // 4% от баланса — запас до лимита 5%
   maxStopsPerDay: 4,
   maxRiskPerTrade: ACCOUNT_BALANCE * 0.02, // $200 при $10k
   maxOpenPositions: 2, // Снижено с 3: фокус на 1-2 качественные позиции
   maxLeverage: 5,
   defaultLeverage: 3,
-  minRR: 1.0, // Снижено с 1.5: быстрые TP, цель +$15-20 за сделку
+  minRR: 1.5, // Строгий: не входим если TP слишком близко, цель +$50-70 за сделку
 
-  // Quick profit strategy: закрываем 100% по TP, без partial close
-  partialCloseAtR: 99, // Отключён (недостижимый порог) — закрываем всё сразу по TP
+  // Quality profit strategy: partial close в безубыток + trail остаток
+  partialCloseAtR: 1.0, // Закрыть 50% при +1R (зафиксировать ~$35-50)
   partialClosePercent: 0.5,
-  trailingStartR: 0.7, // Раньше начинаем тянуть SL (было 1.5R)
-  trailingDistanceR: 0.3, // Теснее trailing (было 0.5R)
+  trailingStartR: 1.2, // Trail SL после +1.2R
+  trailingDistanceR: 0.4, // Trailing distance: 0.4R от текущей цены
 
   maxFundingRate: 0.005,
   minFundingRate: -0.005,
   maxSpreadPercent: 0.1,
-  atrSlMultiplier: 1.5, // Теснее SL (было 2.0): меньше риск = больше позиция = быстрее $15-20
+  atrSlMultiplier: 1.8, // Стандартнее SL: даём позиции дышать при высоком R:R
   staleOrderMinutes: 30,
-  minConfidence: 45, // Повышен с 20: отсекаем мусор до Claude (ARB 35% → заблокирован)
+  minConfidence: 55, // Строгий: только сильные сигналы доходят до Claude
   backtestMinConfidence: 38, // Ниже чем live: в бэктесте нет orderbook/OI/funding данных
   pairCooldownMin: 240, // 4 часа между сделками на одну пару (было 3ч — WLD спамил)
-  maxDailyTrades: 5, // Максимум сделок в день: 3 целевые + 2 запасные
+  maxDailyTrades: 3, // Качество > количество: 1-3 сделки с хорошим R:R
 
   // Группы коррелированных пар — не более 1 позиции на группу
   ecosystemGroups: [

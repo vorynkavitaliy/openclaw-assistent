@@ -26,21 +26,20 @@ const log = createLogger('market-analyzer');
 // Динамический R:R: в сильном тренде целим дальше, в боковике — быстрее забираем.
 // Чем сильнее confluence score — тем ближе к максимальному RR для данного режима.
 // strength = min(|confluenceScore| / 75, 1), итоговый RR = baseRR + (maxRR - baseRR) * strength
-// Quick profit strategy: быстрые TP, цель +$15-20 за сделку
-// Низкий R:R но высокий winrate — 3 сделки × $15 = $45/день
+// Quality strategy: 1-3 сделки × $50-70 = $70-200/день, минимум R:R 1.5
 function getRegimeRR(regime: string, confluenceScore: number): number {
   const strength = Math.min(Math.abs(confluenceScore) / 75, 1);
   switch (regime as MarketRegime) {
     case 'STRONG_TREND':
-      return 1.2 + (1.8 - 1.2) * strength; // 1.2–1.8R (было 2.0–3.0)
+      return 2.0 + (3.0 - 2.0) * strength; // 2.0–3.0R: тренд несёт, целим далеко
     case 'WEAK_TREND':
-      return 1.0 + (1.3 - 1.0) * strength; // 1.0–1.3R (было 1.5–2.0)
+      return 1.5 + (2.0 - 1.5) * strength; // 1.5–2.0R: умеренные цели
     case 'RANGING':
-      return 1.0 + (1.2 - 1.0) * strength; // 1.0–1.2R (было 1.2–1.5)
+      return 1.5 + (1.8 - 1.5) * strength; // 1.5–1.8R: от уровня до уровня
     case 'VOLATILE':
-      return 1.0 + (1.5 - 1.0) * strength; // 1.0–1.5R (было 1.5–2.0)
+      return 1.8 + (2.5 - 1.8) * strength; // 1.8–2.5R: волатильность = движение
     case 'CHOPPY':
-      return 1.0 + (1.2 - 1.0) * strength; // 1.0–1.2R (было 1.2–1.5)
+      return 1.5 + (1.8 - 1.5) * strength; // 1.5–1.8R: минимум, если вообще торгуем
   }
 }
 
@@ -54,13 +53,13 @@ function getRegimeRR(regime: string, confluenceScore: number): number {
 function getAdaptiveSlMultiplier(regime: string, base: number): number {
   switch (regime as MarketRegime) {
     case 'STRONG_TREND':
-      return base * 0.8; // Тесный SL: тренд защищает
+      return base * 0.85; // Чуть теснее: тренд защищает, но даём дышать
     case 'WEAK_TREND':
       return base; // Стандартный
     case 'RANGING':
-      return base * 0.7; // Очень тесный: торгуем от S/R
+      return base * 0.8; // Теснее: торгуем от S/R, но не слишком тесный
     case 'VOLATILE':
-      return base * 1.4; // Широкий: не стопить на шуме
+      return base * 1.3; // Шире: не стопить на шуме
     case 'CHOPPY':
       return base; // Стандартный
   }
@@ -606,6 +605,14 @@ async function analyzePairV2(
 
   // Динамический R:R в зависимости от режима рынка и силы confluence score
   const rr = getRegimeRR(regime, confluence.total);
+
+  // Жёсткий R:R фильтр: не входим если R:R ниже минимума
+  if (rr < config.minRR) {
+    logDecision(cycleId, 'skip', pair, 'LOW_RR', [
+      `R:R ${rr.toFixed(2)} < минимум ${config.minRR} для ${regime}`,
+    ]);
+    return null;
+  }
 
   // TP: используем динамический RR
   const tp = side === 'Buy' ? entry + slDistance * rr : entry - slDistance * rr;

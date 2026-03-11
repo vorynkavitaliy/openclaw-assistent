@@ -351,15 +351,16 @@ export function calculateBollingerBands(
 
 /**
  * Ichimoku Cloud: Tenkan(9), Kijun(26), Senkou A/B, price vs cloud.
- * Требуется минимум 52 свечи.
+ * Требуется минимум 78 свечей (52 для Senkou B + 26 для cloud shift).
  */
 export function calculateIchimoku(candles: OHLC[]): IchimokuCloud | null {
-  if (candles.length < 52) return null;
+  if (candles.length < 78) return null;
 
   const highLow = (start: number, end: number): number => {
+    const s = Math.max(0, start);
     let hi = -Infinity;
     let lo = Infinity;
-    for (let i = start; i < end; i++) {
+    for (let i = s; i < end; i++) {
       if (candles[i]!.high > hi) hi = candles[i]!.high;
       if (candles[i]!.low < lo) lo = candles[i]!.low;
     }

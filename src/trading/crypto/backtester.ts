@@ -14,21 +14,36 @@ import { getKlines } from './bybit-client.js';
 import config from './config.js';
 import { roundPrice } from './symbol-specs.js';
 
-// Динамический R:R: в сильном тренде целим дальше, в боковике — быстрее забираем.
-// strength = min(|confluenceScore| / 75, 1), итоговый RR = baseRR + (maxRR - baseRR) * strength
+// Quick Profit R:R: быстрые TP, цель +$15-20 за сделку
 function getRegimeRR(regime: string, confluenceScore: number): number {
   const strength = Math.min(Math.abs(confluenceScore) / 75, 1);
   switch (regime as MarketRegime) {
     case 'STRONG_TREND':
-      return 2.0 + (3.0 - 2.0) * strength; // 2.0–3.0R
+      return 1.2 + (1.8 - 1.2) * strength; // 1.2–1.8R
     case 'WEAK_TREND':
-      return 1.5 + (2.0 - 1.5) * strength; // 1.5–2.0R
+      return 1.0 + (1.3 - 1.0) * strength; // 1.0–1.3R
     case 'RANGING':
-      return 1.2 + (1.5 - 1.2) * strength; // 1.2–1.5R
+      return 1.0 + (1.2 - 1.0) * strength; // 1.0–1.2R
     case 'VOLATILE':
-      return 1.5 + (2.0 - 1.5) * strength; // 1.5–2.0R
+      return 1.0 + (1.5 - 1.0) * strength; // 1.0–1.5R
     case 'CHOPPY':
-      return 1.2 + (1.5 - 1.2) * strength; // 1.2–1.5R
+      return 1.0 + (1.2 - 1.0) * strength; // 1.0–1.2R
+  }
+}
+
+// Adaptive ATR SL multiplier по режиму
+function getAdaptiveSlMultiplier(regime: string, base: number): number {
+  switch (regime as MarketRegime) {
+    case 'STRONG_TREND':
+      return base * 0.8;
+    case 'WEAK_TREND':
+      return base;
+    case 'RANGING':
+      return base * 0.7;
+    case 'VOLATILE':
+      return base * 1.4;
+    case 'CHOPPY':
+      return base;
   }
 }
 
@@ -464,7 +479,8 @@ async function backtestPair(
 
     if (atr === 0 || price === 0) continue;
 
-    const slDistance = atr * config.atrSlMultiplier;
+    const slMultiplier = getAdaptiveSlMultiplier(regime, config.atrSlMultiplier);
+    const slDistance = atr * slMultiplier;
     const entry = roundPrice(price, pair);
     const sl = roundPrice(side === 'Buy' ? entry - slDistance : entry + slDistance, pair);
 
